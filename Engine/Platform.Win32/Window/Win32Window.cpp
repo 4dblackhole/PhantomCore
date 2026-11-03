@@ -499,8 +499,9 @@ void Win32Window::UpdateMouseCapture()
 {
     // Native editors retain their mouse selection/context-menu behavior.
     POINT cursor{};
-    if (IsWin32TextInput(GetCapture()) ||
-        (GetCursorPos(&cursor) && IsWin32TextInput(WindowFromPoint(cursor))))
+    if (input_->IsMouseButtonDown(MouseButton::Right) &&
+        (IsWin32TextInput(GetCapture()) ||
+         (GetCursorPos(&cursor) && IsWin32TextInput(WindowFromPoint(cursor)))))
     {
         ReleaseMouseCapture();
         return;

@@ -2,6 +2,7 @@
 #include "PhantomCore.h"
 #include <iostream>
 #include <Windows.h>
+#include <algorithm>
 #include <stdexcept>
 
 namespace
@@ -15,6 +16,44 @@ namespace
     {
         bool resized{}, rendered{}, shutdown{};
     };
+    void TestPlaceholder(HWND child, ITextInput &editor)
+    {
+        HDC dc = CreateCompatibleDC(nullptr);
+        if (!dc) throw std::runtime_error("Create placeholder capture DC.");
+        BITMAPINFO info{};
+        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth = 320;
+        info.bmiHeader.biHeight = -28;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        void *data{};
+        HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &data, nullptr, 0);
+        if (!bitmap || !data)
+        {
+            if (bitmap) DeleteObject(bitmap);
+            DeleteDC(dc);
+            throw std::runtime_error("Create placeholder capture bitmap.");
+        }
+        auto *pixels = static_cast<std::uint32_t *>(data);
+        const auto previous = SelectObject(dc, bitmap);
+        const auto painted = [&]
+        {
+            std::fill_n(pixels, 320 * 28, 0xFFFFFFFFU);
+            SendMessageW(child, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(dc), PRF_CLIENT);
+            GdiFlush();
+            return std::count_if(pixels, pixels + 320 * 28,
+                                 [](auto pixel) { return (pixel & 0xFFFFFFU) != 0xFFFFFFU; });
+        };
+        editor.SetPlaceholder(L"");
+        const auto empty = painted();
+        editor.SetPlaceholder(L"Search songs");
+        const auto hinted = painted();
+        SelectObject(dc, previous);
+        DeleteObject(bitmap);
+        DeleteDC(dc);
+        Check(hinted > empty + 10, "Placeholder paints without requiring an application theme manifest.");
+    }
     class ResizeClient final : public IGameClient
     {
       public:
@@ -85,6 +124,7 @@ namespace
             Check(process == GetCurrentProcessId(), "Test owns native window.");
             HWND child = FindWindowExW(parent, nullptr, L"EDIT", nullptr);
             Check(child != nullptr && IsWindowUnicode(child), "Native edit is Unicode.");
+            TestPlaceholder(child, *editor);
             editor->SetText(L"Angel Dream");
             std::wstring text;
             Check(editor->TakeText(text) && text == L"Angel Dream", "Committed text notification.");

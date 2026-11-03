@@ -33,8 +33,10 @@ OS가 IME 조합·후보창, 커서·선택, 삭제와 클립보드 편집을 �
 `Focus`/`Blur`로 포커스를 제어하고 `TakeText`로 변경된 확정 문자열만 가져옵니다.
 조합 중 Enter/Escape는 편집기 명령으로 보고하지 않으며, 조합 밖의 Enter/Escape는
 `TakeSubmit`/`TakeCancel`에서 한 번 소비합니다. 편집 중 게임별 단축키 차단은 Client 책임입니다.
+빈 편집기의 안내 문구는 포커스가 없을 때 표시하며, common-controls v6 manifest가 없는
+소비 실행 파일에서도 그립니다. 앱 전체의 native 테마를 변경하지 않습니다.
 숨기면 포커스와 대기 명령을 해제합니다. Raw Input 이벤트·판정 시각 경로는 유지합니다.
 
 `--window-control`은 Unicode/서로게이트 삽입, 조합 중 변경 보류와 명령 분리,
-명령 1회 소비, 숨김 및 native handle 해제도 자동 검사합니다. 실제 IME 후보 선택과
+명령 1회 소비, 안내 문구의 실제 픽셀 출력, 숨김 및 native handle 해제도 자동 검사합니다. 실제 IME 후보 선택과
 클립보드 조작을 사람이 수행한 검증은 이 테스트에 포함되지 않습니다.

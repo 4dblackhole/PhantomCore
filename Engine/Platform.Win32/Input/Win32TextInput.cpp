@@ -46,8 +46,13 @@ namespace
         }
         void SetPlaceholder(std::wstring_view text) override
         {
-            const std::wstring value{text};
-            SendMessageW(window_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(value.c_str()));
+            if (placeholder_ == text) return;
+            if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+                throw std::length_error("Text input placeholder is too long.");
+            placeholder_ = text;
+            nativeCue_ = SendMessageW(window_, EM_SETCUEBANNER, FALSE,
+                                     reinterpret_cast<LPARAM>(placeholder_.c_str())) != 0;
+            InvalidateRect(window_, nullptr, TRUE);
         }
         void SetBounds(TextInputBounds bounds) override
         {
@@ -123,6 +128,28 @@ namespace
         }
 
       private:
+        void PaintPlaceholder(HWND window, HDC target = nullptr) const noexcept
+        {
+            // Cue banners require a v6 common-controls manifest. Keep the same
+            // empty/unfocused hint for consumers that use the default EDIT class.
+            if (nativeCue_ || placeholder_.empty() || HasFocus() || GetWindowTextLengthW(window) != 0) return;
+            HDC dc = target ? target : GetDC(window);
+            if (!dc) return;
+            const int saved = SaveDC(dc);
+            if (saved != 0)
+            {
+                RECT bounds{};
+                GetClientRect(window, &bounds);
+                bounds.left += 1;
+                SelectObject(dc, font_);
+                SetBkMode(dc, TRANSPARENT);
+                SetTextColor(dc, Rgb(foreground_));
+                DrawTextW(dc, placeholder_.c_str(), static_cast<int>(placeholder_.size()), &bounds,
+                          DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS);
+                RestoreDC(dc, saved);
+            }
+            if (!target) ReleaseDC(window, dc);
+        }
         std::wstring ReadText() const
         {
             if (!window_) return {};
@@ -167,14 +194,20 @@ namespace
             }
             // Enter/Escape commands above must not produce a native beep.
             if (message == WM_CHAR && (wParam == VK_RETURN || wParam == VK_ESCAPE || wParam == 1)) return 0;
-            return DefSubclassProc(window, message, wParam, lParam);
+            const auto result = DefSubclassProc(window, message, wParam, lParam);
+            if (message == WM_PAINT) self.PaintPlaceholder(window);
+            else if (message == WM_PRINTCLIENT) self.PaintPlaceholder(window, reinterpret_cast<HDC>(wParam));
+            else if (message == WM_SETFOCUS || message == WM_KILLFOCUS)
+                InvalidateRect(window, nullptr, TRUE);
+            return result;
         }
         HWND parent_{}, window_{};
         HFONT font_{};
         HBRUSH brush_{};
         std::wstring fontFamily_;
+        std::wstring placeholder_;
         std::uint32_t fontHeight_{}, foreground_{}, background_{};
-        bool changed_{}, composing_{}, submit_{}, cancel_{}, visible_{};
+        bool changed_{}, composing_{}, submit_{}, cancel_{}, visible_{}, nativeCue_{};
     };
     Win32TextInput *Find(HWND window) noexcept
     {
