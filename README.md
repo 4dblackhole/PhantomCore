@@ -18,6 +18,8 @@ paused Voice의 준비 완료 후 clock을 예약하며 종료된 샘플은 관�
 디코드를 비동기로 준비하며 GPU 업로드는 fence까지 자원을 보관해 이미지별 대기를 제거한다.
 해제된 텍스처의 SRV 블록은 업로드·GPU 프레임의 마지막 참조 이후 재사용한다.
 Raw Input 이벤트 버퍼는 한 Update의 모든 키 전이를 순서대로 유지하도록 확장된다.
+`IWindowControl::CreateTextInput`은 IME·커서·선택·붙여넣기를 지원하는 Unicode 편집기를
+제공한다. 소유권과 입력 명령 계약은 [창·텍스트 입력](Docs/WindowControl.md)에 있다.
 텍스트는 유지된 배치와 2,048항목 보조 LRU를 사용하고 clip 밖의 글리프를 제외한다.
 회색조 아틀라스는 기본 16MiB에서 필요한 만큼 확대·회수하며 새 글리프를 upload arena에 묶는다.
 TextStyle/TextVisualComponent는 1~999 굵기를 지원하며 글꼴 배치·글리프 캐시를 굵기별로 구분한다.

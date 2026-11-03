@@ -40,6 +40,7 @@ public:
     [[nodiscard]] WindowResolution ClientSize() const noexcept override;
     [[nodiscard]] std::vector<WindowResolution> DisplayResolutions() const override;
     [[nodiscard]] bool SetClientSize(WindowResolution size, std::string &error) override;
+    [[nodiscard]] std::unique_ptr<ITextInput> CreateTextInput() override;
 
     [[nodiscard]] HWND Handle() const noexcept;
     [[nodiscard]] std::uint32_t ClientWidth() const noexcept;

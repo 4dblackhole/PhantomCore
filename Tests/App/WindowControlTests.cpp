@@ -1,6 +1,7 @@
 #include "WindowControlTests.h"
 #include "PhantomCore.h"
 #include <iostream>
+#include <Windows.h>
 #include <stdexcept>
 
 namespace
@@ -31,6 +32,7 @@ namespace
         {
             window_ = services.windowControl;
             Check(window_ != nullptr, "Run provides window control.");
+            TestTextInput();
             const auto initial = window_->ClientSize();
             std::string error;
             Check(!window_->SetClientSize({0, 720}, error) && !error.empty() && window_->ClientSize() == initial,
@@ -67,6 +69,47 @@ namespace
         }
 
       private:
+        void TestTextInput()
+        {
+            auto editor = window_->CreateTextInput();
+            Check(editor != nullptr, "Window creates Unicode editor.");
+            editor->SetBounds({24, 32, 320, 28});
+            editor->SetFont(L"Segoe UI", 18);
+            editor->SetColors(0x243F5B, 0xFFFFFF);
+            editor->SetPlaceholder(L"Search songs");
+            editor->SetVisible(true);
+            // Locate only the control just created in this test's own window.
+            HWND parent = FindWindowW(L"PhantomCore.D3D12.Window", nullptr);
+            DWORD process{};
+            GetWindowThreadProcessId(parent, &process);
+            Check(process == GetCurrentProcessId(), "Test owns native window.");
+            HWND child = FindWindowExW(parent, nullptr, L"EDIT", nullptr);
+            Check(child != nullptr && IsWindowUnicode(child), "Native edit is Unicode.");
+            editor->SetText(L"Angel Dream");
+            std::wstring text;
+            Check(editor->TakeText(text) && text == L"Angel Dream", "Committed text notification.");
+            Check(!editor->TakeText(text), "Text notifications are consumed once.");
+            SendMessageW(child, EM_SETSEL, 0, -1);
+            const wchar_t *foreign = L"천사의 꿈 天使の夢 café \U0001F3B5";
+            SendMessageW(child, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(foreign));
+            Check(editor->TakeText(text) && text == foreign, "Unicode insertion preserves foreign text and surrogate pairs.");
+            SendMessageW(child, WM_IME_STARTCOMPOSITION, 0, 0);
+            editor->SetText(L"조합");
+            Check(!editor->TakeText(text), "Composition is not published as a committed query.");
+            SendMessageW(child, WM_KEYDOWN, VK_RETURN, 0);
+            SendMessageW(child, WM_KEYDOWN, VK_ESCAPE, 0);
+            Check(!editor->TakeSubmit() && !editor->TakeCancel(), "IME commands do not submit/cancel editor.");
+            SendMessageW(child, WM_IME_ENDCOMPOSITION, 0, 0);
+            Check(editor->TakeText(text) && text == L"조합", "Composition publishes when committed.");
+            SendMessageW(child, WM_KEYDOWN, VK_RETURN, 0);
+            Check(editor->TakeSubmit() && !editor->TakeSubmit(), "Enter submit is consumed once.");
+            SendMessageW(child, WM_KEYDOWN, VK_ESCAPE, 0);
+            Check(editor->TakeCancel() && !editor->TakeCancel(), "Escape cancel is consumed once.");
+            editor->SetVisible(false);
+            Check((GetWindowLongPtrW(child, GWL_STYLE) & WS_VISIBLE) == 0, "Hide native editor.");
+            editor.reset();
+            Check(!IsWindow(child), "Editor owns and releases native control.");
+        }
         ResizeReport &report_;
         IWindowControl *window_{};
     };
@@ -77,6 +120,6 @@ int TestWindowControl()
     const auto result = Run(std::make_unique<ResizeClient>(report));
     if (result != 0 || !report.resized || !report.rendered || !report.shutdown)
         return 1;
-    std::cout << "Native window resize, display modes and deferred renderer notification passed.\n";
+    std::cout << "Native Unicode input/IME lifecycle, window resize, display modes and renderer notification passed.\n";
     return 0;
 }

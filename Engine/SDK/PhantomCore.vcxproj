@@ -111,6 +111,9 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\Platform.Win32\Input\Input.cpp" />
+    <ClCompile Include="..\Platform.Win32\Input\Win32TextInput.cpp" />
+    <ClInclude Include="..\Platform.Win32\Input\TextInput.h" />
+    <ClInclude Include="..\Platform.Win32\Input\Win32TextInput.h" />
     <ClCompile Include="..\Platform.Win32\System\ComApartment.cpp" />
     <ClCompile Include="..\Platform.Win32\System\RuntimePaths.cpp" />
     <ClCompile Include="..\Platform.Win32\Window\Win32Window.cpp" />

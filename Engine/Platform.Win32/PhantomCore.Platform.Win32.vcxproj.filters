@@ -40,4 +40,10 @@
       <Filter>Window</Filter>
     </ClCompile>
   </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="Input\Win32TextInput.cpp"><Filter>Input</Filter></ClCompile>
+    <ClInclude Include="Input\Win32TextInput.h"><Filter>Input</Filter></ClInclude>
+    <ClInclude Include="Input\TextInput.h"><Filter>Input</Filter></ClInclude>
+  </ItemGroup>
 </Project>

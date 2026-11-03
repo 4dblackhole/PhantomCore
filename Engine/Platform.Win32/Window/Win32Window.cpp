@@ -1,4 +1,5 @@
 #include "Window/Win32Window.h"
+#include "Input/Win32TextInput.h"
 
 #include <algorithm>
 #include <array>
@@ -91,7 +92,7 @@ void Win32Window::Initialize(const WindowConfig& config, InputState& input)
         static_cast<LONG>(config.clientWidth),
         static_cast<LONG>(config.clientHeight)};
 
-    constexpr DWORD windowStyle = WS_OVERLAPPEDWINDOW;
+    constexpr DWORD windowStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     if (!AdjustWindowRect(&windowRectangle, windowStyle, FALSE))
     {
         throw MakeWin32Error("AdjustWindowRect");
@@ -219,6 +220,11 @@ HWND Win32Window::Handle() const noexcept
     return window_;
 }
 
+std::unique_ptr<ITextInput> Win32Window::CreateTextInput()
+{
+    return CreateWin32TextInput(window_);
+}
+
 std::uint32_t Win32Window::ClientWidth() const noexcept
 {
     return clientWidth_;
@@ -302,6 +308,14 @@ LRESULT Win32Window::WindowProcedure(
 {
     switch (message)
     {
+    case WM_COMMAND:
+        if (HIWORD(wParam) == EN_CHANGE && NotifyWin32TextInputChanged(reinterpret_cast<HWND>(lParam)))
+            return 0;
+        break;
+    case WM_CTLCOLOREDIT:
+        if (const auto brush = PaintWin32TextInput(reinterpret_cast<HWND>(lParam), reinterpret_cast<HDC>(wParam)))
+            return reinterpret_cast<LRESULT>(brush);
+        break;
     case WM_INPUT:
         ProcessRawInput(reinterpret_cast<HRAWINPUT>(lParam));
         UpdateMouseCapture();
@@ -483,6 +497,14 @@ void Win32Window::ProcessRawMouse(
 
 void Win32Window::UpdateMouseCapture()
 {
+    // Native editors retain their mouse selection/context-menu behavior.
+    POINT cursor{};
+    if (IsWin32TextInput(GetCapture()) ||
+        (GetCursorPos(&cursor) && IsWin32TextInput(WindowFromPoint(cursor))))
+    {
+        ReleaseMouseCapture();
+        return;
+    }
     // Right-button look captures the cursor to the client rectangle; Raw
     // Input still supplies relative movement while the cursor is hidden.
     const bool shouldCapture =

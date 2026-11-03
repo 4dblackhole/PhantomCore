@@ -66,6 +66,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Input\Input.cpp" />
+    <ClCompile Include="Input\Win32TextInput.cpp" />
+    <ClInclude Include="Input\TextInput.h" />
+    <ClInclude Include="Input\Win32TextInput.h" />
     <ClCompile Include="System\ComApartment.cpp" />
     <ClCompile Include="System\RuntimePaths.cpp" />
     <ClCompile Include="Window\Win32Window.cpp" />

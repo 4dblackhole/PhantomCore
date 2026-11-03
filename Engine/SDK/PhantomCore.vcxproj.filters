@@ -215,4 +215,10 @@
     <Filter Include="Audio\ThirdParty\Signalsmith\signalsmith-linear\platform" />
     <Filter Include="Audio\ThirdParty\Signalsmith\signalsmith-stretch" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="..\Platform.Win32\Input\Win32TextInput.cpp"><Filter>Platform.Win32\Input</Filter></ClCompile>
+    <ClInclude Include="..\Platform.Win32\Input\Win32TextInput.h"><Filter>Platform.Win32\Input</Filter></ClInclude>
+    <ClInclude Include="..\Platform.Win32\Input\TextInput.h"><Filter>Platform.Win32\Input</Filter></ClInclude>
+  </ItemGroup>
 </Project>

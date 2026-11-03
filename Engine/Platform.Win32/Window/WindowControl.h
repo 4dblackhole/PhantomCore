@@ -1,6 +1,8 @@
 #pragma once
+#include "Input/TextInput.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -20,4 +22,6 @@ class IWindowControl
     [[nodiscard]] virtual WindowResolution ClientSize() const noexcept = 0;
     [[nodiscard]] virtual std::vector<WindowResolution> DisplayResolutions() const = 0;
     [[nodiscard]] virtual bool SetClientSize(WindowResolution size, std::string &error) = 0;
+    // Optional for offscreen/test implementations. The caller owns the editor.
+    [[nodiscard]] virtual std::unique_ptr<ITextInput> CreateTextInput() { return {}; }
 };

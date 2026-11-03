@@ -64,7 +64,7 @@ SDK 테스트의 `--headless-error`는 실제 D3D12/NoSound 실행 중 Update �
 | Client 계약 | `Engine/Core/Client` | `IGameClient`, `SceneGameClient`, `EngineServices`, Update/Render context |
 | Scene | `Engine/Core/Scene` | `GameScene`, `SceneManager`, factory, 지연 전환, 수명 정책 |
 | 공통 시스템 | `Engine/Core/System` | `Camera`, `TransformNode`, `MeshInstance`, `HighResolutionClock` |
-| 입력·창 | `Engine/Platform.Win32` | HWND, 메시지 펌프, Raw Input, Virtual-Key, QPC 입력 이벤트; [실행 중 창 크기](WindowControl.md) |
+| 입력·창 | `Engine/Platform.Win32` | HWND, 메시지 펌프, Raw Input, Virtual-Key, QPC 입력 이벤트; [창 크기·Unicode 텍스트 입력](WindowControl.md) |
 | 오디오 | `Engine/Audio` | backend-neutral `AudioSystem`, 출력 API·장치·DSP buffer, FMOD backend |
 | 충돌 | `Engine/Collision` | 렌더러 비종속 선·ray·면·원·구·OBB·삼각형·절두체 질의 |
 | Geometry | `Engine/Geometry` | `Shape`, 정점 속성, 사각형·곡면·정육면체·구 primitive |
