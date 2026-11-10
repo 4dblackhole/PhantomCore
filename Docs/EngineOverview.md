@@ -58,6 +58,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 SDK 테스트의 `--headless-error`는 실제 D3D12/NoSound 실행 중 Update 예외를 주입해
 이 정리와 비차단 종료를 검증합니다. 기본 SDK 단위 테스트와 별도로 실행합니다.
 
+`RunWithGraphicsDiagnostics`는 같은 엔진 실행과 정리를 수행한 뒤 GPU 오류와 손상 메시지를 `GraphicsDiagnostics` 값으로 제공합니다. 일반 Client는 기존 `Run` 진입점을 사용합니다. 진단 결과는 메시지의 심각도와 설명을 소유하므로 실행이 끝난 뒤에도 읽을 수 있습니다.
+
+`Collected`는 읽기에 성공한 상태이며 오류와 손상 메시지가 없으면 목록이 비어 있습니다. `Unavailable`은 backend의 진단 기능을 사용할 수 없음을 나타냅니다. `ReadFailed`는 메시지 읽기에 실패했음을 나타냅니다. 이 상태와 메시지는 엔진 종료 코드와 별도로 검사합니다. `--text-rendering`은 공개 진단 API로 이 검사를 수행합니다.
+
+
 여러 Scene을 사용하는 게임은 `SceneGameClient`를 상속하고
 `RegisterScenes`에서 Scene factory와 수명 정책을 등록하는 방식이 권장된다.
 
