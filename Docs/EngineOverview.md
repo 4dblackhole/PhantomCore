@@ -13,6 +13,10 @@
   포함한다.
 - `Engine/SDK/PhantomCore.h`는 생성 파일이다. 직접 수정하지 않고 원본 기능 헤더를
   수정한 뒤 `Engine/SDK/GenerateCoreHeader.ps1`로 다시 생성한다.
+- 공개 헤더 선택과 선언 순서는 `Engine/SDK/PublicHeaders.props` 한 곳에서 관리한다.
+  생성기와 MSBuild가 이 목록을 공유하며, 목록 자체와 모든 원본 헤더가 증분 생성의
+  입력이다. 경로는 저장소 루트 기준이고 조건을 붙이지 않는다. 생성 시 내부 include를
+  제거하므로 선언 순서를 보존한다.
 - FMOD는 현재 기본 오디오 backend지만 공개 API에는 FMOD 타입을 노출하지 않는다.
 - 게임 규칙, Scene ID, 게임별 asset과 화면 전환 정책은 Client 저장소에 둔다.
 - 이미지 비동기 준비와 업로드 fence 수명은 Visual2DPerformanceAndOwnership을,
@@ -290,7 +294,7 @@ DrawPacket은 문자열 복사 대신 공유 payload를 전달하며 위치·색
 | D3D12 resource, PSO, shader, batching | `Engine/Graphics.D3D12` |
 | Sprite·위젯 공통 Node와 입력 정책 | `Engine/Core/Visual2D` |
 | D3D12 Visual2D 표현 | `Engine/Graphics.D3D12/Visual2D` |
-| Client에 공개할 새 헤더 | 원본 기능 헤더 + `GenerateCoreHeader.ps1` 목록 |
+| Client에 공개할 새 헤더 | 원본 기능 헤더 + `Engine/SDK/PublicHeaders.props` 목록 |
 
 판단 기준은 “다른 게임에서도 같은 의미로 재사용되는가”다. 게임 규칙과 표현
 정책은 Client에, backend와 무관한 재사용 계약은 Core에, API별 구현은 해당
@@ -324,7 +328,7 @@ Client 저장소의 추가 문서는 다음과 같다.
 2. 엔진 작업이면 이 문서, Client 작업이면 `Docs/ExecutionFlow.md`도 읽는다.
 3. `git status -sb`, 현재 branch, `origin/main`과 submodule gitlink를 확인한다.
 4. 요청을 엔진 재사용 기능과 Client 게임 정책으로 나눈다.
-5. 공개 API 변경 전 원본 header와 `GenerateCoreHeader.ps1`을 함께 확인한다.
+5. 공개 API 변경 전 원본 header, `PublicHeaders.props`, `GenerateCoreHeader.ps1`을 함께 확인한다.
 6. 기존 사용자 변경과 미추적 asset을 보존한다.
 7. 긴 함수는 동작별 helper로 분리하고, 한 작업이 길 때는 단계 경계 주석을 둔다.
 8. 엔진 변경은 Debug/Release x64와 관련 공개 SDK 테스트를 검증한다.

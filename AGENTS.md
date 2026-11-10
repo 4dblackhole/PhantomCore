@@ -28,7 +28,8 @@ This file applies to the entire repository.
 - Keep feature-first physical folders and keep a feature's `.h` and `.cpp`
   together. Keep `.vcxproj.filters` paths synchronized with physical paths.
 - Public APIs must not expose FMOD or D3D12 implementation-only types.
-- Client-facing headers are selected by
+- Client-facing headers and their declaration order are listed once in
+  `Engine/SDK/PublicHeaders.props`, shared by MSBuild and
   `Engine/SDK/GenerateCoreHeader.ps1`; never hand-edit generated
   `Engine/SDK/PhantomCore.h`.
 - Prefer RAII and `Microsoft::WRL::ComPtr`. Raw pointers are non-owning unless
