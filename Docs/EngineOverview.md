@@ -11,6 +11,7 @@
   `PhantomCore.h`로 Client에 제공된다.
 - Client는 `Engine/SDK/PhantomCore.vcxproj` 하나만 참조하고 `PhantomCore.h`만
   포함한다.
+- 공개 C++ 이름은 전역 범위에 선언한다. 내부 링크에는 익명 네임스페이스를 쓴다.
 - `Engine/SDK/PhantomCore.h`는 생성 파일이다. 직접 수정하지 않고 원본 기능 헤더를
   수정한 뒤 `Engine/SDK/GenerateCoreHeader.ps1`로 다시 생성한다.
 - 공개 헤더 선택과 선언 순서는 `Engine/SDK/PublicHeaders.props` 한 곳에서 관리한다.
@@ -92,14 +93,17 @@ Client wWinMain
    → EngineServices의 비소유 참조를 Client에 전달
    → Client Initialize
    → Update는 가능한 한 자주, Render는 주사율 deadline에만 실행
-   → GPU 완료 확인
+   → renderer.WaitForGpu()
    → Client Shutdown
-   → Audio / Graphics / Window 역순 해제
+   → AudioSystem Shutdown
+   → 지역 객체 소멸: window → input → audio → renderer
 ```
 
 핵심 소유권 규칙은 다음과 같다.
 
 - `Run`이 플랫폼, 그래픽, 오디오 subsystem을 소유한다.
+- Client 초기화 후 실행에 실패하면 GPU 완료를 시도한 뒤 Client와 오디오를
+  정리한다. GPU 대기도 실패하면 원래 오류를 보존하고 Client 정리를 계속한다.
 - `EngineServices`의 시스템 참조는 `Run`이 Scene 종료까지 수명을 보장하는
   빌린 참조다. 비동기 준비를 기다리는 Scene은 이 참조의 사본을 보관할 수 있으나
   서비스를 해제하지 않으며 Shutdown에서 관찰자를 먼저 버린다. 창 크기 사본은
@@ -150,6 +154,7 @@ FPS/UPS 통계 데이터의 엔진·Client 경계는
 
 게임의 Scene 구성은 Client 저장소의 `Docs/ExecutionFlow.md`에서 확인한다.
 Client에 포함되었던 기술 예제 Scene은 제거되었으며 별도 검증 프로젝트는 아직 없다.
+공개 SDK 테스트의 `--scene-manager`는 지연 전환, Scene 보존과 종료 순서를 검증한다.
 
 ## 7. Graphics·Geometry·인스턴싱
 
@@ -310,6 +315,7 @@ backend 프로젝트에 둔다.
 | [AudioPlayback.md](AudioPlayback.md) | DSP 예약 재생, bus, voice와 effect를 다룰 때 |
 | [Collision.md](Collision.md) | 충돌 타입과 질의 계약을 사용할 때 |
 | [TextRendering.md](TextRendering.md) | 글꼴·글자·glyph atlas 수명을 다룰 때 |
+| [ImageReadback.md](ImageReadback.md) | 완료된 화면 프레임을 CPU 이미지로 읽을 때 |
 | [PerformanceStatistics.md](PerformanceStatistics.md) | FPS/UPS 수집과 표시 책임을 구분할 때 |
 | [Visual2DArchitecture.md](Visual2DArchitecture.md) | Sprite·위젯·Canvas·입력 구조를 이해할 때 |
 | [Visual2DRendererLifecycle.md](Visual2DRendererLifecycle.md) | 엔진 소유 Visual2D renderer와 Scene 경계를 볼 때 |
@@ -338,48 +344,3 @@ Client 저장소의 추가 문서는 다음과 같다.
 
 이 체크리스트는 구현 방법보다 저장소 경계와 검증 누락을 방지하기 위한 것이다.
 세부 동작은 반드시 해당 기능 문서와 현재 코드를 함께 확인한다.
-
-## 2026-10-11 예제 제거 확인
-
-엔진 소스·공개 헤더·SDK 생성 목록과 호출 관계를 확인했으며, 구형 API 별칭이나
-이전 구현을 선택하는 호환 분기는 발견되지 않았다. Client의 ColoredCube 계열
-예제 제거에 따라 이 안내서의 예제 경로를 정리했다. 엔진 API/구현은 변경하지 않았다.
-Debug/Release x64 `PhantomCore.sln` 전체 Rebuild 및 두 구성의 `PhantomCore.Collision.Tests.exe`
-(audio/Camera/collision/Visual2D 공개 SDK 단위 테스트)가 성공했고 `git diff --check`를 통과했다.
-Client의 제거된 예제 실행 경로를 엔진 검증 명령으로 사용하지 않는다.
-
-공통 PCM 디코딩(2026-10-20): `Audio/Decode`의 공개 `DecodeAudioPcm`은 장치와 독립적으로 원본 sample rate의 float PCM을 제공합니다. FMOD 재생과 Client 에디터 분석이 이 결과를 공유하며 MP3 Info/LAME 패딩을 제거합니다. 기존 Vorbis/Windows 코덱 경로와 취소·비동기 수명·메모리 비용은 [AudioPlayback](AudioPlayback.md#공통-pcm-시간축-2026-10-20)을 참고합니다.
-
-## 2026-10-22 입력·텍스처 수명 리뷰 수정
-
-- Debug/Release x64 solution Rebuild 후 최종 수정도 두 구성 Build로 검증했습니다.
-  기본 SDK 검사와 `PhantomCore.Collision.Tests.exe --input-state`, `--texture-lifetime`이
-  모두 성공했습니다. 입력은 4,096개 혼합 이벤트·키 전이·버퍼 재사용을 검사합니다.
-  텍스처는 200회 즉시 해제 생성, 동시 16세트의 용량 거부, 업로드 fence 참조,
-  64개 실제 D3D12 프레임의 타깃 유지·회수와 사용 중 descriptor 중복 방지를 검사합니다.
-- MSVC v143/14.44 Code Analysis를 실제 Core·SDK Tests의 include/define/PCH/C++20과
-  Debug/Release x64 설정으로 실행했습니다. 변경한 코드의 컴파일·분석 진단과
-  파싱 오류는 없습니다. 제3자 코덱은 기존 vendor-only 분석 제외를 유지합니다.
-  범위 밖 기존 진단은 ScreenVisual2DManager C26478, Visual2DSurface C26498/C6011,
-  CollisionTests C26800, WindowControlTests C6011이며 수정하거나 억제하지 않았습니다.
-- `git diff --check` 통과. 원시 로그는 ignored `build/review-fixes-2026-10-22/`입니다.
-  이 검증은 숨긴 창의 자동 SDK 검사이며 실제 화면·물리 입력·청취의 수동 검증은 아닙니다.
-
-## 2026-10-22 PhantomCore 개명과 공개 API
-
-솔루션·프로젝트·문서·빌드 경로를 PhantomCore로 통일했습니다. 소비자는
-`Engine/SDK/PhantomCore.vcxproj` 하나를 참조하고 생성된 `PhantomCore.h` 및
-`PhantomCore.lib`를 사용합니다. 생성기는 원본 헤더에서 공개 헤더를 계속 만듭니다.
-엔진 소유의 이름 있는 C++ 네임스페이스는 제거했고 파일 내부 익명 네임스페이스는
-내부 링크를 위해 유지합니다. 이전 공개 이름의 별칭·전달 헤더는 제공하지 않습니다.
-원본 선언과 직접 호출부, 공개 SDK의 수명·오류 처리·타입 이름 충돌을 검토했습니다.
-
-Debug/Release x64 전체 Rebuild와 MSVC 14.44/v143 Code Analysis를 실제 프로젝트
-include/define/PCH/C++20 설정으로 실행했습니다. 파싱/컴파일 오류와 새 분석 진단은 없습니다.
-기존 ScreenVisual2DManager C26478, Visual2DSurface C26498/C6011,
-CollisionTests C26800, WindowControlTests C6011 진단은 별도 보고합니다.
-두 구성에서 기본 SDK와 `--input-state`, `--texture-lifetime`, `--text-rendering`,
-`--text-pixels`, `--headless-error`가 모두 성공했습니다. `git diff --check`도 통과했습니다.
-자동 숨김 창/GPU 검사이며 실제 화면·물리 입력·청취는 수동 검증하지 않았습니다.
-
-고정 속도 PCM 음정 유지와 원본 좌표 탐색은 [AudioPlayback](AudioPlayback.md)의 PrepareTimeStretch를 참고합니다.
