@@ -319,6 +319,11 @@ LRESULT Win32Window::WindowProcedure(
     case WM_INPUT:
         ProcessRawInput(reinterpret_cast<HRAWINPUT>(lParam));
         UpdateMouseCapture();
+        // Foreground Raw Input requires default processing to release system resources.
+        if (GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT)
+        {
+            DefWindowProcW(window_, message, wParam, lParam);
+        }
         return 0;
 
     case WM_ACTIVATEAPP:
