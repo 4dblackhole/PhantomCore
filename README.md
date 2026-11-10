@@ -29,6 +29,8 @@ TextStyle/TextVisualComponent는 1~999 굵기를 지원하며 글꼴 배치·글
 마이크로초 시작 위치와 준비된 Voice의 DSP 예약, 취소 Clip의 지연 해제를 지원한다.
 화면 Sprite는 `SceneGameClient::ScreenVisuals()`가 Canvas와 이미지 등록을 소유하고
 Scene 대신 매 프레임 제출한다. 월드·곡면 Canvas는 명시적 pass로 유지한다.
+`RenderContext::ReadImage()`로 완료된 화면 프레임을 RGBA 이미지로 읽을 수 있다.
+[프레임 이미지 읽기](Docs/ImageReadback.md)
 
 처음 사용하는 개발자나 새 Codex 세션은
 [Docs/EngineOverview.md](Docs/EngineOverview.md)부터 읽는다. 주요 기능, 코드 위치,
