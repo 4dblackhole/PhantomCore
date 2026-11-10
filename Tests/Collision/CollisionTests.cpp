@@ -1,6 +1,7 @@
 #include "../Audio/AudioPcmTests.h"
 #include "../App/HeadlessRunTests.h"
 #include "../App/ImageReadbackTests.h"
+#include "../App/SceneManagerTests.h"
 #include "../App/Visual2DPixelTests.h"
 #include "../App/TextPixelTests.h"
 #include "../App/TextRenderingTests.h"
@@ -1361,6 +1362,8 @@ int main(int argc, char **argv)
         return TestTextPixelOrder();
     if (argc == 2 && std::string_view(argv[1]) == "--image-readback")
         return TestImageReadback();
+    if (argc == 2 && std::string_view(argv[1]) == "--scene-manager")
+        return TestSceneManager();
     if (argc == 2 && std::string_view(argv[1]) == "--visual2d-pixels")
         return TestVisual2DPixels();
     {
