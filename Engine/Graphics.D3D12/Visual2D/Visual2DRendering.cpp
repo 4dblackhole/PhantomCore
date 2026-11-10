@@ -1,4 +1,6 @@
 #include "Visual2D/D3D12Visual2DRenderer.h"
+#include "Visual2D/ImageCacheKey.h"
+#include "Renderer/D3D12Error.h"
 
 #include "Primitive/RectangleShape.h"
 #include "Shader/ShaderCompiler.h"
@@ -29,30 +31,6 @@ namespace
     constexpr float ScreenVisual2DCanvasDepthBand =
         ScreenUiDepthRange /
         static_cast<float>(MaximumScreenCanvasZOrder + 1);
-
-    [[nodiscard]] std::wstring ImageCacheKey(
-        const std::filesystem::path& path)
-    {
-        std::wstring key = path.lexically_normal().generic_wstring();
-        std::ranges::transform(
-            key,
-            key.begin(),
-            [](const wchar_t character)
-            {
-                return static_cast<wchar_t>(std::towlower(character));
-            });
-        return key;
-    }
-
-    void ThrowIfFailed(const HRESULT result, const char* operation)
-    {
-        if (FAILED(result))
-        {
-            throw std::runtime_error(
-                std::string(operation) + " failed with HRESULT " +
-                std::to_string(static_cast<long>(result)) + ".");
-        }
-    }
 
     [[nodiscard]] DirectX::XMFLOAT4 ToFloat4(
         const Color color) noexcept
@@ -430,7 +408,7 @@ struct D3D12Visual2DRenderer::Impl
         }
 
         const std::filesystem::path normalized = path.lexically_normal();
-        const std::wstring cacheKey = ImageCacheKey(normalized);
+        const std::wstring cacheKey = Visual2DDetail::ImageCacheKey(normalized);
         if (const auto existing = imageHandlesByPath.find(cacheKey);
             existing != imageHandlesByPath.end())
         {
@@ -525,7 +503,7 @@ struct D3D12Visual2DRenderer::Impl
             throw std::runtime_error(
                 "UI rectangle root signature failed: " + details);
         }
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device->CreateRootSignature(
                 0,
                 serialized->GetBufferPointer(),
@@ -571,7 +549,7 @@ struct D3D12Visual2DRenderer::Impl
         pipeline.NumRenderTargets = 1;
         pipeline.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         pipeline.SampleDesc.Count = 1;
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device->CreateGraphicsPipelineState(
                 &pipeline,
                 IID_PPV_ARGS(rectanglePipeline.ReleaseAndGetAddressOf())),
@@ -641,7 +619,7 @@ struct D3D12Visual2DRenderer::Impl
             throw std::runtime_error(
                 "Visual2D image root signature failed: " + details);
         }
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device->CreateRootSignature(
                 0,
                 serialized->GetBufferPointer(),
@@ -684,7 +662,7 @@ struct D3D12Visual2DRenderer::Impl
         pipeline.NumRenderTargets = 1;
         pipeline.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         pipeline.SampleDesc.Count = 1;
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device->CreateGraphicsPipelineState(
                 &pipeline,
                 IID_PPV_ARGS(visualPipeline.ReleaseAndGetAddressOf())),
@@ -728,7 +706,7 @@ struct D3D12Visual2DRenderer::Impl
         const D3D12_RESOURCE_DESC description = BufferDescription(
             capacity * instanceSize);
         FrameBufferPage page{};
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device->CreateCommittedResource(
                 &uploadHeap,
                 D3D12_HEAP_FLAG_NONE,
@@ -737,7 +715,7 @@ struct D3D12Visual2DRenderer::Impl
                 nullptr,
                 IID_PPV_ARGS(page.resource.ReleaseAndGetAddressOf())),
             operation);
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             page.resource->Map(
                 0,
                 nullptr,
@@ -921,7 +899,7 @@ bool D3D12Visual2DRenderer::PrepareImages(std::span<const std::filesystem::path>
         throw std::logic_error("Image preparation requires an initialized Visual2D renderer.");
     std::vector<std::filesystem::path> missing;
     for (const auto &path : paths)
-        if (!implementation_->imageHandlesByPath.contains(ImageCacheKey(path.lexically_normal())))
+        if (!implementation_->imageHandlesByPath.contains(Visual2DDetail::ImageCacheKey(path.lexically_normal())))
             missing.push_back(path);
     return implementation_->meshRendering->Textures().PrepareImages(missing, error);
 }

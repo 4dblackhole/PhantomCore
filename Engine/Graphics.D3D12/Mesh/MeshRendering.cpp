@@ -1,4 +1,5 @@
 #include "Mesh/MeshRendering.h"
+#include "Renderer/D3D12Error.h"
 
 #include "Shader/ShaderCompiler.h"
 
@@ -19,16 +20,6 @@ using Microsoft::WRL::ComPtr;
 
 namespace
 {
-    void ThrowIfFailed(const HRESULT result, const char* operation)
-    {
-        if (FAILED(result))
-        {
-            throw std::runtime_error(
-                std::string(operation) + " failed with HRESULT " +
-                std::to_string(static_cast<long>(result)) + ".");
-        }
-    }
-
     [[nodiscard]] D3D12_RESOURCE_DESC BufferDescription(
         const std::size_t byteCount) noexcept
     {
@@ -54,7 +45,7 @@ namespace
             BufferDescription(byteCount);
 
         ComPtr<ID3D12Resource> resource;
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device.CreateCommittedResource(
                 &heapProperties,
                 D3D12_HEAP_FLAG_NONE,
@@ -597,7 +588,7 @@ GpuMeshHandle MeshRenderSystem::CreateMeshData(
         CreateUploadBuffer(*device_, vertexBytes.size());
     D3D12_RANGE noReadRange{0, 0};
     void* mappedVertices = nullptr;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         mesh->vertexBuffer_->Map(
             0,
             &noReadRange,
@@ -619,7 +610,7 @@ GpuMeshHandle MeshRenderSystem::CreateMeshData(
     mesh->indexBuffer_ =
         CreateUploadBuffer(*device_, indices.size_bytes());
     void* mappedIndices = nullptr;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         mesh->indexBuffer_->Map(
             0,
             &noReadRange,
@@ -727,7 +718,7 @@ std::shared_ptr<MaterialTemplate>
     material->requiredVertexLayout_ =
         MeshVertexLayout::PositionColor;
 
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         device_->CreateRootSignature(
             0,
             serializedRootSignature->GetBufferPointer(),
@@ -866,7 +857,7 @@ std::shared_ptr<MaterialTemplate>
     pipelineDescription.DSVFormat = depthStencilFormat_;
     pipelineDescription.SampleDesc.Count = 1;
 
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         device_->CreateGraphicsPipelineState(
             &pipelineDescription,
             IID_PPV_ARGS(
@@ -967,7 +958,7 @@ std::shared_ptr<MaterialTemplate>
     material->usesTextureSet_ = true;
     material->alphaBlended_ = alphaBlended;
 
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         device_->CreateRootSignature(
             0,
             serializedRootSignature->GetBufferPointer(),
@@ -1107,7 +1098,7 @@ std::shared_ptr<MaterialTemplate>
     pipelineDescription.DSVFormat = depthStencilFormat_;
     pipelineDescription.SampleDesc.Count = 1;
 
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         device_->CreateGraphicsPipelineState(
             &pipelineDescription,
             IID_PPV_ARGS(
@@ -1145,7 +1136,7 @@ void MeshRenderSystem::EnsureInstanceCapacity(
         *device_,
         buffer.capacity * sizeof(InstanceData));
     D3D12_RANGE noReadRange{0, 0};
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         buffer.resource->Map(
             0,
             &noReadRange,

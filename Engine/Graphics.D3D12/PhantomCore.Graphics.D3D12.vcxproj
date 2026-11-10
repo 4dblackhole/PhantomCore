@@ -99,4 +99,7 @@
   </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
+  <ItemGroup>
+    <ClInclude Include="Renderer\D3D12Error.h" />
+  </ItemGroup>
 </Project>

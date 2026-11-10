@@ -1,4 +1,5 @@
 #include "FmodAudioBackend.h"
+#include "Backend/Fmod/FmodError.h"
 
 #include "FmodAudioBus.h"
 
@@ -80,15 +81,6 @@ namespace
             OutputBackendName(active) + ".";
     }
 
-    std::string MakeFmodError(
-        const char* operation,
-        const FMOD_RESULT result)
-    {
-        return std::string(operation) + " failed: " +
-            FMOD_ErrorString(result) + " (" +
-            std::to_string(static_cast<int>(result)) + ")";
-    }
-
     void DebugLog(const std::string& message)
     {
         OutputDebugStringA(("[PhantomCore.Audio] " + message + "\n").c_str());
@@ -164,7 +156,7 @@ void FmodAudioBackend::Update()
     const FMOD_RESULT result = system_->update();
     if (result != FMOD_OK)
     {
-        DebugLog(MakeFmodError("FMOD::System::update", result));
+        DebugLog(FmodDetail::MakeFmodError("FMOD::System::update", result));
     }
 }
 
@@ -231,7 +223,7 @@ bool FmodAudioBackend::SetOutputBackend(
     const FMOD_RESULT result = system_->setOutput(ToFmodOutput(backend));
     if (result != FMOD_OK)
     {
-        errorMessage = MakeFmodError("FMOD::System::setOutput", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::System::setOutput", result);
         return false;
     }
 
@@ -293,7 +285,7 @@ bool FmodAudioBackend::SetOutputDriver(
     const FMOD_RESULT result = system_->setDriver(driverIndex);
     if (result != FMOD_OK)
     {
-        errorMessage = MakeFmodError("FMOD::System::setDriver", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::System::setDriver", result);
         return false;
     }
     RefreshRuntimeState();
@@ -432,7 +424,7 @@ std::unique_ptr<IAudioBusBackend> FmodAudioBackend::CreateBus(
         &group);
     if (result != FMOD_OK || group == nullptr)
     {
-        errorMessage = MakeFmodError(
+        errorMessage = FmodDetail::MakeFmodError(
             "FMOD::System::createChannelGroup",
             result);
         return nullptr;
@@ -442,7 +434,7 @@ std::unique_ptr<IAudioBusBackend> FmodAudioBackend::CreateBus(
     if (result != FMOD_OK)
     {
         static_cast<void>(group->release());
-        errorMessage = MakeFmodError(
+        errorMessage = FmodDetail::MakeFmodError(
             "FMOD::ChannelGroup::addGroup",
             result);
         return nullptr;
@@ -476,7 +468,7 @@ bool FmodAudioBackend::CreateSystem(std::string& errorMessage)
     FMOD_RESULT result = FMOD::System_Create(&system_);
     if (result != FMOD_OK || system_ == nullptr)
     {
-        errorMessage = MakeFmodError("FMOD::System_Create", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::System_Create", result);
         system_ = nullptr;
         return false;
     }
@@ -486,7 +478,7 @@ bool FmodAudioBackend::CreateSystem(std::string& errorMessage)
     if (result != FMOD_OK || runtimeVersion < FMOD_VERSION)
     {
         errorMessage = result != FMOD_OK
-            ? MakeFmodError("FMOD::System::getVersion", result)
+            ? FmodDetail::MakeFmodError("FMOD::System::getVersion", result)
             : "The FMOD runtime DLL is older than the FMOD headers.";
         return false;
     }
@@ -507,7 +499,7 @@ bool FmodAudioBackend::InitializeMixer(
     FMOD_RESULT result = system_->setOutput(ToFmodOutput(output));
     if (result != FMOD_OK)
     {
-        errorMessage = MakeFmodError("FMOD::System::setOutput", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::System::setOutput", result);
         return false;
     }
 
@@ -519,7 +511,7 @@ bool FmodAudioBackend::InitializeMixer(
             0);
         if (result != FMOD_OK)
         {
-            errorMessage = MakeFmodError(
+            errorMessage = FmodDetail::MakeFmodError(
                 "FMOD::System::setSoftwareFormat",
                 result);
             return false;
@@ -529,7 +521,7 @@ bool FmodAudioBackend::InitializeMixer(
     result = system_->setDSPBufferSize(bufferLength, bufferCount);
     if (result != FMOD_OK)
     {
-        errorMessage = MakeFmodError(
+        errorMessage = FmodDetail::MakeFmodError(
             "FMOD::System::setDSPBufferSize",
             result);
         return false;
@@ -540,7 +532,7 @@ bool FmodAudioBackend::InitializeMixer(
         result = system_->setDriver(driverIndex);
         if (result != FMOD_OK)
         {
-            errorMessage = MakeFmodError("FMOD::System::setDriver", result);
+            errorMessage = FmodDetail::MakeFmodError("FMOD::System::setDriver", result);
             return false;
         }
     }
@@ -553,7 +545,7 @@ bool FmodAudioBackend::InitializeMixer(
         nativeWindowHandle_);
     if (result != FMOD_OK)
     {
-        errorMessage = MakeFmodError("FMOD::System::init", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::System::init", result);
         return false;
     }
 
@@ -576,7 +568,7 @@ bool FmodAudioBackend::InitializeMixer(
         if (closeResult != FMOD_OK)
         {
             errorMessage += " " +
-                MakeFmodError("FMOD::System::close", closeResult);
+                FmodDetail::MakeFmodError("FMOD::System::close", closeResult);
         }
         return false;
     }
@@ -601,7 +593,7 @@ void FmodAudioBackend::RestoreOutputAfterFailedSwitch(
     if (restoreResult != FMOD_OK)
     {
         errorMessage = switchError + " Restore failed: " +
-            MakeFmodError("FMOD::System::setOutput", restoreResult);
+            FmodDetail::MakeFmodError("FMOD::System::setOutput", restoreResult);
     }
     else if (!enumerated)
     {
@@ -640,7 +632,7 @@ bool FmodAudioBackend::RestartMixer(
     initialized_ = false;
     if (closeResult != FMOD_OK)
     {
-        errorMessage = MakeFmodError("FMOD::System::close", closeResult);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::System::close", closeResult);
         return false;
     }
 
@@ -700,7 +692,7 @@ bool FmodAudioBackend::EnumerateCurrentDrivers(
     FMOD_RESULT result = system_->getNumDrivers(&driverCount_);
     if (result != FMOD_OK)
     {
-        errorMessage = MakeFmodError(
+        errorMessage = FmodDetail::MakeFmodError(
             "FMOD::System::getNumDrivers",
             result);
         driverCount_ = 0;
@@ -726,7 +718,7 @@ bool FmodAudioBackend::EnumerateCurrentDrivers(
         if (result != FMOD_OK)
         {
             DebugLog(
-                MakeFmodError("FMOD::System::getDriverInfo", result) +
+                FmodDetail::MakeFmodError("FMOD::System::getDriverInfo", result) +
                 " for " + OutputBackendName(activeOutput_) +
                 " driver " + std::to_string(driverIndex));
             continue;

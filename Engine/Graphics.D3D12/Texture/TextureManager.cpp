@@ -1,4 +1,5 @@
 #include "Texture/TextureManager.h"
+#include "Renderer/D3D12Error.h"
 
 #include <Windows.h>
 #include <wincodec.h>
@@ -21,16 +22,6 @@ using Microsoft::WRL::ComPtr;
 namespace
 {
     constexpr std::uint32_t DescriptorHeapCapacity = 1024;
-
-    void ThrowIfFailed(const HRESULT result, const char* operation)
-    {
-        if (FAILED(result))
-        {
-            throw std::runtime_error(
-                std::string(operation) + " failed with HRESULT " +
-                std::to_string(static_cast<long>(result)) + ".");
-        }
-    }
 
     [[nodiscard]] D3D12_RESOURCE_DESC BufferDescription(
         const std::uint64_t byteCount) noexcept
@@ -307,7 +298,7 @@ bool TextureManager::PrepareImages(std::span<const std::filesystem::path> paths,
                               [paths = std::move(missing)]
                               {
                                   const auto result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-                                  ThrowIfFailed(result, "Initialize image preparation COM apartment");
+                                  D3D12Detail::ThrowIfFailed(result, "Initialize image preparation COM apartment");
                                   struct Apartment
                                   {
                                       ~Apartment()
@@ -360,7 +351,7 @@ void TextureManager::Initialize(
         heapDescription.NumDescriptors = DescriptorHeapCapacity;
         heapDescription.Flags =
             D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device.CreateDescriptorHeap(
                 &heapDescription,
                 IID_PPV_ARGS(
@@ -371,13 +362,13 @@ void TextureManager::Initialize(
         descriptorBlocks_ = std::make_shared<DescriptorBlockPool>();
         descriptorBlocks_->heap = descriptorHeap_;
 
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device.CreateCommandAllocator(
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
                 IID_PPV_ARGS(
                     uploadAllocator_.ReleaseAndGetAddressOf())),
             "Create texture upload command allocator");
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device.CreateCommandList(
                 0,
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -386,11 +377,11 @@ void TextureManager::Initialize(
                 IID_PPV_ARGS(
                     uploadCommandList_.ReleaseAndGetAddressOf())),
             "Create texture upload command list");
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             uploadCommandList_->Close(),
             "Close initial texture upload command list");
 
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             device.CreateFence(
                 0,
                 D3D12_FENCE_FLAG_NONE,
@@ -497,7 +488,7 @@ TextureSetHandle TextureManager::LoadTextureSet(
                 uploadBuffers);
         }
 
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             uploadCommandList_->Close(),
             "Close texture upload command list");
     }
@@ -550,7 +541,7 @@ TextureSetHandle TextureManager::AppendTexture(
             mutableSet.cpuDescriptorStart,
             mutableSet,
             uploadBuffers);
-        ThrowIfFailed(
+        D3D12Detail::ThrowIfFailed(
             uploadCommandList_->Close(),
             "Close appended texture upload command list");
     }
@@ -586,7 +577,7 @@ RenderTargetTextureHandle TextureManager::CreateRenderTargetTexture(
     defaultHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_CLEAR_VALUE clearValue{};
     clearValue.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         device_->CreateCommittedResource(
             &defaultHeap,
             D3D12_HEAP_FLAG_NONE,
@@ -610,7 +601,7 @@ RenderTargetTextureHandle TextureManager::CreateRenderTargetTexture(
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDescription{};
     rtvHeapDescription.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDescription.NumDescriptors = 1;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         device_->CreateDescriptorHeap(
             &rtvHeapDescription,
             IID_PPV_ARGS(target->rtvHeap.ReleaseAndGetAddressOf())),
@@ -648,7 +639,7 @@ TextureManager::DecodedImage TextureManager::DecodeImage(
     const std::filesystem::path& path)
 {
     ComPtr<IWICImagingFactory> factory;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         CoCreateInstance(
             CLSID_WICImagingFactory2,
             nullptr,
@@ -657,7 +648,7 @@ TextureManager::DecodedImage TextureManager::DecodeImage(
         "Create WIC imaging factory");
 
     ComPtr<IWICBitmapDecoder> decoder;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         factory->CreateDecoderFromFilename(
             path.c_str(),
             nullptr,
@@ -667,13 +658,13 @@ TextureManager::DecodedImage TextureManager::DecodeImage(
         "Open texture image");
 
     ComPtr<IWICBitmapFrameDecode> frame;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         decoder->GetFrame(0, frame.ReleaseAndGetAddressOf()),
         "Read texture frame");
 
     UINT width = 0;
     UINT height = 0;
-    ThrowIfFailed(frame->GetSize(&width, &height), "Read texture dimensions");
+    D3D12Detail::ThrowIfFailed(frame->GetSize(&width, &height), "Read texture dimensions");
     if (width == 0 || height == 0 ||
         width > std::numeric_limits<UINT>::max() / 4)
     {
@@ -682,11 +673,11 @@ TextureManager::DecodedImage TextureManager::DecodeImage(
     }
 
     ComPtr<IWICFormatConverter> converter;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         factory->CreateFormatConverter(
             converter.ReleaseAndGetAddressOf()),
         "Create WIC format converter");
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         converter->Initialize(
             frame.Get(),
             GUID_WICPixelFormat32bppRGBA,
@@ -710,7 +701,7 @@ TextureManager::DecodedImage TextureManager::DecodeImage(
     image.width = width;
     image.height = height;
     image.pixels.resize(static_cast<std::size_t>(pixelByteCount));
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         converter->CopyPixels(
             nullptr,
             stride,
@@ -725,17 +716,17 @@ void TextureManager::BeginUploadCommands()
     CollectCompletedUploads();
     if (!uploadAllocator_)
     {
-        ThrowIfFailed(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+        D3D12Detail::ThrowIfFailed(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                                       IID_PPV_ARGS(uploadAllocator_.ReleaseAndGetAddressOf())),
                       "Create texture upload allocator");
-        ThrowIfFailed(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, uploadAllocator_.Get(), nullptr,
+        D3D12Detail::ThrowIfFailed(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, uploadAllocator_.Get(), nullptr,
                                                  IID_PPV_ARGS(uploadCommandList_.ReleaseAndGetAddressOf())),
                       "Create texture upload list");
     }
     else
     {
-        ThrowIfFailed(uploadAllocator_->Reset(), "Reset texture upload allocator");
-        ThrowIfFailed(uploadCommandList_->Reset(uploadAllocator_.Get(), nullptr), "Reset texture upload list");
+        D3D12Detail::ThrowIfFailed(uploadAllocator_->Reset(), "Reset texture upload allocator");
+        D3D12Detail::ThrowIfFailed(uploadCommandList_->Reset(uploadAllocator_.Get(), nullptr), "Reset texture upload list");
     }
 }
 
@@ -789,7 +780,7 @@ void TextureManager::RecordTextureUpload(
     D3D12_HEAP_PROPERTIES defaultHeap{};
     defaultHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
     ComPtr<ID3D12Resource> texture;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         device_->CreateCommittedResource(
             &defaultHeap,
             D3D12_HEAP_FLAG_NONE,
@@ -818,7 +809,7 @@ void TextureManager::RecordTextureUpload(
     const D3D12_RESOURCE_DESC uploadDescription =
         BufferDescription(uploadByteCount);
     ComPtr<ID3D12Resource> uploadBuffer;
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         device_->CreateCommittedResource(
             &uploadHeap,
             D3D12_HEAP_FLAG_NONE,
@@ -832,7 +823,7 @@ void TextureManager::RecordTextureUpload(
     // footprint without changing the source image dimensions.
     std::byte* mappedPixels = nullptr;
     D3D12_RANGE noReadRange{0, 0};
-    ThrowIfFailed(
+    D3D12Detail::ThrowIfFailed(
         uploadBuffer->Map(
             0,
             &noReadRange,
@@ -926,7 +917,7 @@ void TextureManager::ExecuteUpload(std::vector<ComPtr<ID3D12Resource>> buffers, 
     uploadCommandList_.Reset();
     if (FAILED(signalResult))
         pendingUploads_.back().fence = 0;
-    ThrowIfFailed(signalResult, "Signal texture upload fence");
+    D3D12Detail::ThrowIfFailed(signalResult, "Signal texture upload fence");
 }
 
 ID3D12DescriptorHeap* TextureManager::DescriptorHeap() const noexcept

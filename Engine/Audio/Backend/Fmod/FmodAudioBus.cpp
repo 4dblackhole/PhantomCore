@@ -1,4 +1,5 @@
 #include "FmodAudioBus.h"
+#include "Backend/Fmod/FmodError.h"
 
 #include <fmod_dsp_effects.h>
 #include <fmod_errors.h>
@@ -10,15 +11,6 @@
 
 namespace
 {
-    [[nodiscard]] std::string MakeFmodError(
-        const char* operation,
-        const FMOD_RESULT result)
-    {
-        return std::string(operation) + " failed: " +
-            FMOD_ErrorString(result) + " (" +
-            std::to_string(static_cast<int>(result)) + ")";
-    }
-
     [[nodiscard]] FMOD_DSP_TYPE ToFmodEffectType(
         const AudioEffectType type) noexcept
     {
@@ -45,7 +37,7 @@ namespace
     {
         if (result != FMOD_OK)
         {
-            errorMessage = MakeFmodError(operation, result);
+            errorMessage = FmodDetail::MakeFmodError(operation, result);
             return false;
         }
         errorMessage.clear();
@@ -348,7 +340,7 @@ std::unique_ptr<IAudioEffectBackend> FmodAudioBus::AddEffect(
         &dsp);
     if (result != FMOD_OK || dsp == nullptr)
     {
-        errorMessage = MakeFmodError("FMOD::System::createDSPByType", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::System::createDSPByType", result);
         return nullptr;
     }
 
@@ -356,7 +348,7 @@ std::unique_ptr<IAudioEffectBackend> FmodAudioBus::AddEffect(
     if (result != FMOD_OK)
     {
         static_cast<void>(dsp->release());
-        errorMessage = MakeFmodError("FMOD::ChannelGroup::addDSP", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::ChannelGroup::addDSP", result);
         return nullptr;
     }
 

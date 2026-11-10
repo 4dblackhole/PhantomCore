@@ -81,4 +81,7 @@
       <Filter>Shader</Filter>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Renderer\D3D12Error.h"><Filter>Renderer</Filter></ClInclude>
+  </ItemGroup>
 </Project>

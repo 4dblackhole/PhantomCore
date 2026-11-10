@@ -89,4 +89,7 @@
     <Filter Include="ThirdParty\Signalsmith\signalsmith-linear\platform" />
     <Filter Include="ThirdParty\Signalsmith\signalsmith-stretch" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Backend\Fmod\FmodError.h"><Filter>Backend\Fmod</Filter></ClInclude>
+  </ItemGroup>
 </Project>

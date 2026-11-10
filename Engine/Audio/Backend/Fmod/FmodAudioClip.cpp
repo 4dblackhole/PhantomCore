@@ -1,4 +1,5 @@
 #include "FmodAudioClip.h"
+#include "Backend/Fmod/FmodError.h"
 
 #include "FmodAudioBus.h"
 #include "FmodPcmClip.h"
@@ -14,15 +15,6 @@
 
 namespace
 {
-    std::string MakeFmodError(
-        const char* operation,
-        const FMOD_RESULT result)
-    {
-        return std::string(operation) + " failed: " +
-            FMOD_ErrorString(result) + " (" +
-            std::to_string(static_cast<int>(result)) + ")";
-    }
-
     FMOD_RESULT SoundTiming(FMOD::Sound* sound, unsigned int& frames, float& frequency)
     {
         auto result = sound->getLength(&frames, FMOD_TIMEUNIT_PCM);
@@ -273,7 +265,7 @@ namespace
 
         AudioPreparationState FailPreparation(FMOD_RESULT result, std::string& error)
         {
-            preparationError_ = MakeFmodError("FMOD voice preparation", result);
+            preparationError_ = FmodDetail::MakeFmodError("FMOD voice preparation", result);
             error = preparationError_;
             return AudioPreparationState::Failed;
         }
@@ -304,7 +296,7 @@ namespace
         {
             if (result != FMOD_OK)
             {
-                errorMessage = MakeFmodError(operation, result);
+                errorMessage = FmodDetail::MakeFmodError(operation, result);
                 return false;
             }
             errorMessage.clear();
@@ -363,7 +355,7 @@ std::unique_ptr<IAudioVoiceBackend> FmodAudioClip::Play(
             return nullptr;
         if (settings.startPositionMicroseconds >= duration)
         {
-            errorMessage = MakeFmodError("FMOD source position", FMOD_ERR_INVALID_POSITION);
+            errorMessage = FmodDetail::MakeFmodError("FMOD source position", FMOD_ERR_INVALID_POSITION);
             return nullptr;
         }
     }
@@ -389,7 +381,7 @@ std::unique_ptr<IAudioVoiceBackend> FmodAudioClip::Play(
         &channel);
     if (result != FMOD_OK || channel == nullptr)
     {
-        errorMessage = MakeFmodError("FMOD::System::playSound", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::System::playSound", result);
         return nullptr;
     }
 
@@ -398,7 +390,7 @@ std::unique_ptr<IAudioVoiceBackend> FmodAudioClip::Play(
         const FMOD_RESULT failure)
     {
         static_cast<void>(channel->stop());
-        errorMessage = MakeFmodError(operation, failure);
+        errorMessage = FmodDetail::MakeFmodError(operation, failure);
         return std::unique_ptr<IAudioVoiceBackend>{};
     };
 
@@ -456,7 +448,7 @@ AudioClipLoadState FmodAudioClip::LoadState(std::string& errorMessage) const
     const auto result = sound_->getOpenState(&state, nullptr, nullptr, nullptr);
     if (result != FMOD_OK || state == FMOD_OPENSTATE_ERROR)
     {
-        errorMessage = MakeFmodError("FMOD::Sound::getOpenState", result);
+        errorMessage = FmodDetail::MakeFmodError("FMOD::Sound::getOpenState", result);
         return AudioClipLoadState::Failed;
     }
     errorMessage.clear();
@@ -480,7 +472,7 @@ bool FmodAudioClip::GetDurationMicroseconds(std::uint64_t& duration, std::string
     const auto result = SoundTiming(sound_, frames, frequency);
     if (result != FMOD_OK)
     {
-        error = MakeFmodError("FMOD sound timing", result);
+        error = FmodDetail::MakeFmodError("FMOD sound timing", result);
         return false;
     }
     const long double microseconds = std::round(static_cast<long double>(frames) * 1'000'000 / frequency);

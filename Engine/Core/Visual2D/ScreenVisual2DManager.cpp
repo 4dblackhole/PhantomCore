@@ -1,4 +1,5 @@
 #include "Visual2D/ScreenVisual2DManager.h"
+#include "Visual2D/ImageCacheKey.h"
 
 #include "Visual2D/Visual2DRendering.h"
 
@@ -7,23 +8,6 @@
 #include <stdexcept>
 #include <utility>
 
-
-namespace
-{
-    [[nodiscard]] std::wstring ImageCacheKey(
-        const std::filesystem::path& path)
-    {
-        std::wstring key = path.lexically_normal().generic_wstring();
-        std::ranges::transform(
-            key,
-            key.begin(),
-            [](const wchar_t character)
-            {
-                return static_cast<wchar_t>(std::towlower(character));
-            });
-        return key;
-    }
-}
 
 ScreenCanvasHandle::ScreenCanvasHandle(
     ScreenVisual2DManager& manager,
@@ -215,7 +199,7 @@ ImageHandle ScreenVisual2DManager::RegisterImage(
             "ScreenVisual2DManager must be initialized before use.");
     }
     const std::filesystem::path normalized = path.lexically_normal();
-    const std::wstring key = ImageCacheKey(normalized);
+    const std::wstring key = Visual2DDetail::ImageCacheKey(normalized);
     const auto cached = images_.find(key);
     if (cached != images_.end())
     {

@@ -14,6 +14,9 @@
 
 namespace
 {
+    static_assert(D3D12Renderer::FrameCount == MeshRenderSystem::FrameCount);
+    static_assert(D3D12Renderer::FrameCount == TextRenderSystem::FrameCount);
+
     void ThrowIfFailed(const HRESULT result, const char* operation)
     {
         if (FAILED(result))

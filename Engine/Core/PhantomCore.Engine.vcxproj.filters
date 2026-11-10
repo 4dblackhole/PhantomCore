@@ -89,4 +89,7 @@
     <ClCompile Include="Visual2D\Visual2DSurface.cpp"><Filter>Visual2D</Filter></ClCompile>
     <ClCompile Include="Visual2D\Visual2DWidgets.cpp"><Filter>Visual2D</Filter></ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Visual2D\ImageCacheKey.h"><Filter>Visual2D</Filter></ClInclude>
+  </ItemGroup>
 </Project>

@@ -107,4 +107,7 @@
     <None Include="ThirdParty\Signalsmith\signalsmith-stretch\README.md" />
     <ClInclude Include="ThirdParty\Signalsmith\signalsmith-stretch\signalsmith-stretch.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Backend\Fmod\FmodError.h" />
+  </ItemGroup>
 </Project>

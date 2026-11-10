@@ -217,4 +217,13 @@
     <None Include="..\Audio\ThirdParty\Signalsmith\signalsmith-stretch\README.md" />
     <ClInclude Include="..\Audio\ThirdParty\Signalsmith\signalsmith-stretch\signalsmith-stretch.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12Error.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Core\Visual2D\ImageCacheKey.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Audio\Backend\Fmod\FmodError.h" />
+  </ItemGroup>
 </Project>
