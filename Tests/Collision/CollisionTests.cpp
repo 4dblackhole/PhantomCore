@@ -1,5 +1,6 @@
 #include "../Audio/AudioPcmTests.h"
 #include "../App/HeadlessRunTests.h"
+#include "../App/ImageReadbackTests.h"
 #include "../App/TextPixelTests.h"
 #include "../App/TextRenderingTests.h"
 #include "../App/WindowControlTests.h"
@@ -1357,6 +1358,8 @@ int main(int argc, char **argv)
         return TestTextRendering();
     if (argc == 2 && std::string_view(argv[1]) == "--text-pixels")
         return TestTextPixelOrder();
+    if (argc == 2 && std::string_view(argv[1]) == "--image-readback")
+        return TestImageReadback();
     {
 
         Visual2DCanvas canvas;

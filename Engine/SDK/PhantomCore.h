@@ -3180,9 +3180,26 @@ private:
 };
 // ===== END Engine\Graphics.D3D12\Mesh\MeshRendering.h =====
 
+// ===== BEGIN Engine\Core\Rendering\ImageReadback.h =====
+
+#include <cstdint>
+#include <vector>
+
+// CPU-owned image of a completed frame. Pixels are tightly packed RGBA bytes,
+// four bytes per pixel, with rows running from the top of the image to the bottom.
+// Channels contain the rendered output values without an additional color transform.
+struct RgbaImage final
+{
+    std::uint32_t width{};
+    std::uint32_t height{};
+    std::vector<std::uint8_t> pixels;
+};
+// ===== END Engine\Core\Rendering\ImageReadback.h =====
+
 // ===== BEGIN Engine\Graphics.D3D12\Renderer\D3D12Renderer.h =====
 
 // Renderer feature: D3D12 device, frame resources, and presentation.
+
 
 #include <Windows.h>
 #include <d3d12.h>
@@ -3191,12 +3208,14 @@ private:
 
 #include <array>
 #include <cstdint>
+#include <future>
 #include <memory>
 
 
 class MeshRenderSystem;
 class TextRenderSystem;
 class Visual2DRenderSystem;
+class FrameImageReadbackQueue;
 
 struct ClearColor
 {
@@ -3230,6 +3249,16 @@ struct RenderContext
     // Non-owning engine-wide Visual2D service. Scenes submit Canvas data
     // through this pointer but never initialize or release the renderer.
     Visual2DRenderSystem* visual2DRendering{};
+
+    // Request the final RGBA image of this frame on the rendering thread.
+    // Repeated requests share a result. Poll the future without blocking Update/
+    // Render; completion occurs at an existing frame-resource or shutdown wait.
+    // The completed CPU image remains usable after the engine is destroyed.
+    [[nodiscard]] std::shared_future<RgbaImage> ReadImage() const;
+
+private:
+    friend class D3D12Renderer;
+    FrameImageReadbackQueue* imageReadbacks_{};
 };
 
 // Public D3D12 frame lifecycle, device, and presentation service.
@@ -3313,6 +3342,7 @@ private:
     std::unique_ptr<TextRenderSystem> textRenderSystem_;
     // Declared after its dependencies so it is destroyed before them.
     std::unique_ptr<Visual2DRenderSystem> visual2DRenderSystem_;
+    std::unique_ptr<FrameImageReadbackQueue> imageReadbacks_;
 };
 // ===== END Engine\Graphics.D3D12\Renderer\D3D12Renderer.h =====
 

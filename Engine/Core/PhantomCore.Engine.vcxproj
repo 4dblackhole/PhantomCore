@@ -59,6 +59,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="App\Engine.h" />
+    <ClInclude Include="Rendering\ImageReadback.h" />
     <ClInclude Include="Client\IGameClient.h" />
     <ClInclude Include="Client\SceneGameClient.h" />
     <ClInclude Include="Scene\GameScene.h" />

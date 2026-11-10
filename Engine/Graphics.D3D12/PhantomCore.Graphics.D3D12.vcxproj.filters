@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClInclude Include="Renderer\FrameImageReadbackQueue.h"><Filter>Renderer</Filter></ClInclude>
+    <ClCompile Include="Renderer\FrameImageReadbackQueue.cpp"><Filter>Renderer</Filter></ClCompile>
     <Filter Include="Renderer">
       <UniqueIdentifier>{20222222-2222-4222-8222-222222222221}</UniqueIdentifier>
     </Filter>

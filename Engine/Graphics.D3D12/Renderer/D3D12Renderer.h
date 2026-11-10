@@ -2,6 +2,8 @@
 
 // Renderer feature: D3D12 device, frame resources, and presentation.
 
+#include "Rendering/ImageReadback.h"
+
 #include <Windows.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -9,12 +11,14 @@
 
 #include <array>
 #include <cstdint>
+#include <future>
 #include <memory>
 
 
 class MeshRenderSystem;
 class TextRenderSystem;
 class Visual2DRenderSystem;
+class FrameImageReadbackQueue;
 
 struct ClearColor
 {
@@ -48,6 +52,16 @@ struct RenderContext
     // Non-owning engine-wide Visual2D service. Scenes submit Canvas data
     // through this pointer but never initialize or release the renderer.
     Visual2DRenderSystem* visual2DRendering{};
+
+    // Request the final RGBA image of this frame on the rendering thread.
+    // Repeated requests share a result. Poll the future without blocking Update/
+    // Render; completion occurs at an existing frame-resource or shutdown wait.
+    // The completed CPU image remains usable after the engine is destroyed.
+    [[nodiscard]] std::shared_future<RgbaImage> ReadImage() const;
+
+private:
+    friend class D3D12Renderer;
+    FrameImageReadbackQueue* imageReadbacks_{};
 };
 
 // Public D3D12 frame lifecycle, device, and presentation service.
@@ -131,4 +145,5 @@ private:
     std::unique_ptr<TextRenderSystem> textRenderSystem_;
     // Declared after its dependencies so it is destroyed before them.
     std::unique_ptr<Visual2DRenderSystem> visual2DRenderSystem_;
+    std::unique_ptr<FrameImageReadbackQueue> imageReadbacks_;
 };

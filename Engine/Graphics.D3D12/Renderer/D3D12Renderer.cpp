@@ -1,4 +1,5 @@
 #include "Renderer/D3D12Renderer.h"
+#include "Renderer/FrameImageReadbackQueue.h"
 
 #include "Mesh/MeshRendering.h"
 #include "Text/TextRendering.h"
@@ -87,6 +88,13 @@ namespace
     }
 }
 
+std::shared_future<RgbaImage> RenderContext::ReadImage() const
+{
+    if (imageReadbacks_ == nullptr)
+        throw std::logic_error("ReadImage requires an active engine RenderContext.");
+    return imageReadbacks_->Request(renderIndex);
+}
+
 D3D12Renderer::D3D12Renderer() = default;
 
 D3D12Renderer::~D3D12Renderer()
@@ -149,6 +157,7 @@ void D3D12Renderer::Initialize(
         *meshRenderSystem_,
         *textRenderSystem_);
     visual2DRenderSystem_ = std::move(visual2DBackend);
+    imageReadbacks_ = std::make_unique<FrameImageReadbackQueue>(*device_.Get(), FrameCount);
 }
 
 void D3D12Renderer::Resize(
@@ -204,6 +213,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     // when the allocator/back buffer selected for reuse is still in use;
     // it never waits for the entire GPU after every render.
     WaitForFrame(frameIndex_);
+    imageReadbacks_->CompleteFrame(frameIndex_);
     ThrowIfFailed(
         commandAllocators_[frameIndex_]->Reset(),
         "ID3D12CommandAllocator::Reset");
@@ -257,22 +267,25 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     const std::uint64_t renderIndex = nextRenderIndex_++;
     meshRenderSystem_->BeginFrame(frameIndex_);
     textRenderSystem_->BeginFrame(frameIndex_, renderIndex);
+    imageReadbacks_->BeginFrame(frameIndex_, renderIndex, *renderTargets_[frameIndex_].Get());
     frameOpen_ = true;
-    return RenderContext{
-        commandList_.Get(),
-        viewport_,
-        scissorRectangle_,
-        width_,
-        height_,
-        frameIndex_,
-        renderIndex,
-        renderTargetFormat_,
-        depthStencilFormat_,
-        renderTargetView,
-        depthStencilView,
-        meshRenderSystem_.get(),
-        textRenderSystem_.get(),
-        visual2DRenderSystem_.get()};
+    RenderContext context;
+    context.commandList = commandList_.Get();
+    context.viewport = viewport_;
+    context.scissorRectangle = scissorRectangle_;
+    context.width = width_;
+    context.height = height_;
+    context.frameIndex = frameIndex_;
+    context.renderIndex = renderIndex;
+    context.renderTargetFormat = renderTargetFormat_;
+    context.depthStencilFormat = depthStencilFormat_;
+    context.renderTargetView = renderTargetView;
+    context.depthStencilView = depthStencilView;
+    context.meshRendering = meshRenderSystem_.get();
+    context.textRendering = textRenderSystem_.get();
+    context.visual2DRendering = visual2DRenderSystem_.get();
+    context.imageReadbacks_ = imageReadbacks_.get();
+    return context;
 }
 
 void D3D12Renderer::EndFrame()
@@ -290,6 +303,7 @@ void D3D12Renderer::EndFrame()
         *commandList_.Get(),
         width_,
         height_);
+    imageReadbacks_->RecordCopy(*commandList_.Get());
 
     D3D12_RESOURCE_BARRIER toPresent{};
     toPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -308,6 +322,7 @@ void D3D12Renderer::EndFrame()
         "ID3D12GraphicsCommandList::Close");
     ID3D12CommandList* commandLists[]{commandList_.Get()};
     commandQueue_->ExecuteCommandLists(1, commandLists);
+    imageReadbacks_->MarkSubmitted();
 
     const UINT presentFlags = tearingSupported_
         ? DXGI_PRESENT_ALLOW_TEARING
@@ -348,6 +363,8 @@ void D3D12Renderer::WaitForGpu()
             "ID3D12Fence::SetEventOnCompletion");
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
+    if (imageReadbacks_)
+        imageReadbacks_->CompleteAll();
 }
 
 ID3D12Device* D3D12Renderer::Device() const noexcept

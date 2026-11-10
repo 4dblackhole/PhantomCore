@@ -89,6 +89,8 @@
     <ClInclude Include="..\Core\Visual2D\Visual2DSurface.h" />
     <ClInclude Include="..\Core\Visual2D\Visual2DWidgets.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12Renderer.h" />
+    <ClInclude Include="..\Core\Rendering\ImageReadback.h" />
+    <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h" />
     <ClInclude Include="..\Graphics.D3D12\Mesh\MeshRendering.h" />
     <ClInclude Include="..\Graphics.D3D12\Texture\TextureManager.h" />
     <ClInclude Include="..\Graphics.D3D12\Text\TextRendering.h" />
@@ -137,6 +139,7 @@
     <ClCompile Include="..\Core\Visual2D\Visual2DSurface.cpp" />
     <ClCompile Include="..\Core\Visual2D\Visual2DWidgets.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Renderer\D3D12Renderer.cpp" />
+    <ClCompile Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Mesh\MeshRendering.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Texture\TextureManager.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Text\TextRendering.cpp" />

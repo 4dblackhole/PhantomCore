@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="Core\Rendering" />
     <Filter Include="Platform.Win32">
       <UniqueIdentifier>{70888888-8888-4888-8888-888888888801}</UniqueIdentifier>
     </Filter>
@@ -111,6 +112,8 @@
     <ClInclude Include="..\Core\Visual2D\Visual2DSurface.h"><Filter>Core\Visual2D</Filter></ClInclude>
     <ClInclude Include="..\Core\Visual2D\Visual2DWidgets.h"><Filter>Core\Visual2D</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12Renderer.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
+    <ClInclude Include="..\Core\Rendering\ImageReadback.h"><Filter>Core\Rendering</Filter></ClInclude>
+    <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Mesh\MeshRendering.h"><Filter>Graphics.D3D12\Mesh</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Texture\TextureManager.h"><Filter>Graphics.D3D12\Texture</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Text\TextRendering.h"><Filter>Graphics.D3D12\Text</Filter></ClInclude>
@@ -154,6 +157,7 @@
     <ClCompile Include="..\Core\Visual2D\Visual2DSurface.cpp"><Filter>Core\Visual2D</Filter></ClCompile>
     <ClCompile Include="..\Core\Visual2D\Visual2DWidgets.cpp"><Filter>Core\Visual2D</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Renderer\D3D12Renderer.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
+    <ClCompile Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Mesh\MeshRendering.cpp"><Filter>Graphics.D3D12\Mesh</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Texture\TextureManager.cpp"><Filter>Graphics.D3D12\Texture</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Text\TextRendering.cpp"><Filter>Graphics.D3D12\Text</Filter></ClCompile>
