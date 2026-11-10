@@ -5,17 +5,60 @@
 #include "Window/Win32Window.h"
 
 #include <Windows.h>
+#include <d3d12sdklayers.h>
+#include <wrl/client.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 
 namespace
 {
+    GraphicsDiagnostics ReadGraphicsDiagnostics(ID3D12InfoQueue& queue) noexcept
+    {
+        using Status = GraphicsDiagnostics::Status;
+        using Severity = GraphicsDiagnostics::Severity;
+        try
+        {
+            GraphicsDiagnostics result{Status::Collected, {}};
+            std::vector<std::byte> storage;
+            const auto count = queue.GetNumStoredMessages();
+            for (UINT64 index = 0; index < count; ++index)
+            {
+                SIZE_T bytes{};
+                if (FAILED(queue.GetMessage(index, nullptr, &bytes)))
+                    return {Status::ReadFailed, {}};
+                storage.resize(bytes);
+                auto* message = reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+                if (FAILED(queue.GetMessage(index, message, &bytes)))
+                    return {Status::ReadFailed, {}};
+                switch (message->Severity)
+                {
+                case D3D12_MESSAGE_SEVERITY_ERROR:
+                    result.messages.push_back({Severity::Error, message->pDescription});
+                    break;
+                case D3D12_MESSAGE_SEVERITY_CORRUPTION:
+                    result.messages.push_back({Severity::Corruption, message->pDescription});
+                    break;
+                default:
+                    break;
+                }
+            }
+            return result;
+        }
+        catch (...)
+        {
+            return {Status::ReadFailed, {}};
+        }
+    }
+
     double ValidRate(const double rate, const double fallback) noexcept
     {
         return rate > 1.0 ? rate : fallback;
@@ -232,7 +275,8 @@ namespace
     }
 }
 
-int Run(std::unique_ptr<IGameClient> client)
+static int RunClient(std::unique_ptr<IGameClient> client,
+                     Microsoft::WRL::ComPtr<ID3D12InfoQueue>* diagnosticsQueue)
 {
     if (client == nullptr)
     {
@@ -275,6 +319,12 @@ int Run(std::unique_ptr<IGameClient> client)
                 window.Handle(),
                 window.ClientWidth(),
                 window.ClientHeight());
+
+            if (diagnosticsQueue != nullptr)
+            {
+                static_cast<void>(renderer.Device()->QueryInterface(
+                    IID_PPV_ARGS(diagnosticsQueue->GetAddressOf())));
+            }
 
             config.audio.nativeWindowHandle = window.Handle();
             std::string audioError;
@@ -342,4 +392,20 @@ int Run(std::unique_ptr<IGameClient> client)
         ReportFatalError(exception, showErrorDialog);
         return EXIT_FAILURE;
     }
+}
+
+int Run(std::unique_ptr<IGameClient> client)
+{
+    return RunClient(std::move(client), nullptr);
+}
+
+int RunWithGraphicsDiagnostics(std::unique_ptr<IGameClient> client, GraphicsDiagnostics& diagnostics)
+{
+    diagnostics = {};
+    // Keep the backend queue alive through renderer and Client teardown.
+    Microsoft::WRL::ComPtr<ID3D12InfoQueue> queue;
+    const int exitCode = RunClient(std::move(client), &queue);
+    if (queue)
+        diagnostics = ReadGraphicsDiagnostics(*queue.Get());
+    return exitCode;
 }

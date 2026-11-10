@@ -1,7 +1,6 @@
 #include "TextRenderingTests.h"
 #include "PhantomCore.h"
 #include <cstdlib>
-#include <d3d12sdklayers.h>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -18,8 +17,7 @@ namespace
     class TextClient final : public IGameClient
     {
       public:
-        TextClient(bool &completed, Microsoft::WRL::ComPtr<ID3D12InfoQueue> &queue)
-            : completed_(completed), queue_(queue)
+        explicit TextClient(bool &completed) : completed_(completed)
         {
         }
         EngineConfig GetEngineConfig() const override
@@ -48,8 +46,6 @@ namespace
         }
         void Render(const RenderContext &context) override
         {
-            if (frames_ == 0)
-                static_cast<void>(context.meshRendering->Device()->QueryInterface(IID_PPV_ARGS(queue_.GetAddressOf())));
             TextDrawCommand draw;
             draw.style.font = font_;
             draw.style.fontSizePixels = 16;
@@ -174,7 +170,6 @@ namespace
                       << ", evictions=" << stats.atlasEvictions << '\n';
         }
         bool &completed_;
-        Microsoft::WRL::ComPtr<ID3D12InfoQueue> &queue_;
         TextRenderSystem *renderer_{};
         FontHandle font_;
         std::vector<TextLayoutHandle> layouts_;
@@ -187,27 +182,20 @@ namespace
 int TestTextRendering()
 {
     bool completed = false;
-    Microsoft::WRL::ComPtr<ID3D12InfoQueue> queue;
-    const int result = Run(std::make_unique<TextClient>(completed, queue));
-    if (queue)
+    GraphicsDiagnostics diagnostics;
+    const int result = RunWithGraphicsDiagnostics(std::make_unique<TextClient>(completed), diagnostics);
+    if (diagnostics.status == GraphicsDiagnostics::Status::ReadFailed)
     {
-        for (UINT64 index = 0; index < queue->GetNumStoredMessages(); ++index)
-        {
-            SIZE_T bytes = 0;
-            if (FAILED(queue->GetMessage(index, nullptr, &bytes)))
-                return EXIT_FAILURE;
-            std::vector<std::byte> storage(bytes);
-            auto *message = reinterpret_cast<D3D12_MESSAGE *>(storage.data());
-            if (FAILED(queue->GetMessage(index, message, &bytes)))
-                return EXIT_FAILURE;
-            if (message->Severity == D3D12_MESSAGE_SEVERITY_ERROR ||
-                message->Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION)
-            {
-                std::cerr << message->pDescription << '\n';
-                return EXIT_FAILURE;
-            }
-        }
-        std::cout << "D3D12 validation: no error/corruption messages.\n";
+        std::cerr << "Could not read graphics diagnostics.\n";
+        return EXIT_FAILURE;
     }
+    for (const auto &message : diagnostics.messages)
+        std::cerr << message.description << '\n';
+    if (!diagnostics.messages.empty())
+        return EXIT_FAILURE;
+    if (diagnostics.status == GraphicsDiagnostics::Status::Collected)
+        std::cout << "Graphics diagnostics: no error/corruption messages.\n";
+    else
+        std::cout << "Graphics diagnostics: unavailable.\n";
     return result == EXIT_SUCCESS && completed ? EXIT_SUCCESS : EXIT_FAILURE;
 }
