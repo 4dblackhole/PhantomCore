@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Shared by MSBuild and GenerateCoreHeader.ps1. Keep these unconditional,
+       repository-relative entries in declaration order: quoted includes are
+       removed when the public facade is generated. -->
+  <ItemGroup>
+    <CorePublicHeader Include="Engine\Audio\Decode\AudioPcmDecoder.h" />
+    <CorePublicHeader Include="Engine\Audio\Processing\TimeStretch.h" />
+    <CorePublicHeader Include="Engine\Audio\System\AudioPlayback.h" />
+    <CorePublicHeader Include="Engine\Audio\System\AudioSystem.h" />
+    <CorePublicHeader Include="Engine\Audio\System\AudioPlaybackManager.h" />
+    <CorePublicHeader Include="Engine\Platform.Win32\System\RuntimePaths.h" />
+    <CorePublicHeader Include="Engine\Platform.Win32\Input\Input.h" />
+    <CorePublicHeader Include="Engine\Platform.Win32\Input\TextInput.h" />
+    <CorePublicHeader Include="Engine\Platform.Win32\Window\WindowControl.h" />
+    <CorePublicHeader Include="Engine\Collision\Query\Collision.h" />
+    <CorePublicHeader Include="Engine\Geometry\Shape\Vertex.h" />
+    <CorePublicHeader Include="Engine\Geometry\Shape\Shape.h" />
+    <CorePublicHeader Include="Engine\Geometry\Primitive\RectangleShape.h" />
+    <CorePublicHeader Include="Engine\Geometry\Primitive\CurvedRectangleShape.h" />
+    <CorePublicHeader Include="Engine\Geometry\Primitive\CubeShape.h" />
+    <CorePublicHeader Include="Engine\Geometry\Primitive\SphereShape.h" />
+    <CorePublicHeader Include="Engine\Core\System\TransformNode.h" />
+    <CorePublicHeader Include="Engine\Core\Visual2D\Visual2DNode.h" />
+    <CorePublicHeader Include="Engine\Core\Visual2D\Visual2DCanvas.h" />
+    <CorePublicHeader Include="Engine\Core\Visual2D\ScreenVisual2DManager.h" />
+    <CorePublicHeader Include="Engine\Core\Visual2D\Visual2DComponents.h" />
+    <CorePublicHeader Include="Engine\Core\Visual2D\Visual2DInputRouter.h" />
+    <CorePublicHeader Include="Engine\Core\Visual2D\Visual2DSurface.h" />
+    <CorePublicHeader Include="Engine\Core\Visual2D\Visual2DWidgets.h" />
+    <CorePublicHeader Include="Engine\Graphics.D3D12\Text\TextRendering.h" />
+    <CorePublicHeader Include="Engine\Graphics.D3D12\Texture\TextureManager.h" />
+    <CorePublicHeader Include="Engine\Graphics.D3D12\Mesh\MeshRendering.h" />
+    <CorePublicHeader Include="Engine\Graphics.D3D12\Renderer\D3D12Renderer.h" />
+    <CorePublicHeader Include="Engine\Graphics.D3D12\Visual2D\Visual2DRendering.h" />
+    <CorePublicHeader Include="Engine\Core\Client\IGameClient.h" />
+    <CorePublicHeader Include="Engine\Core\System\HighResolutionClock.h" />
+    <CorePublicHeader Include="Engine\Core\System\Camera.h" />
+    <CorePublicHeader Include="Engine\Core\App\Engine.h" />
+    <CorePublicHeader Include="Engine\Core\Scene\GameScene.h" />
+    <CorePublicHeader Include="Engine\Core\System\MeshInstance.h" />
+    <CorePublicHeader Include="Engine\Core\Scene\SceneManager.h" />
+    <CorePublicHeader Include="Engine\Core\Client\SceneGameClient.h" />
+  </ItemGroup>
+</Project>

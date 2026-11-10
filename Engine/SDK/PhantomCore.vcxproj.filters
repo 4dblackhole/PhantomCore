@@ -171,6 +171,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="GenerateCoreHeader.ps1" />
+    <None Include="PublicHeaders.props" />
     <None Include="..\Graphics.D3D12\Shader\GenerateEmbeddedShaders.ps1"><Filter>Graphics.D3D12\Shader</Filter></None>
     <None Include="..\Graphics.D3D12\Shader\Visual2DRectangle.hlsl"><Filter>Graphics.D3D12\Shader</Filter></None>
     <None Include="..\Graphics.D3D12\Shader\UnlitVertexColorInstanced.hlsl"><Filter>Graphics.D3D12\Shader</Filter></None>

@@ -154,51 +154,18 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="GenerateCoreHeader.ps1" />
+    <None Include="PublicHeaders.props" />
     <None Include="..\Graphics.D3D12\Shader\GenerateEmbeddedShaders.ps1" />
     <None Include="..\Graphics.D3D12\Shader\UnlitVertexColorInstanced.hlsl" />
     <None Include="..\Graphics.D3D12\Shader\UnlitVertexColorTextureArrayInstanced.hlsl" />
     <None Include="..\Graphics.D3D12\Shader\Text.hlsl" />
     <None Include="..\Graphics.D3D12\Shader\Visual2DRectangle.hlsl" />
   </ItemGroup>
-  <ItemGroup>
-    <CorePublicHeader Include="$(ProjectDir)..\Audio\System\AudioPlayback.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Audio\System\AudioSystem.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Audio\System\AudioPlaybackManager.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Platform.Win32\System\RuntimePaths.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Platform.Win32\Input\Input.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Collision\Query\Collision.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Geometry\Shape\Vertex.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Geometry\Shape\Shape.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Geometry\Primitive\RectangleShape.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Geometry\Primitive\CurvedRectangleShape.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Geometry\Primitive\CubeShape.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Geometry\Primitive\SphereShape.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Visual2D\Visual2DNode.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Visual2D\Visual2DCanvas.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Visual2D\ScreenVisual2DManager.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Visual2D\Visual2DComponents.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Visual2D\Visual2DInputRouter.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Visual2D\Visual2DSurface.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Visual2D\Visual2DWidgets.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Graphics.D3D12\Text\TextRendering.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Graphics.D3D12\Texture\TextureManager.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Graphics.D3D12\Mesh\MeshRendering.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Graphics.D3D12\Renderer\D3D12Renderer.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Graphics.D3D12\Visual2D\Visual2DRendering.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Client\IGameClient.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Client\SceneGameClient.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\App\Engine.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\System\Camera.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\System\HighResolutionClock.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\System\MeshInstance.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\System\TransformNode.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Scene\GameScene.h" />
-    <CorePublicHeader Include="$(ProjectDir)..\Core\Scene\SceneManager.h" />
-  </ItemGroup>
+  <Import Project="PublicHeaders.props" />
   <Target Name="InvalidateMissingCoreHeaderStamp" BeforeTargets="GenerateCoreHeader" Condition="!Exists('$(ProjectDir)PhantomCore.h')">
     <Delete Files="$(IntDir)GenerateCoreHeader.stamp" />
   </Target>
-  <Target Name="GenerateCoreHeader" BeforeTargets="PrepareForBuild" Inputs="$(ProjectDir)GenerateCoreHeader.ps1;@(CorePublicHeader)" Outputs="$(IntDir)GenerateCoreHeader.stamp">
+  <Target Name="GenerateCoreHeader" BeforeTargets="PrepareForBuild" Inputs="$(ProjectDir)GenerateCoreHeader.ps1;$(ProjectDir)PublicHeaders.props;@(CorePublicHeader->'$(ProjectDir)..\..\%(Identity)')" Outputs="$(IntDir)GenerateCoreHeader.stamp">
     <MakeDir Directories="$(IntDir)" />
     <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)GenerateCoreHeader.ps1&quot; -RepositoryRoot &quot;$(ProjectDir)..\..&quot; -OutputPath &quot;$(ProjectDir)PhantomCore.h&quot;" />
     <Touch Files="$(IntDir)GenerateCoreHeader.stamp" AlwaysCreate="true" />

@@ -8,45 +8,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$publicHeaders = @(
-    'Engine\Audio\Decode\AudioPcmDecoder.h',
-    'Engine\Audio\Processing\TimeStretch.h',
-    'Engine\Audio\System\AudioPlayback.h',
-    'Engine\Audio\System\AudioSystem.h',
-    'Engine\Audio\System\AudioPlaybackManager.h',
-    'Engine\Platform.Win32\System\RuntimePaths.h',
-    'Engine\Platform.Win32\Input\Input.h',
-    'Engine\Platform.Win32\Input\TextInput.h',
-    'Engine\Platform.Win32\Window\WindowControl.h',
-    'Engine\Collision\Query\Collision.h',
-    'Engine\Geometry\Shape\Vertex.h',
-    'Engine\Geometry\Shape\Shape.h',
-    'Engine\Geometry\Primitive\RectangleShape.h',
-    'Engine\Geometry\Primitive\CurvedRectangleShape.h',
-    'Engine\Geometry\Primitive\CubeShape.h',
-    'Engine\Geometry\Primitive\SphereShape.h',
-    'Engine\Core\System\TransformNode.h',
-    'Engine\Core\Visual2D\Visual2DNode.h',
-    'Engine\Core\Visual2D\Visual2DCanvas.h',
-    'Engine\Core\Visual2D\ScreenVisual2DManager.h',
-    'Engine\Core\Visual2D\Visual2DComponents.h',
-    'Engine\Core\Visual2D\Visual2DInputRouter.h',
-    'Engine\Core\Visual2D\Visual2DSurface.h',
-    'Engine\Core\Visual2D\Visual2DWidgets.h',
-    'Engine\Graphics.D3D12\Text\TextRendering.h',
-    'Engine\Graphics.D3D12\Texture\TextureManager.h',
-    'Engine\Graphics.D3D12\Mesh\MeshRendering.h',
-    'Engine\Graphics.D3D12\Renderer\D3D12Renderer.h',
-    'Engine\Graphics.D3D12\Visual2D\Visual2DRendering.h',
-    'Engine\Core\Client\IGameClient.h',
-    'Engine\Core\System\HighResolutionClock.h',
-    'Engine\Core\System\Camera.h',
-    'Engine\Core\App\Engine.h',
-    'Engine\Core\Scene\GameScene.h',
-    'Engine\Core\System\MeshInstance.h',
-    'Engine\Core\Scene\SceneManager.h',
-    'Engine\Core\Client\SceneGameClient.h'
-)
+$manifestPath = Join-Path $PSScriptRoot 'PublicHeaders.props'
+[xml]$manifest = Get-Content -Raw -LiteralPath $manifestPath
+$publicHeaders = @($manifest.Project.ItemGroup.CorePublicHeader |
+    ForEach-Object { [string]$_.Include })
+if ($publicHeaders.Count -eq 0)
+{
+    throw "The public header manifest is empty: $manifestPath"
+}
 
 $builder = [System.Text.StringBuilder]::new()
 [void]$builder.AppendLine('#pragma once')
