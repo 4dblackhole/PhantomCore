@@ -216,6 +216,8 @@ Sprite와 버튼, 라벨, ComboBox는 별도 상속 계층이 아니라 같은
 Canvas는 전체 화면일 필요가 없다. HUD는 `FixedHeight`, 독립 패널은 필요한 크기의
 `Fixed` Canvas로 만들 수 있다. 여러 Canvas를 렌더링할 때는 먼저
 `canvasZOrder`, 그 다음 각 Canvas 내부 트리의 `ZIndex` 순서가 적용된다.
+화면 Canvas는 같은 Z의 제출 순서를 유지하고 사각형·이미지·글자를 트리 순서로
+알파 합성한다. EndFrame에서 월드, 화면 Canvas, 직접 제출한 Text 순서로 기록한다.
 Canvas 논리 좌표는 정중앙 원점이며 3D Transform과 마찬가지로 `+Y`가 위쪽이다.
 Win32 화면 픽셀은 입력·제출 경계에서 이 좌표로 변환된다.
 단색·이미지 Sprite는 둥근 모서리를 지정할 수 있으며 node-local clip rect는

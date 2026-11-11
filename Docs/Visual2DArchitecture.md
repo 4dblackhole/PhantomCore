@@ -110,8 +110,9 @@ capture를 재사용하고 hit-test와 move 이벤트를 생략한다. 포인터
 
 `Visual2DRenderSystem::LoadImage`는 서로 크기가 다른 PNG를 각각 독립된
 `Texture2D`로 올린다. 같은 Descriptor Table 안의 texture index를 인스턴스 데이터로
-전달하므로 크기를 강제로 통일하는 `Texture2DArray`가 필요하지 않다. 화면과 평면
-Sprite는 같은 mesh/material 조합을 사용하여 `DrawIndexedInstanced` 배치에 들어간다.
+전달하므로 크기를 강제로 통일하는 `Texture2DArray`가 필요하지 않다. 화면 Sprite는
+Canvas 표시 순서에 따라 `DrawInstanced`로 기록한다. 평면 Sprite는
+mesh/material 조합별 `DrawIndexedInstanced` 배치에 들어간다.
 
 `GetImageSize(ImageHandle)`은 WIC가 읽은 원본 픽셀 크기를 돌려준다. Sprite Bounds는
 여전히 Client가 정하지만, 이 크기로 목표 폭 또는 높이에 맞는 다른 축을 계산하면
@@ -190,8 +191,12 @@ renderContext.visual2DRendering->SubmitScreen(canvas, renderContext);
 
 ## Transparent PNG composition
 
-Visual2D image pages use an alpha-blended texture material for screen and
-world submissions. The mesh renderer records opaque primitives first and then
-keeps alpha-blended submissions in Canvas paint order. Transparent PNG pixels
-therefore reveal the existing scene, while translucent edges compose without
-writing over the opaque depth buffer.
+화면 Canvas는 `canvasZOrder` 오름차순, 같은 Z에서는 제출 순서대로 합성한다.
+각 Canvas 안에서는 트리의 paint 순서를 유지하며 사각형·이미지·글자를 번갈아 기록한다.
+연속된 같은 종류만 배치하고 이미지 descriptor 페이지가 바뀌면 배치를 닫는다.
+사각형과 이미지의 알파는 배경과 이미 그린 글자에 함께 적용된다.
+
+화면 요소는 기존 depth band로 월드 깊이를 검사하고 깊이 쓰기는 끈다.
+Z 31을 넘는 Canvas도 전체 Z 값으로 정렬하며 월드 검사에 쓰는 band만 31로 제한한다.
+`TextRenderSystem`에 직접 제출한 텍스트는 화면 Canvas 뒤 최종 pass에서 기록한다.
+`SubmitPlane`은 Mesh 렌더러의 재질·깊이 경로를 사용한다.

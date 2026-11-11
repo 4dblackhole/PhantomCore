@@ -40,9 +40,14 @@ Scene의 Canvas dispatcher가 결정한다.
 
 화면 Visual2D의 순서는 다음 두 단계다.
 
-1. `SubmitScreen(..., canvasZOrder)`가 Canvas 전체의 depth band를 결정한다.
-2. 각 band 안에서 `Visual2DCanvas::BuildDrawList`가 부모·자식 트리와 `ZIndex`에
-   따라 노드를 배치한다.
+1. `SubmitScreen(..., canvasZOrder)`의 Z 오름차순으로 Canvas를 합성한다.
+   같은 Z에서는 제출 순서를 유지한다.
+2. `Visual2DCanvas::BuildDrawList`의 부모·자식 트리와 `ZIndex` 순서로
+   사각형·이미지·글자를 기록한다.
+
+화면 요소는 깊이를 쓰지 않으며 월드 깊이 검사에는 기존 0.10 범위의 band를 사용한다.
+이 검사에 쓰는 Canvas Z만 최대 31로 제한한다. 화면 합성 정렬은 전체 Z 값을 사용한다.
+연속된 같은 종류와 이미지 페이지만 묶으므로 종류가 교차하면 draw 수가 증가한다.
 
 따라서 뒤쪽 Canvas의 높은 `ZIndex` 노드가 앞쪽 Canvas의 낮은 `ZIndex` 노드보다
 앞으로 나올 수 없다. 입력 dispatcher도 앞쪽 Canvas부터 검사해야 화면 표시와
@@ -63,7 +68,10 @@ TextureSet은 64칸 SRV 블록의 공유 lease를 소유합니다. 마지막 참
 원래 heap의 pool로 반환하며, 업로드·material·RenderToTexture의 프레임 참조가 GPU
 fence까지 이를 유지하므로 사용 중인 descriptor는 재사용하지 않습니다. 관리자를
 재초기화해도 이전 handle은 새 heap의 pool에 블록을 반환하지 않습니다.
-화면 SubmitScreen은 clip 밖의 primitive를 텍스트 shaping/instance 생성 전에 거릅니다.
+화면 SubmitScreen은 크기·배율·화면 원점·Z와 불변 payload를 포함한 draw 목록을
+복사해 보관합니다. EndFrame에서 기록하므로 제출 뒤 Canvas와 node를 제거해도
+그 프레임의 내용은 유지됩니다. clip 밖의 primitive는 기록 시 텍스트 shaping/instance
+생성 전에 거릅니다.
 Canvas 트리 자체의 수집 비용은 남으므로 큰 목록은 Client에서 가시 항목만 생성해야 합니다.
 
 `DrawPacket::text`는 불변 문자열·글꼴·크기·정렬을 소유하는 `TextContentHandle`입니다.

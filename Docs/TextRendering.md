@@ -17,8 +17,14 @@
    제출한다.
 5. 루트 Client는 필요하다면 `SceneGameClient::OnClientRendered`에서 활성 Scene
    뒤에 전역 디버그 텍스트를 제출한다.
-6. `D3D12Renderer::EndFrame`은 메시 draw를 먼저 기록하고 텍스트 draw를
-   기록한다. 그러므로 일반 텍스트는 3D 장면 위에 합성된다.
+6. `D3D12Renderer::EndFrame`은 월드 메시, 화면 Canvas, 직접 제출한 텍스트
+   순서로 기록한다. Canvas 글자는 사각형·이미지 사이의 트리 순서에 따라 기록한다.
+   직접 제출한 FPS/UPS 등의 텍스트는 최종 pass에서 기록한다.
+
+화면 Canvas의 여러 텍스트 배치와 직접 제출 목록은 같은 glyph cache와 프레임
+업로드 아레나를 공유한다. Canvas 배치를 기록해도 직접 제출 목록은 최종 pass까지
+보관한다. 새 글리프는 필요한 배치 앞에서 한 번 업로드하고 같은 프레임의 다음
+배치는 업로드·instance 범위를 이어서 할당한다.
 
 `Submit`은 command list를 즉시 실행하지 않는다. 화면 clip과 겹치는 글리프를
 CPU 제출 목록에 저장하고 `Flush`가 `DrawInstanced`를 기록한다.
@@ -119,6 +125,7 @@ renderer는 payload를 약한 참조로 추적하고 화면/texture별 배치를
 원본이 사라지면 해당 유지 상태를 회수하며 resize 때 사용하지 않는 크기 변형도 교체합니다.
 `TextVisualComponent::MeasuredSize()`는 마지막 렌더에서 계산한 논리 크기이고,
 첫 렌더 전에는 값이 없습니다. 여러 영역에 같은 payload를 그리면 마지막 pass의 값입니다.
+화면 Canvas의 측정과 제출 통계는 EndFrame의 Canvas 기록에서 갱신됩니다.
 이 측정 캐시의 쓰기와 UI 읽기는 엔진 Update/Render 스레드에서 수행합니다.
 
 ## 글리프 캐시와 GPU 처리
@@ -158,6 +165,9 @@ Debug/Release x64 빌드 후 `PhantomCore.Collision.Tests.exe`를 실행합니�
 512개 한글의 단일 upload arena, 아틀라스 확대·회수·재생성을 검사합니다.
 서로 다른 굵기의 TextFormat·레이아웃·글리프가 혼동되지 않는 것도 검사합니다.
 `--text-pixels`는 다중 페이지의 겹친 글자 합성 순서를 GPU readback으로 검사합니다.
+`--visual2d-pixels`는 공개 ReadImage와 그래픽 진단 API로 화면 알파, 글자 위 패널·이미지,
+Canvas Z와 동일 Z의 제출 순서, snapshot 및 프레임 자원 재사용을 검사합니다.
+합성·깊이 회귀 가드 24개와 월드 평면 알파의 알려진 실패 1개를 별도로 집계합니다.
 각 경로는 별도 프로세스로 실행합니다.
 
 ## FPS/UPS 성능 오버레이

@@ -111,14 +111,17 @@ void ExampleScene::Render(const RenderContext& context)
 덮어쓰지 않는다. Text 렌더러도 같은 `renderIndex`의 여러 패스에 별도
 범위를 할당한다.
 
-RenderToTexture는 Canvas 트리의 그리기 순서를 유지하면서 연속된
-Rectangle, 같은 이미지 Descriptor 페이지, Text를 각각 배치한다.
+SubmitScreen은 draw 목록과 배치를 프레임용 snapshot으로 보관한다.
+EndFrame은 월드 Mesh와 평면, 정렬된 화면 Canvas, 직접 제출된 Text 순서로 기록한다.
+ReadImage 복사는 이 기록이 모두 끝난 뒤 수행한다. 화면과 RenderToTexture는
+트리 순서를 유지하면서 연속된 Rectangle, 같은 이미지 Descriptor 페이지, Text를
+각각 배치하는 코드를 공유한다.
 렌더 타깃 핸들은 해당 frame-resource fence가 완료될 때까지 렌더러가
 보관하므로 동적 Scene이 프레임 직후 삭제되어도 GPU 참조가 유효하다.
 
 Node-local clip은 Core가 중첩 교집합을 계산하고 renderer가 현재 화면 또는 렌더
 타깃의 픽셀 좌표로 바꾼다. clip과 둥근 모서리는 인스턴스 데이터이므로 서로 다른
-viewport와 radius를 사용하는 Sprite도 기존 mesh/material batch에 함께 남는다.
+viewport와 radius를 사용하는 Sprite도 연속된 호환 배치에 함께 기록한다.
 
 ## 이미지 캐시
 

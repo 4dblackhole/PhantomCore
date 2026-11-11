@@ -6,6 +6,8 @@ PhantomCore은 Visual Studio 2022, C++20, DirectX 12 기반의 Windows 게임 �
 3D `MeshInstance`는 Camera의 Perspective/Orthographic 절두체와 로컬 Bounding
 Sphere를 사용해 화면 밖 인스턴스를 제출 전에 제외한다.
 Visual2D Canvas는 화면과 월드 표면 모두 정중앙 원점과 Y-up 논리 좌표를 사용한다.
+화면의 사각형·이미지·글자는 Canvas Z와 트리 순서대로 알파 합성한다.
+세부 순서와 배치는 [Visual2D 구조](Docs/Visual2DArchitecture.md)를 따른다.
 Visual2D 텍스트와 ComboBox는 renderer 기본 글꼴, 시스템 family 또는 배포 글꼴
 파일을 backend-neutral `TextFont`로 선택할 수 있다.
 불변 사각형 묶음 `RectangleBatch`는 geometry를 공유하여 매 프레임 명령 복사를 줄인다.
