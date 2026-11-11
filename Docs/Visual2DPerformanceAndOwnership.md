@@ -101,6 +101,11 @@ Scene은 renderer 수명에 관여하지 않고 Canvas, InputRouter, 이미지/�
 자동 해제되므로 예외 경로와 `DestroyOnExit` 전환에서 Canvas가 남지 않는다.
 Node 포인터는 여전히 Canvas가 소유하는 비소유 관찰자이며 handle보다 먼저 버린다.
 
+`GpuMesh`와 `MaterialTemplate`의 공유 핸들이 각각의 비공개 GPU 구현을 보유한다.
+Mesh 프레임의 보관 참조는 버퍼와 재질 파이프라인을 GPU fence까지 유지한다.
+`TextureManager`도 비공개 구현을 소유하고 이미지 준비·로드·추가와 타깃 생성을 제공한다.
+엔진 내부 `TextureRenderingBackend`는 장치·descriptor 바인딩과 타깃 pass를 기록한다.
+
 `TextureSet`과 `RenderTargetTexture`의 공개 계약은 읽기 전용 메타데이터와 수명만
 노출한다. 실제 `ID3D12Resource`, descriptor handle, RTV heap, resource state는
 `TextureManager.cpp` 내부의 D3D12 구현 객체가 소유한다. `TextureManager`는

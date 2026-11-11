@@ -191,6 +191,11 @@ Scene은 같은 `GpuMesh`와 `MaterialInstance`를 여러 `MeshInstance`가 공�
 `Render`에서 `MeshInstance::Submit`을 호출한다. `MeshRenderSystem`은 같은
 mesh/material 조합을 모아 `DrawIndexedInstanced`로 기록한다.
 
+`GpuMesh`와 `MaterialTemplate`은 메타데이터와 핸들을 공개하고 GPU 버퍼·뷰·root
+signature·PSO는 각각의 비공개 구현이 소유한다. `TextureManager`의 디코드·업로드·
+descriptor·queue 상태도 비공개 구현이 소유하며, 엔진 내부 TextureRenderingBackend가
+초기화·프레임 정리·타깃 기록을 연결한다.
+
 `GpuMesh` 생성 시 Shape의 canonical position 정점으로 로컬 Bounding Sphere를 한
 번 계산한다. `MeshInstance::Submit`은 부모를 포함한 월드 행렬로 Sphere 중심과
 반지름을 변환하고 `Camera::Frustum()`에 완전히 벗어난 인스턴스는
