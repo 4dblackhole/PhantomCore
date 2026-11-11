@@ -482,6 +482,769 @@ namespace
     };
 }
 
+namespace
+{
+    struct GlyphInstance final
+    {
+        DirectX::XMFLOAT4X4 transform{};
+        DirectX::XMFLOAT2 positionPixels{};
+        DirectX::XMFLOAT2 sizePixels{};
+        DirectX::XMFLOAT4 uvRectangle{};
+        DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
+        DirectX::XMFLOAT4 clipRectPixels{
+            -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
+        float depth{};
+        std::uint32_t pageIndex{};
+    };
+
+    struct GpuGlyphInstance final
+    {
+        DirectX::XMFLOAT4X4 transform{};
+        DirectX::XMFLOAT2 positionPixels{};
+        DirectX::XMFLOAT2 sizePixels{};
+        DirectX::XMFLOAT4 uvRectangle{};
+        DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
+        DirectX::XMFLOAT4 clipRectPixels{
+            -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
+        float depth{};
+    };
+
+    static_assert(sizeof(GpuGlyphInstance) == 132);
+
+    struct FrameInstancePage final
+    {
+        ComPtr<ID3D12Resource> resource;
+        std::byte* mappedData{};
+        std::size_t capacity{};
+        std::size_t used{};
+    };
+
+    struct FrameInstanceBuffer final
+    {
+        std::vector<FrameInstancePage> pages;
+        std::vector<FrameInstancePage> glyphUploadPages;
+        std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps;
+        std::uint64_t renderIndex{};
+    };
+
+    struct AtlasPage final
+    {
+        ComPtr<ID3D12Resource> texture;
+        std::uint32_t nextX{GlyphPadding};
+        std::uint32_t nextY{GlyphPadding};
+        std::uint32_t rowHeight{};
+        std::uint8_t inFlightFrames{};
+        std::uint64_t lastUsedRenderIndex{};
+    };
+
+    struct PendingGlyphUpload final
+    {
+        std::uint32_t pageIndex{};
+        std::uint32_t destinationX{};
+        std::uint32_t destinationY{};
+        std::uint32_t width{};
+        std::uint32_t height{};
+        std::vector<std::uint8_t> pixels;
+    };
+
+    struct GlyphKey final
+    {
+        std::uintptr_t fontFaceIdentity{};
+        std::uint32_t fontSizeBits{};
+        std::uint16_t glyphIndex{};
+        DWRITE_MEASURING_MODE measuringMode{};
+
+        [[nodiscard]] bool operator==(const GlyphKey&) const noexcept =
+            default;
+    };
+
+    struct GlyphKeyHash final
+    {
+        [[nodiscard]] std::size_t operator()(
+            const GlyphKey& key) const noexcept
+        {
+            std::size_t result = 0;
+            HashCombine(result, key.fontFaceIdentity);
+            HashCombine(result, key.fontSizeBits);
+            HashCombine(result, key.glyphIndex);
+            HashCombine(
+                result,
+                static_cast<std::uint32_t>(key.measuringMode));
+            return result;
+        }
+    };
+
+    struct GlyphEntry final
+    {
+        ComPtr<IUnknown> fontFaceIdentity;
+        std::uint32_t pageIndex{};
+        DirectX::XMFLOAT2 sizePixels{};
+        DirectX::XMFLOAT2 bearingPixels{};
+        DirectX::XMFLOAT4 uvRectangle{};
+        bool drawable{};
+    };
+
+
+
+
+    // Owns glyph rasterization, atlas descriptors and fence-protected frame arenas.
+    class GlyphAtlas final
+    {
+    public:
+        explicit GlyphAtlas(TextRenderStatistics& counters) noexcept : statistics(counters) {}
+        void Initialize(ID3D12Device& newDevice, IDWriteFactory5& factory)
+        {
+            device = &newDevice;
+            directWriteFactory = &factory;
+            CreateDescriptorHeap();
+        }
+
+        void BeginFrame(const std::uint32_t frameIndex, const std::uint64_t renderIndex)
+        {
+            currentFrameIndex = frameIndex;
+            currentRenderIndex = renderIndex;
+            pendingUploads.clear();
+            FrameInstanceBuffer& frame = frameBuffers[frameIndex];
+            if (frame.renderIndex != renderIndex)
+            {
+                frame.renderIndex = renderIndex;
+
+                frame.descriptorHeaps.clear();
+                for (auto &page : atlasPages)
+                {
+                    page.inFlightFrames &= static_cast<std::uint8_t>(~(1U << frameIndex));
+                    // An inactive off-screen pass may skip one ring index.
+                    // Engine frames older than the two-frame fence ring are complete.
+                    if (renderIndex >= page.lastUsedRenderIndex && renderIndex - page.lastUsedRenderIndex >= D3D12Detail::FrameCount)
+                        page.inFlightFrames = 0;
+                }
+                TrimAtlasPages();
+                for (FrameInstancePage& page : frame.pages)
+                {
+                    page.used = 0;
+                }
+                for (auto &page : frame.glyphUploadPages)
+                    page.used = 0;
+            }
+        }
+
+        void MarkUsed(const std::uint32_t pageIndex)
+        {
+            auto& page = atlasPages[pageIndex];
+            page.lastUsedRenderIndex = currentRenderIndex;
+            page.inFlightFrames |= static_cast<std::uint8_t>(1U << currentFrameIndex);
+        }
+        [[nodiscard]] std::uint64_t RenderIndex() const noexcept { return currentRenderIndex; }
+        [[nodiscard]] std::size_t PageCount() const noexcept { return atlasPages.size(); }
+        void ClearPendingUploads() noexcept { pendingUploads.clear(); }
+        void ClearPendingUploadsAndGlyphs() noexcept { pendingUploads.clear(); glyphCache.clear(); }
+        void ReleasePages() noexcept { atlasPages.clear(); }
+        void ReleaseDescriptorHeap() noexcept { atlasDescriptorHeap.Reset(); }
+        void ReleaseFrames() noexcept
+        {
+            for (FrameInstanceBuffer& frame : frameBuffers)
+            {
+                for (FrameInstancePage& page : frame.pages)
+                {
+                    if (page.resource != nullptr &&
+                        page.mappedData != nullptr)
+                    {
+                        page.resource->Unmap(0, nullptr);
+                    }
+                }
+                for (FrameInstancePage &page : frame.glyphUploadPages)
+                    if (page.resource && page.mappedData)
+                        page.resource->Unmap(0, nullptr);
+                frame = {};
+            }
+        }
+        void ResetState() noexcept
+        {
+            device = nullptr;
+            directWriteFactory = nullptr;
+            currentFrameIndex = 0;
+            currentRenderIndex = 0;
+            atlasDescriptorCapacity = 0;
+        }
+        void RecordInstances(ID3D12GraphicsCommandList& commandList,
+            const std::uint32_t viewportWidth, const std::uint32_t viewportHeight,
+            const std::span<const GlyphInstance> instances, const TextPipeline& pipeline)
+        {
+            UploadNewGlyphs(commandList);
+            pendingUploads.clear();
+            if (instances.empty())
+                return;
+
+            FrameInstanceBuffer& frame = frameBuffers[currentFrameIndex];
+            std::size_t allocationStart = 0;
+            FrameInstancePage& page = UploadInstances(frame, instances, allocationStart);
+            BindPipeline(commandList, frame, pipeline, viewportWidth, viewportHeight);
+            RecordPageBatches(commandList, page, allocationStart, instances);
+        }
+        [[nodiscard]] const GlyphEntry &FindOrCreateGlyph(IDWriteFontFace &fontFace, IUnknown *identity,
+                                                          const std::uint16_t glyphIndex, const float fontEmSize,
+                                                          const DWRITE_MEASURING_MODE measuringMode)
+        {
+            const GlyphKey key{reinterpret_cast<std::uintptr_t>(identity), std::bit_cast<std::uint32_t>(fontEmSize),
+                               glyphIndex, measuringMode};
+            if (const auto found = glyphCache.find(key);
+                found != glyphCache.end())
+            {
+                return found->second;
+            }
+
+            ++statistics.glyphRasterizations;
+            // Rasterize exactly one glyph. Its font-face COM identity is part
+            // of the cache key, so equal glyph indices from different fonts
+            // never share an atlas entry accidentally.
+            const float zeroAdvance = 0.0F;
+            const DWRITE_GLYPH_OFFSET zeroOffset{};
+            DWRITE_GLYPH_RUN singleGlyphRun{};
+            singleGlyphRun.fontFace = &fontFace;
+            singleGlyphRun.fontEmSize = fontEmSize;
+            singleGlyphRun.glyphCount = 1;
+            singleGlyphRun.glyphIndices = &glyphIndex;
+            singleGlyphRun.glyphAdvances = &zeroAdvance;
+            singleGlyphRun.glyphOffsets = &zeroOffset;
+
+            ComPtr<IDWriteGlyphRunAnalysis> analysis;
+            // Grayscale directly produces the single alpha channel used by R8.
+            ThrowIfFailed(directWriteFactory->CreateGlyphRunAnalysis(
+                              &singleGlyphRun, nullptr, DWRITE_RENDERING_MODE1_NATURAL_SYMMETRIC, measuringMode,
+                              DWRITE_GRID_FIT_MODE_ENABLED, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE, 0.0F, 0.0F,
+                              analysis.ReleaseAndGetAddressOf()),
+                          "IDWriteFactory3::CreateGlyphRunAnalysis");
+
+            RECT bounds{};
+            ThrowIfFailed(analysis->GetAlphaTextureBounds(DWRITE_TEXTURE_ALIASED_1x1, &bounds),
+                          "IDWriteGlyphRunAnalysis::GetAlphaTextureBounds");
+            const std::uint32_t width = static_cast<std::uint32_t>(
+                std::max<LONG>(bounds.right - bounds.left, 0));
+            const std::uint32_t height = static_cast<std::uint32_t>(
+                std::max<LONG>(bounds.bottom - bounds.top, 0));
+
+            GlyphEntry entry;
+            entry.fontFaceIdentity = identity;
+            entry.sizePixels = {
+                static_cast<float>(width),
+                static_cast<float>(height)};
+            entry.bearingPixels = {
+                static_cast<float>(bounds.left),
+                static_cast<float>(bounds.top)};
+            entry.drawable = width > 0 && height > 0;
+            if (entry.drawable)
+                QueueGlyphUpload(*analysis.Get(), bounds, width, height, entry);
+
+            return glyphCache.emplace(key, std::move(entry)).first->second;
+        }
+
+    private:
+
+        FrameInstancePage& UploadInstances(FrameInstanceBuffer& frame,
+            const std::span<const GlyphInstance> instances, std::size_t& allocationStart)
+        {
+            FrameInstancePage& page = AllocateInstanceRange(
+                frame,
+                instances.size(),
+                allocationStart);
+            auto* destination =
+                reinterpret_cast<GpuGlyphInstance*>(page.mappedData) +
+                allocationStart;
+            for (std::size_t index = 0;
+                 index < instances.size();
+                 ++index)
+            {
+                const GlyphInstance& source = instances[index];
+                destination[index] = GpuGlyphInstance{
+                    source.transform,
+                    source.positionPixels,
+                    source.sizePixels,
+                    source.uvRectangle,
+                    source.color,
+                    source.clipRectPixels,
+                    source.depth};
+            }
+            return page;
+        }
+
+        void BindPipeline(ID3D12GraphicsCommandList& commandList, FrameInstanceBuffer& frame,
+            const TextPipeline& pipeline, const std::uint32_t viewportWidth,
+            const std::uint32_t viewportHeight)
+        {
+            ID3D12DescriptorHeap* heaps[]{
+                atlasDescriptorHeap.Get()};
+            // Heap growth keeps every heap used by recorded passes alive.
+            if (frame.descriptorHeaps.empty() || frame.descriptorHeaps.back() != atlasDescriptorHeap)
+                frame.descriptorHeaps.push_back(atlasDescriptorHeap);
+            commandList.SetDescriptorHeaps(1, heaps);
+            pipeline.Bind(commandList);
+            commandList.IASetPrimitiveTopology(
+                D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+            const std::array viewportConstants{
+                std::bit_cast<std::uint32_t>(
+                    static_cast<float>(viewportWidth)),
+                std::bit_cast<std::uint32_t>(
+                    static_cast<float>(viewportHeight))};
+            commandList.SetGraphicsRoot32BitConstants(
+                2,
+                static_cast<UINT>(viewportConstants.size()),
+                viewportConstants.data(),
+                0);
+        }
+
+        void RecordPageBatches(ID3D12GraphicsCommandList& commandList,
+            const FrameInstancePage& page, const std::size_t allocationStart,
+            const std::span<const GlyphInstance> instances)
+        {
+            // Emit one instanced draw for each consecutive atlas page.
+            const D3D12_GPU_DESCRIPTOR_HANDLE heapStart =
+                atlasDescriptorHeap->
+                    GetGPUDescriptorHandleForHeapStart();
+            std::size_t firstInstance = 0;
+            while (firstInstance < instances.size())
+            {
+                const std::uint32_t pageIndex =
+                    instances[firstInstance].pageIndex;
+                std::size_t endInstance = firstInstance + 1;
+                while (endInstance < instances.size() &&
+                    instances[endInstance].pageIndex == pageIndex)
+                {
+                    ++endInstance;
+                }
+
+                D3D12_GPU_DESCRIPTOR_HANDLE pageDescriptor = heapStart;
+                pageDescriptor.ptr +=
+                    static_cast<UINT64>(pageIndex) *
+                    atlasDescriptorSize;
+                commandList.SetGraphicsRootDescriptorTable(
+                    0,
+                    pageDescriptor);
+                commandList.SetGraphicsRootShaderResourceView(
+                    1,
+                    page.resource->GetGPUVirtualAddress() +
+                        static_cast<UINT64>(
+                            allocationStart + firstInstance) *
+                        sizeof(GpuGlyphInstance));
+                commandList.DrawInstanced(
+                    6,
+                    static_cast<UINT>(endInstance - firstInstance),
+                    0,
+                    0);
+                firstInstance = endInstance;
+            }
+        }
+
+        void QueueGlyphUpload(IDWriteGlyphRunAnalysis& analysis, const RECT& bounds,
+            const std::uint32_t width, const std::uint32_t height, GlyphEntry& entry)
+        {
+            std::vector<std::uint8_t> grayscalePixels(static_cast<std::size_t>(width) * height);
+            ThrowIfFailed(analysis.CreateAlphaTexture(DWRITE_TEXTURE_ALIASED_1x1, &bounds, grayscalePixels.data(),
+                                                       static_cast<UINT32>(grayscalePixels.size())),
+                          "IDWriteGlyphRunAnalysis::CreateAlphaTexture");
+
+            const std::uint32_t uploadWidth =
+                width + GlyphPadding * 2U;
+            const std::uint32_t uploadHeight =
+                height + GlyphPadding * 2U;
+            std::vector<std::uint8_t> coverage(
+                static_cast<std::size_t>(uploadWidth) * uploadHeight,
+                0U);
+            for (std::uint32_t y = 0; y < height; ++y)
+            {
+                for (std::uint32_t x = 0; x < width; ++x)
+                {
+                    const std::uint8_t alpha = grayscalePixels[static_cast<std::size_t>(y) * width + x];
+                    coverage[
+                        static_cast<std::size_t>(
+                            y + GlyphPadding) * uploadWidth +
+                        x + GlyphPadding] = alpha;
+                }
+            }
+
+            std::uint32_t pageIndex = 0;
+            std::uint32_t destinationX = 0;
+            std::uint32_t destinationY = 0;
+            AllocateAtlasRegion(
+                uploadWidth,
+                uploadHeight,
+                pageIndex,
+                destinationX,
+                destinationY);
+            entry.pageIndex = pageIndex;
+
+            // Padding prevents filtering from sampling an adjacent glyph
+            // when the UV rectangle reaches an atlas-cell edge.
+            const float left = static_cast<float>(
+                destinationX + GlyphPadding);
+            const float top = static_cast<float>(
+                destinationY + GlyphPadding);
+            entry.uvRectangle = {
+                left / static_cast<float>(AtlasWidth),
+                top / static_cast<float>(AtlasHeight),
+                (left + static_cast<float>(width)) /
+                    static_cast<float>(AtlasWidth),
+                (top + static_cast<float>(height)) /
+                    static_cast<float>(AtlasHeight)};
+            pendingUploads.push_back(PendingGlyphUpload{
+                pageIndex,
+                destinationX,
+                destinationY,
+                uploadWidth,
+                uploadHeight,
+                std::move(coverage)});
+        }
+
+        void AllocateAtlasRegion(
+            const std::uint32_t width,
+            const std::uint32_t height,
+            std::uint32_t& pageIndex,
+            std::uint32_t& destinationX,
+            std::uint32_t& destinationY)
+        {
+            if (width > AtlasWidth || height > AtlasHeight)
+            {
+                throw std::runtime_error(
+                    "A rasterized glyph is larger than the glyph atlas.");
+            }
+
+            for (std::uint32_t index = 0;
+                 index < atlasPages.size();
+                 ++index)
+            {
+                if (TryAllocate(
+                        atlasPages[index],
+                        width,
+                        height,
+                        destinationX,
+                        destinationY))
+                {
+                    pageIndex = index;
+                    return;
+                }
+            }
+
+            if (atlasPages.size() >= DefaultAtlasPages)
+            {
+                auto candidate = atlasPages.end();
+                for (auto page = atlasPages.begin(); page != atlasPages.end(); ++page)
+                    if (page->inFlightFrames == 0 &&
+                        (candidate == atlasPages.end() || page->lastUsedRenderIndex < candidate->lastUsedRenderIndex))
+                        candidate = page;
+                if (candidate != atlasPages.end())
+                {
+                    pageIndex = static_cast<std::uint32_t>(candidate - atlasPages.begin());
+                    ErasePageGlyphs(pageIndex);
+                    candidate->nextX = GlyphPadding;
+                    candidate->nextY = GlyphPadding;
+                    candidate->rowHeight = 0;
+                    if (!TryAllocate(*candidate, width, height, destinationX, destinationY))
+                        throw std::runtime_error("A glyph cannot fit an empty atlas page.");
+                    return;
+                }
+            }
+            // Current and in-flight glyphs may temporarily exceed the soft budget.
+            CreateAtlasPage();
+            pageIndex =
+                static_cast<std::uint32_t>(atlasPages.size() - 1U);
+            if (!TryAllocate(
+                    atlasPages.back(),
+                    width,
+                    height,
+                    destinationX,
+                    destinationY))
+            {
+                throw std::runtime_error(
+                    "Failed to allocate a glyph in a new atlas page.");
+            }
+        }
+
+        [[nodiscard]] bool TryAllocate(
+            AtlasPage& page,
+            const std::uint32_t width,
+            const std::uint32_t height,
+            std::uint32_t& destinationX,
+            std::uint32_t& destinationY) noexcept
+        {
+            if (page.nextX + width + GlyphPadding > AtlasWidth)
+            {
+                page.nextX = GlyphPadding;
+                page.nextY += page.rowHeight + GlyphPadding;
+                page.rowHeight = 0;
+            }
+            if (page.nextY + height + GlyphPadding > AtlasHeight)
+            {
+                return false;
+            }
+
+            destinationX = page.nextX;
+            destinationY = page.nextY;
+            page.nextX += width + GlyphPadding;
+            page.rowHeight = std::max(page.rowHeight, height);
+            return true;
+        }
+
+        void CreateAtlasPage()
+        {
+            if (atlasPages.size() >= std::numeric_limits<std::uint32_t>::max())
+                throw std::length_error("Too many text atlas pages.");
+            EnsureDescriptorCapacity(static_cast<std::uint32_t>(atlasPages.size() + 1));
+            D3D12_RESOURCE_DESC description{};
+            description.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            description.Width = AtlasWidth;
+            description.Height = AtlasHeight;
+            description.DepthOrArraySize = 1;
+            description.MipLevels = 1;
+            description.Format = DXGI_FORMAT_R8_UNORM;
+            description.SampleDesc.Count = 1;
+            description.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+            AtlasPage page;
+            const D3D12_HEAP_PROPERTIES properties =
+                HeapProperties(D3D12_HEAP_TYPE_DEFAULT);
+            ThrowIfFailed(
+                device->CreateCommittedResource(
+                    &properties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &description,
+                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                    nullptr,
+                    IID_PPV_ARGS(page.texture.ReleaseAndGetAddressOf())),
+                "ID3D12Device::CreateCommittedResource(glyph atlas)");
+
+            WriteAtlasDescriptor(page.texture.Get(), atlasPages.size());
+            atlasPages.push_back(std::move(page));
+        }
+
+        void ErasePageGlyphs(std::uint32_t index)
+        {
+            std::erase_if(glyphCache, [index](const auto &entry)
+                          { return entry.second.drawable && entry.second.pageIndex == index; });
+            ++statistics.atlasEvictions;
+        }
+
+        void TrimAtlasPages()
+        {
+            while (atlasPages.size() > DefaultAtlasPages && atlasPages.back().inFlightFrames == 0)
+            {
+                ErasePageGlyphs(static_cast<std::uint32_t>(atlasPages.size() - 1));
+                atlasPages.pop_back();
+            }
+        }
+
+        void EnsureDescriptorCapacity(std::uint32_t required)
+        {
+            if (required <= atlasDescriptorCapacity)
+                return;
+            std::uint32_t capacity = std::max(atlasDescriptorCapacity, DefaultAtlasPages);
+            while (capacity < required)
+            {
+                if (capacity > std::numeric_limits<std::uint32_t>::max() / 2)
+                    throw std::length_error("Text atlas descriptor capacity overflow.");
+                capacity *= 2;
+            }
+            CreateDescriptorHeap(capacity);
+            // Shader-visible heaps cannot be descriptor copy sources. Recreate
+            // views from retained resources instead of reading GPU descriptors.
+            for (std::size_t index = 0; index < atlasPages.size(); ++index)
+                WriteAtlasDescriptor(atlasPages[index].texture.Get(), index);
+        }
+
+        void WriteAtlasDescriptor(ID3D12Resource *texture, std::size_t index)
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+            view.Format = DXGI_FORMAT_R8_UNORM;
+            view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            view.Texture2D.MipLevels = 1;
+            auto descriptor = atlasDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            descriptor.ptr += index * atlasDescriptorSize;
+            device->CreateShaderResourceView(texture, &view, descriptor);
+        }
+        static std::size_t AlignUploadOffset(std::size_t value)
+        {
+            constexpr std::size_t alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
+            if (value > std::numeric_limits<std::size_t>::max() - (alignment - 1))
+                throw std::length_error("Text upload alignment overflow.");
+            return (value + alignment - 1) & ~(alignment - 1);
+        }
+
+        FrameInstancePage &AllocateGlyphUpload(std::size_t bytes, std::size_t &offset)
+        {
+            auto &pages = frameBuffers[currentFrameIndex].glyphUploadPages;
+            for (auto &page : pages)
+            {
+                const auto begin = AlignUploadOffset(page.used);
+                if (begin <= page.capacity && bytes <= page.capacity - begin)
+                {
+                    offset = begin;
+                    page.used = begin + bytes;
+                    return page;
+                }
+            }
+            std::size_t capacity = 65536;
+            while (capacity < bytes)
+            {
+                if (capacity > std::numeric_limits<std::size_t>::max() / 2)
+                    throw std::length_error("Text upload capacity overflow.");
+                capacity *= 2;
+            }
+            FrameInstancePage page;
+            const auto properties = HeapProperties(D3D12_HEAP_TYPE_UPLOAD);
+            const auto description = BufferDescription(capacity);
+            ThrowIfFailed(device->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &description,
+                                                          D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                          IID_PPV_ARGS(page.resource.GetAddressOf())),
+                          "ID3D12Device::CreateCommittedResource(text glyph arena)");
+            const D3D12_RANGE noReads{0, 0};
+            ThrowIfFailed(page.resource->Map(0, &noReads, reinterpret_cast<void **>(&page.mappedData)),
+                          "ID3D12Resource::Map(text glyph arena)");
+            page.capacity = capacity;
+            page.used = bytes;
+            offset = 0;
+            pages.push_back(std::move(page));
+            ++statistics.uploadAllocations;
+            return pages.back();
+        }
+
+        void UploadNewGlyphs(ID3D12GraphicsCommandList &commandList)
+        {
+            if (pendingUploads.empty())
+                return;
+            std::vector<bool> touchedPages(atlasPages.size());
+            std::size_t bytes = 0;
+            for (const auto &upload : pendingUploads)
+            {
+                touchedPages[upload.pageIndex] = true;
+                const auto rowPitch = Align(upload.width, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+                const auto size = static_cast<std::size_t>(rowPitch) * upload.height;
+                bytes = AlignUploadOffset(bytes);
+                if (size > std::numeric_limits<std::size_t>::max() - bytes)
+                    throw std::length_error("Text glyph upload size overflow.");
+                bytes += size;
+            }
+            std::size_t bufferOffset = 0;
+            auto &arena = AllocateGlyphUpload(bytes, bufferOffset);
+            statistics.uploadBytes += bytes;
+            std::vector<D3D12_RESOURCE_BARRIER> barriers;
+            for (std::size_t index = 0; index < atlasPages.size(); ++index)
+                if (touchedPages[index])
+                    barriers.push_back(TransitionBarrier(*atlasPages[index].texture.Get(),
+                                                         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                                                         D3D12_RESOURCE_STATE_COPY_DEST));
+            commandList.ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
+            std::size_t localOffset = 0;
+            for (const auto &upload : pendingUploads)
+            {
+                localOffset = AlignUploadOffset(localOffset);
+                const auto offset = bufferOffset + localOffset;
+                const auto rowPitch = Align(upload.width, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+                for (std::uint32_t row = 0; row < upload.height; ++row)
+                    std::memcpy(arena.mappedData + offset + static_cast<std::size_t>(row) * rowPitch,
+                                upload.pixels.data() + static_cast<std::size_t>(row) * upload.width, upload.width);
+                D3D12_TEXTURE_COPY_LOCATION destination{};
+                destination.pResource = atlasPages[upload.pageIndex].texture.Get();
+                destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                D3D12_TEXTURE_COPY_LOCATION source{};
+                source.pResource = arena.resource.Get();
+                source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                source.PlacedFootprint.Offset = offset;
+                source.PlacedFootprint.Footprint = {DXGI_FORMAT_R8_UNORM, upload.width, upload.height, 1, rowPitch};
+                commandList.CopyTextureRegion(&destination, upload.destinationX, upload.destinationY, 0, &source,
+                                              nullptr);
+                localOffset += static_cast<std::size_t>(rowPitch) * upload.height;
+            }
+            for (auto &barrier : barriers)
+                std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+            commandList.ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
+        }
+        [[nodiscard]] FrameInstancePage& AllocateInstanceRange(
+            FrameInstanceBuffer& frame,
+            const std::size_t requiredCapacity,
+            std::size_t& firstInstance)
+        {
+            for (FrameInstancePage& page : frame.pages)
+            {
+                if (page.capacity - page.used >= requiredCapacity)
+                {
+                    firstInstance = page.used;
+                    page.used += requiredCapacity;
+                    return page;
+                }
+            }
+
+            std::size_t capacity = 256;
+            while (capacity < requiredCapacity)
+            {
+                capacity *= 2;
+            }
+            const std::size_t sizeBytes =
+                capacity * sizeof(GpuGlyphInstance);
+            const D3D12_HEAP_PROPERTIES properties =
+                HeapProperties(D3D12_HEAP_TYPE_UPLOAD);
+            const D3D12_RESOURCE_DESC description =
+                BufferDescription(sizeBytes);
+            FrameInstancePage page{};
+            ThrowIfFailed(
+                device->CreateCommittedResource(
+                    &properties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &description,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    nullptr,
+                    IID_PPV_ARGS(
+                        page.resource.ReleaseAndGetAddressOf())),
+                "ID3D12Device::CreateCommittedResource(text instances)");
+            ThrowIfFailed(
+                page.resource->Map(
+                    0,
+                    nullptr,
+                    reinterpret_cast<void**>(&page.mappedData)),
+                "ID3D12Resource::Map(text instances)");
+            page.capacity = capacity;
+            page.used = requiredCapacity;
+            firstInstance = 0;
+            frame.pages.push_back(std::move(page));
+            return frame.pages.back();
+        }
+
+        void CreateDescriptorHeap(std::uint32_t capacity = DefaultAtlasPages)
+        {
+            D3D12_DESCRIPTOR_HEAP_DESC description{};
+            description.Type =
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            description.NumDescriptors = capacity;
+            description.Flags =
+                D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+            ThrowIfFailed(
+                device->CreateDescriptorHeap(
+                    &description,
+                    IID_PPV_ARGS(
+                        atlasDescriptorHeap.ReleaseAndGetAddressOf())),
+                "ID3D12Device::CreateDescriptorHeap(text atlas)");
+            atlasDescriptorSize =
+                device->GetDescriptorHandleIncrementSize(
+                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            atlasDescriptorCapacity = capacity;
+        }
+
+
+    private:
+        ID3D12Device* device{};
+        ComPtr<ID3D12DescriptorHeap> atlasDescriptorHeap;
+        std::uint32_t atlasDescriptorSize{};
+        std::vector<AtlasPage> atlasPages;
+        std::unordered_map<GlyphKey, GlyphEntry, GlyphKeyHash> glyphCache;
+        std::vector<PendingGlyphUpload> pendingUploads;
+        std::array<FrameInstanceBuffer, D3D12Detail::FrameCount> frameBuffers{};
+        std::uint32_t currentFrameIndex{};
+        std::uint64_t currentRenderIndex{};
+        std::uint32_t atlasDescriptorCapacity{};
+        IDWriteFactory5* directWriteFactory{};
+        TextRenderStatistics& statistics;
+    };
+}
+
 struct TextRenderSystem::Impl final
 {
     using CanvasDraw = TextRenderingBackend::CanvasDraw;
@@ -596,108 +1359,6 @@ struct TextRenderSystem::Impl final
         std::unordered_map<LayoutKey, FormatEntry, LayoutKeyHash> formatCache;
     };
 
-    struct GlyphInstance final
-    {
-        DirectX::XMFLOAT4X4 transform{};
-        DirectX::XMFLOAT2 positionPixels{};
-        DirectX::XMFLOAT2 sizePixels{};
-        DirectX::XMFLOAT4 uvRectangle{};
-        DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
-        DirectX::XMFLOAT4 clipRectPixels{
-            -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
-        float depth{};
-        std::uint32_t pageIndex{};
-    };
-
-    struct GpuGlyphInstance final
-    {
-        DirectX::XMFLOAT4X4 transform{};
-        DirectX::XMFLOAT2 positionPixels{};
-        DirectX::XMFLOAT2 sizePixels{};
-        DirectX::XMFLOAT4 uvRectangle{};
-        DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
-        DirectX::XMFLOAT4 clipRectPixels{
-            -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
-        float depth{};
-    };
-
-    static_assert(sizeof(GpuGlyphInstance) == 132);
-
-    struct FrameInstancePage final
-    {
-        ComPtr<ID3D12Resource> resource;
-        std::byte* mappedData{};
-        std::size_t capacity{};
-        std::size_t used{};
-    };
-
-    struct FrameInstanceBuffer final
-    {
-        std::vector<FrameInstancePage> pages;
-        std::vector<FrameInstancePage> glyphUploadPages;
-        std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps;
-        std::uint64_t renderIndex{};
-    };
-
-    struct AtlasPage final
-    {
-        ComPtr<ID3D12Resource> texture;
-        std::uint32_t nextX{GlyphPadding};
-        std::uint32_t nextY{GlyphPadding};
-        std::uint32_t rowHeight{};
-        std::uint8_t inFlightFrames{};
-        std::uint64_t lastUsedRenderIndex{};
-    };
-
-    struct PendingGlyphUpload final
-    {
-        std::uint32_t pageIndex{};
-        std::uint32_t destinationX{};
-        std::uint32_t destinationY{};
-        std::uint32_t width{};
-        std::uint32_t height{};
-        std::vector<std::uint8_t> pixels;
-    };
-
-    struct GlyphKey final
-    {
-        std::uintptr_t fontFaceIdentity{};
-        std::uint32_t fontSizeBits{};
-        std::uint16_t glyphIndex{};
-        DWRITE_MEASURING_MODE measuringMode{};
-
-        [[nodiscard]] bool operator==(const GlyphKey&) const noexcept =
-            default;
-    };
-
-    struct GlyphKeyHash final
-    {
-        [[nodiscard]] std::size_t operator()(
-            const GlyphKey& key) const noexcept
-        {
-            std::size_t result = 0;
-            HashCombine(result, key.fontFaceIdentity);
-            HashCombine(result, key.fontSizeBits);
-            HashCombine(result, key.glyphIndex);
-            HashCombine(
-                result,
-                static_cast<std::uint32_t>(key.measuringMode));
-            return result;
-        }
-    };
-
-    struct GlyphEntry final
-    {
-        ComPtr<IUnknown> fontFaceIdentity;
-        std::uint32_t pageIndex{};
-        DirectX::XMFLOAT2 sizePixels{};
-        DirectX::XMFLOAT2 bearingPixels{};
-        DirectX::XMFLOAT4 uvRectangle{};
-        bool drawable{};
-    };
-
-
-
     void Initialize(
         ID3D12Device& newDevice,
         const DXGI_FORMAT renderTargetFormat,
@@ -709,44 +1370,24 @@ struct TextRenderSystem::Impl final
                 "TextRenderSystem is already initialized.");
         }
 
-        device = &newDevice;
         layouts.Initialize();
 
-        CreateDescriptorHeap();
+        atlas.Initialize(newDevice, *layouts.Factory());
         pipeline.Initialize(newDevice, renderTargetFormat, newDepthStencilFormat);
         initialized = true;
     }
 
     void Shutdown() noexcept
     {
-        for (FrameInstanceBuffer& frame : frameBuffers)
-        {
-            for (FrameInstancePage& page : frame.pages)
-            {
-                if (page.resource != nullptr &&
-                    page.mappedData != nullptr)
-                {
-                    page.resource->Unmap(0, nullptr);
-                }
-            }
-            for (FrameInstancePage &page : frame.glyphUploadPages)
-                if (page.resource && page.mappedData)
-                    page.resource->Unmap(0, nullptr);
-            frame = {};
-        }
-
+        atlas.ReleaseFrames();
         pendingInstances.clear();
-        pendingUploads.clear();
-        glyphCache.clear();
+        atlas.ClearPendingUploadsAndGlyphs();
         layouts.ClearCaches();
-        atlasPages.clear();
+        atlas.ReleasePages();
         pipeline.Reset();
-        atlasDescriptorHeap.Reset();
+        atlas.ReleaseDescriptorHeap();
         layouts.ReleaseFactory();
-        device = nullptr;
-        currentFrameIndex = 0;
-        currentRenderIndex = 0;
-        atlasDescriptorCapacity = 0;
+        atlas.ResetState();
         statistics = {};
         initialized = false;
         frameOpen = false;
@@ -782,34 +1423,10 @@ struct TextRenderSystem::Impl final
                 "A text rendering frame is already open.");
         }
 
-        currentFrameIndex = frameIndex;
-        if (currentRenderIndex != renderIndex)
+        if (atlas.RenderIndex() != renderIndex)
             statistics = {};
-        currentRenderIndex = renderIndex;
         pendingInstances.clear();
-        pendingUploads.clear();
-        FrameInstanceBuffer& frame = frameBuffers[frameIndex];
-        if (frame.renderIndex != renderIndex)
-        {
-            frame.renderIndex = renderIndex;
-
-            frame.descriptorHeaps.clear();
-            for (auto &page : atlasPages)
-            {
-                page.inFlightFrames &= static_cast<std::uint8_t>(~(1U << frameIndex));
-                // An inactive off-screen pass may skip one ring index.
-                // Engine frames older than the two-frame fence ring are complete.
-                if (renderIndex >= page.lastUsedRenderIndex && renderIndex - page.lastUsedRenderIndex >= D3D12Detail::FrameCount)
-                    page.inFlightFrames = 0;
-            }
-            TrimAtlasPages();
-            for (FrameInstancePage& page : frame.pages)
-            {
-                page.used = 0;
-            }
-            for (auto &page : frame.glyphUploadPages)
-                page.used = 0;
-        }
+        atlas.BeginFrame(frameIndex, renderIndex);
         frameOpen = true;
     }
 
@@ -878,13 +1495,11 @@ struct TextRenderSystem::Impl final
                     const auto &prepared = run.glyphs[index];
                     if (!IntersectsClip(prepared.bounds, command))
                         continue;
-                    const GlyphEntry &glyph = FindOrCreateGlyph(*run.face.Get(), run.identity.Get(), prepared.index,
+                    const GlyphEntry &glyph = atlas.FindOrCreateGlyph(*run.face.Get(), run.identity.Get(), prepared.index,
                                                                 run.size, run.measuringMode);
                     if (!glyph.drawable)
                         continue;
-                    auto &atlas = atlasPages[glyph.pageIndex];
-                    atlas.lastUsedRenderIndex = currentRenderIndex;
-                    atlas.inFlightFrames |= static_cast<std::uint8_t>(1U << currentFrameIndex);
+                    atlas.MarkUsed(glyph.pageIndex);
                     pendingInstances.push_back(
                         GlyphInstance{command.transform,
                                       {command.positionPixels.x + prepared.origin.x + glyph.bearingPixels.x,
@@ -908,10 +1523,10 @@ struct TextRenderSystem::Impl final
         RequireFrameOpen();
         if (viewportWidth != 0 && viewportHeight != 0)
         {
-            RecordInstances(commandList, viewportWidth, viewportHeight, pendingInstances);
+            atlas.RecordInstances(commandList, viewportWidth, viewportHeight, pendingInstances, pipeline);
         }
         pendingInstances.clear();
-        pendingUploads.clear();
+        atlas.ClearPendingUploads();
         frameOpen = false;
     }
 
@@ -929,109 +1544,11 @@ struct TextRenderSystem::Impl final
         {
             Submit(draw.layout, draw.command);
         }
-        RecordInstances(commandList, viewportWidth, viewportHeight,
-            std::span<const GlyphInstance>(pendingInstances).subspan(first));
+        atlas.RecordInstances(commandList, viewportWidth, viewportHeight,
+            std::span<const GlyphInstance>(pendingInstances).subspan(first), pipeline);
         pendingInstances.resize(first);
     }
 
-    void RecordInstances(
-        ID3D12GraphicsCommandList& commandList,
-        const std::uint32_t viewportWidth,
-        const std::uint32_t viewportHeight,
-        const std::span<const GlyphInstance> instances)
-    {
-        // New glyph bitmaps must reach their atlas pages before any
-        // instance in this frame samples them.
-        UploadNewGlyphs(commandList);
-        pendingUploads.clear();
-        if (!instances.empty())
-        {
-            // Preserve paint order, including overlapping translucent text.
-            // Consecutive pages are batched below; no per-frame glyph sorting.
-            FrameInstanceBuffer& frame =
-                frameBuffers[currentFrameIndex];
-            std::size_t allocationStart = 0;
-            FrameInstancePage& page = AllocateInstanceRange(
-                frame,
-                instances.size(),
-                allocationStart);
-            auto* destination =
-                reinterpret_cast<GpuGlyphInstance*>(page.mappedData) +
-                allocationStart;
-            for (std::size_t index = 0;
-                 index < instances.size();
-                 ++index)
-            {
-                const GlyphInstance& source = instances[index];
-                destination[index] = GpuGlyphInstance{
-                    source.transform,
-                    source.positionPixels,
-                    source.sizePixels,
-                    source.uvRectangle,
-                    source.color,
-                    source.clipRectPixels,
-                    source.depth};
-            }
-
-            ID3D12DescriptorHeap* heaps[]{
-                atlasDescriptorHeap.Get()};
-            // Heap growth keeps every heap used by recorded passes alive.
-            if (frame.descriptorHeaps.empty() || frame.descriptorHeaps.back() != atlasDescriptorHeap)
-                frame.descriptorHeaps.push_back(atlasDescriptorHeap);
-            commandList.SetDescriptorHeaps(1, heaps);
-            pipeline.Bind(commandList);
-            commandList.IASetPrimitiveTopology(
-                D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-            const std::array viewportConstants{
-                std::bit_cast<std::uint32_t>(
-                    static_cast<float>(viewportWidth)),
-                std::bit_cast<std::uint32_t>(
-                    static_cast<float>(viewportHeight))};
-            commandList.SetGraphicsRoot32BitConstants(
-                2,
-                static_cast<UINT>(viewportConstants.size()),
-                viewportConstants.data(),
-                0);
-
-            // Emit one instanced draw for each consecutive atlas page.
-            const D3D12_GPU_DESCRIPTOR_HANDLE heapStart =
-                atlasDescriptorHeap->
-                    GetGPUDescriptorHandleForHeapStart();
-            std::size_t firstInstance = 0;
-            while (firstInstance < instances.size())
-            {
-                const std::uint32_t pageIndex =
-                    instances[firstInstance].pageIndex;
-                std::size_t endInstance = firstInstance + 1;
-                while (endInstance < instances.size() &&
-                    instances[endInstance].pageIndex == pageIndex)
-                {
-                    ++endInstance;
-                }
-
-                D3D12_GPU_DESCRIPTOR_HANDLE pageDescriptor = heapStart;
-                pageDescriptor.ptr +=
-                    static_cast<UINT64>(pageIndex) *
-                    atlasDescriptorSize;
-                commandList.SetGraphicsRootDescriptorTable(
-                    0,
-                    pageDescriptor);
-                commandList.SetGraphicsRootShaderResourceView(
-                    1,
-                    page.resource->GetGPUVirtualAddress() +
-                        static_cast<UINT64>(
-                            allocationStart + firstInstance) *
-                        sizeof(GpuGlyphInstance));
-                commandList.DrawInstanced(
-                    6,
-                    static_cast<UINT>(endInstance - firstInstance),
-                    0,
-                    0);
-                firstInstance = endInstance;
-            }
-        }
-    }
 
 
 
@@ -1040,451 +1557,6 @@ struct TextRenderSystem::Impl final
 
 
 
-    [[nodiscard]] const GlyphEntry &FindOrCreateGlyph(IDWriteFontFace &fontFace, IUnknown *identity,
-                                                      const std::uint16_t glyphIndex, const float fontEmSize,
-                                                      const DWRITE_MEASURING_MODE measuringMode)
-    {
-        const GlyphKey key{reinterpret_cast<std::uintptr_t>(identity), std::bit_cast<std::uint32_t>(fontEmSize),
-                           glyphIndex, measuringMode};
-        if (const auto found = glyphCache.find(key);
-            found != glyphCache.end())
-        {
-            return found->second;
-        }
-
-        ++statistics.glyphRasterizations;
-        // Rasterize exactly one glyph. Its font-face COM identity is part
-        // of the cache key, so equal glyph indices from different fonts
-        // never share an atlas entry accidentally.
-        const float zeroAdvance = 0.0F;
-        const DWRITE_GLYPH_OFFSET zeroOffset{};
-        DWRITE_GLYPH_RUN singleGlyphRun{};
-        singleGlyphRun.fontFace = &fontFace;
-        singleGlyphRun.fontEmSize = fontEmSize;
-        singleGlyphRun.glyphCount = 1;
-        singleGlyphRun.glyphIndices = &glyphIndex;
-        singleGlyphRun.glyphAdvances = &zeroAdvance;
-        singleGlyphRun.glyphOffsets = &zeroOffset;
-
-        ComPtr<IDWriteGlyphRunAnalysis> analysis;
-        // Grayscale directly produces the single alpha channel used by R8.
-        ThrowIfFailed(layouts.Factory()->CreateGlyphRunAnalysis(
-                          &singleGlyphRun, nullptr, DWRITE_RENDERING_MODE1_NATURAL_SYMMETRIC, measuringMode,
-                          DWRITE_GRID_FIT_MODE_ENABLED, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE, 0.0F, 0.0F,
-                          analysis.ReleaseAndGetAddressOf()),
-                      "IDWriteFactory3::CreateGlyphRunAnalysis");
-
-        RECT bounds{};
-        ThrowIfFailed(analysis->GetAlphaTextureBounds(DWRITE_TEXTURE_ALIASED_1x1, &bounds),
-                      "IDWriteGlyphRunAnalysis::GetAlphaTextureBounds");
-        const std::uint32_t width = static_cast<std::uint32_t>(
-            std::max<LONG>(bounds.right - bounds.left, 0));
-        const std::uint32_t height = static_cast<std::uint32_t>(
-            std::max<LONG>(bounds.bottom - bounds.top, 0));
-
-        GlyphEntry entry;
-        entry.fontFaceIdentity = identity;
-        entry.sizePixels = {
-            static_cast<float>(width),
-            static_cast<float>(height)};
-        entry.bearingPixels = {
-            static_cast<float>(bounds.left),
-            static_cast<float>(bounds.top)};
-        entry.drawable = width > 0 && height > 0;
-        if (entry.drawable)
-        {
-            std::vector<std::uint8_t> grayscalePixels(static_cast<std::size_t>(width) * height);
-            ThrowIfFailed(analysis->CreateAlphaTexture(DWRITE_TEXTURE_ALIASED_1x1, &bounds, grayscalePixels.data(),
-                                                       static_cast<UINT32>(grayscalePixels.size())),
-                          "IDWriteGlyphRunAnalysis::CreateAlphaTexture");
-
-            const std::uint32_t uploadWidth =
-                width + GlyphPadding * 2U;
-            const std::uint32_t uploadHeight =
-                height + GlyphPadding * 2U;
-            std::vector<std::uint8_t> coverage(
-                static_cast<std::size_t>(uploadWidth) * uploadHeight,
-                0U);
-            for (std::uint32_t y = 0; y < height; ++y)
-            {
-                for (std::uint32_t x = 0; x < width; ++x)
-                {
-                    const std::uint8_t alpha = grayscalePixels[static_cast<std::size_t>(y) * width + x];
-                    coverage[
-                        static_cast<std::size_t>(
-                            y + GlyphPadding) * uploadWidth +
-                        x + GlyphPadding] = alpha;
-                }
-            }
-
-            std::uint32_t pageIndex = 0;
-            std::uint32_t destinationX = 0;
-            std::uint32_t destinationY = 0;
-            AllocateAtlasRegion(
-                uploadWidth,
-                uploadHeight,
-                pageIndex,
-                destinationX,
-                destinationY);
-            entry.pageIndex = pageIndex;
-
-            // Padding prevents filtering from sampling an adjacent glyph
-            // when the UV rectangle reaches an atlas-cell edge.
-            const float left = static_cast<float>(
-                destinationX + GlyphPadding);
-            const float top = static_cast<float>(
-                destinationY + GlyphPadding);
-            entry.uvRectangle = {
-                left / static_cast<float>(AtlasWidth),
-                top / static_cast<float>(AtlasHeight),
-                (left + static_cast<float>(width)) /
-                    static_cast<float>(AtlasWidth),
-                (top + static_cast<float>(height)) /
-                    static_cast<float>(AtlasHeight)};
-            pendingUploads.push_back(PendingGlyphUpload{
-                pageIndex,
-                destinationX,
-                destinationY,
-                uploadWidth,
-                uploadHeight,
-                std::move(coverage)});
-        }
-
-        return glyphCache.emplace(key, std::move(entry)).first->second;
-    }
-
-    void AllocateAtlasRegion(
-        const std::uint32_t width,
-        const std::uint32_t height,
-        std::uint32_t& pageIndex,
-        std::uint32_t& destinationX,
-        std::uint32_t& destinationY)
-    {
-        if (width > AtlasWidth || height > AtlasHeight)
-        {
-            throw std::runtime_error(
-                "A rasterized glyph is larger than the glyph atlas.");
-        }
-
-        for (std::uint32_t index = 0;
-             index < atlasPages.size();
-             ++index)
-        {
-            if (TryAllocate(
-                    atlasPages[index],
-                    width,
-                    height,
-                    destinationX,
-                    destinationY))
-            {
-                pageIndex = index;
-                return;
-            }
-        }
-
-        if (atlasPages.size() >= DefaultAtlasPages)
-        {
-            auto candidate = atlasPages.end();
-            for (auto page = atlasPages.begin(); page != atlasPages.end(); ++page)
-                if (page->inFlightFrames == 0 &&
-                    (candidate == atlasPages.end() || page->lastUsedRenderIndex < candidate->lastUsedRenderIndex))
-                    candidate = page;
-            if (candidate != atlasPages.end())
-            {
-                pageIndex = static_cast<std::uint32_t>(candidate - atlasPages.begin());
-                ErasePageGlyphs(pageIndex);
-                candidate->nextX = GlyphPadding;
-                candidate->nextY = GlyphPadding;
-                candidate->rowHeight = 0;
-                if (!TryAllocate(*candidate, width, height, destinationX, destinationY))
-                    throw std::runtime_error("A glyph cannot fit an empty atlas page.");
-                return;
-            }
-        }
-        // Current and in-flight glyphs may temporarily exceed the soft budget.
-        CreateAtlasPage();
-        pageIndex =
-            static_cast<std::uint32_t>(atlasPages.size() - 1U);
-        if (!TryAllocate(
-                atlasPages.back(),
-                width,
-                height,
-                destinationX,
-                destinationY))
-        {
-            throw std::runtime_error(
-                "Failed to allocate a glyph in a new atlas page.");
-        }
-    }
-
-    [[nodiscard]] bool TryAllocate(
-        AtlasPage& page,
-        const std::uint32_t width,
-        const std::uint32_t height,
-        std::uint32_t& destinationX,
-        std::uint32_t& destinationY) noexcept
-    {
-        if (page.nextX + width + GlyphPadding > AtlasWidth)
-        {
-            page.nextX = GlyphPadding;
-            page.nextY += page.rowHeight + GlyphPadding;
-            page.rowHeight = 0;
-        }
-        if (page.nextY + height + GlyphPadding > AtlasHeight)
-        {
-            return false;
-        }
-
-        destinationX = page.nextX;
-        destinationY = page.nextY;
-        page.nextX += width + GlyphPadding;
-        page.rowHeight = std::max(page.rowHeight, height);
-        return true;
-    }
-
-    void CreateAtlasPage()
-    {
-        if (atlasPages.size() >= std::numeric_limits<std::uint32_t>::max())
-            throw std::length_error("Too many text atlas pages.");
-        EnsureDescriptorCapacity(static_cast<std::uint32_t>(atlasPages.size() + 1));
-        D3D12_RESOURCE_DESC description{};
-        description.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        description.Width = AtlasWidth;
-        description.Height = AtlasHeight;
-        description.DepthOrArraySize = 1;
-        description.MipLevels = 1;
-        description.Format = DXGI_FORMAT_R8_UNORM;
-        description.SampleDesc.Count = 1;
-        description.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-
-        AtlasPage page;
-        const D3D12_HEAP_PROPERTIES properties =
-            HeapProperties(D3D12_HEAP_TYPE_DEFAULT);
-        ThrowIfFailed(
-            device->CreateCommittedResource(
-                &properties,
-                D3D12_HEAP_FLAG_NONE,
-                &description,
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                nullptr,
-                IID_PPV_ARGS(page.texture.ReleaseAndGetAddressOf())),
-            "ID3D12Device::CreateCommittedResource(glyph atlas)");
-
-        WriteAtlasDescriptor(page.texture.Get(), atlasPages.size());
-        atlasPages.push_back(std::move(page));
-    }
-
-    void ErasePageGlyphs(std::uint32_t index)
-    {
-        std::erase_if(glyphCache, [index](const auto &entry)
-                      { return entry.second.drawable && entry.second.pageIndex == index; });
-        ++statistics.atlasEvictions;
-    }
-
-    void TrimAtlasPages()
-    {
-        while (atlasPages.size() > DefaultAtlasPages && atlasPages.back().inFlightFrames == 0)
-        {
-            ErasePageGlyphs(static_cast<std::uint32_t>(atlasPages.size() - 1));
-            atlasPages.pop_back();
-        }
-    }
-
-    void EnsureDescriptorCapacity(std::uint32_t required)
-    {
-        if (required <= atlasDescriptorCapacity)
-            return;
-        std::uint32_t capacity = std::max(atlasDescriptorCapacity, DefaultAtlasPages);
-        while (capacity < required)
-        {
-            if (capacity > std::numeric_limits<std::uint32_t>::max() / 2)
-                throw std::length_error("Text atlas descriptor capacity overflow.");
-            capacity *= 2;
-        }
-        CreateDescriptorHeap(capacity);
-        // Shader-visible heaps cannot be descriptor copy sources. Recreate
-        // views from retained resources instead of reading GPU descriptors.
-        for (std::size_t index = 0; index < atlasPages.size(); ++index)
-            WriteAtlasDescriptor(atlasPages[index].texture.Get(), index);
-    }
-
-    void WriteAtlasDescriptor(ID3D12Resource *texture, std::size_t index)
-    {
-        D3D12_SHADER_RESOURCE_VIEW_DESC view{};
-        view.Format = DXGI_FORMAT_R8_UNORM;
-        view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        view.Texture2D.MipLevels = 1;
-        auto descriptor = atlasDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-        descriptor.ptr += index * atlasDescriptorSize;
-        device->CreateShaderResourceView(texture, &view, descriptor);
-    }
-    static std::size_t AlignUploadOffset(std::size_t value)
-    {
-        constexpr std::size_t alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
-        if (value > std::numeric_limits<std::size_t>::max() - (alignment - 1))
-            throw std::length_error("Text upload alignment overflow.");
-        return (value + alignment - 1) & ~(alignment - 1);
-    }
-
-    FrameInstancePage &AllocateGlyphUpload(std::size_t bytes, std::size_t &offset)
-    {
-        auto &pages = frameBuffers[currentFrameIndex].glyphUploadPages;
-        for (auto &page : pages)
-        {
-            const auto begin = AlignUploadOffset(page.used);
-            if (begin <= page.capacity && bytes <= page.capacity - begin)
-            {
-                offset = begin;
-                page.used = begin + bytes;
-                return page;
-            }
-        }
-        std::size_t capacity = 65536;
-        while (capacity < bytes)
-        {
-            if (capacity > std::numeric_limits<std::size_t>::max() / 2)
-                throw std::length_error("Text upload capacity overflow.");
-            capacity *= 2;
-        }
-        FrameInstancePage page;
-        const auto properties = HeapProperties(D3D12_HEAP_TYPE_UPLOAD);
-        const auto description = BufferDescription(capacity);
-        ThrowIfFailed(device->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &description,
-                                                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                                      IID_PPV_ARGS(page.resource.GetAddressOf())),
-                      "ID3D12Device::CreateCommittedResource(text glyph arena)");
-        const D3D12_RANGE noReads{0, 0};
-        ThrowIfFailed(page.resource->Map(0, &noReads, reinterpret_cast<void **>(&page.mappedData)),
-                      "ID3D12Resource::Map(text glyph arena)");
-        page.capacity = capacity;
-        page.used = bytes;
-        offset = 0;
-        pages.push_back(std::move(page));
-        ++statistics.uploadAllocations;
-        return pages.back();
-    }
-
-    void UploadNewGlyphs(ID3D12GraphicsCommandList &commandList)
-    {
-        if (pendingUploads.empty())
-            return;
-        std::vector<bool> touchedPages(atlasPages.size());
-        std::size_t bytes = 0;
-        for (const auto &upload : pendingUploads)
-        {
-            touchedPages[upload.pageIndex] = true;
-            const auto rowPitch = Align(upload.width, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-            const auto size = static_cast<std::size_t>(rowPitch) * upload.height;
-            bytes = AlignUploadOffset(bytes);
-            if (size > std::numeric_limits<std::size_t>::max() - bytes)
-                throw std::length_error("Text glyph upload size overflow.");
-            bytes += size;
-        }
-        std::size_t bufferOffset = 0;
-        auto &arena = AllocateGlyphUpload(bytes, bufferOffset);
-        statistics.uploadBytes += bytes;
-        std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        for (std::size_t index = 0; index < atlasPages.size(); ++index)
-            if (touchedPages[index])
-                barriers.push_back(TransitionBarrier(*atlasPages[index].texture.Get(),
-                                                     D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                                                     D3D12_RESOURCE_STATE_COPY_DEST));
-        commandList.ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
-        std::size_t localOffset = 0;
-        for (const auto &upload : pendingUploads)
-        {
-            localOffset = AlignUploadOffset(localOffset);
-            const auto offset = bufferOffset + localOffset;
-            const auto rowPitch = Align(upload.width, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-            for (std::uint32_t row = 0; row < upload.height; ++row)
-                std::memcpy(arena.mappedData + offset + static_cast<std::size_t>(row) * rowPitch,
-                            upload.pixels.data() + static_cast<std::size_t>(row) * upload.width, upload.width);
-            D3D12_TEXTURE_COPY_LOCATION destination{};
-            destination.pResource = atlasPages[upload.pageIndex].texture.Get();
-            destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-            D3D12_TEXTURE_COPY_LOCATION source{};
-            source.pResource = arena.resource.Get();
-            source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-            source.PlacedFootprint.Offset = offset;
-            source.PlacedFootprint.Footprint = {DXGI_FORMAT_R8_UNORM, upload.width, upload.height, 1, rowPitch};
-            commandList.CopyTextureRegion(&destination, upload.destinationX, upload.destinationY, 0, &source,
-                                          nullptr);
-            localOffset += static_cast<std::size_t>(rowPitch) * upload.height;
-        }
-        for (auto &barrier : barriers)
-            std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-        commandList.ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
-    }
-    [[nodiscard]] FrameInstancePage& AllocateInstanceRange(
-        FrameInstanceBuffer& frame,
-        const std::size_t requiredCapacity,
-        std::size_t& firstInstance)
-    {
-        for (FrameInstancePage& page : frame.pages)
-        {
-            if (page.capacity - page.used >= requiredCapacity)
-            {
-                firstInstance = page.used;
-                page.used += requiredCapacity;
-                return page;
-            }
-        }
-
-        std::size_t capacity = 256;
-        while (capacity < requiredCapacity)
-        {
-            capacity *= 2;
-        }
-        const std::size_t sizeBytes =
-            capacity * sizeof(GpuGlyphInstance);
-        const D3D12_HEAP_PROPERTIES properties =
-            HeapProperties(D3D12_HEAP_TYPE_UPLOAD);
-        const D3D12_RESOURCE_DESC description =
-            BufferDescription(sizeBytes);
-        FrameInstancePage page{};
-        ThrowIfFailed(
-            device->CreateCommittedResource(
-                &properties,
-                D3D12_HEAP_FLAG_NONE,
-                &description,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(
-                    page.resource.ReleaseAndGetAddressOf())),
-            "ID3D12Device::CreateCommittedResource(text instances)");
-        ThrowIfFailed(
-            page.resource->Map(
-                0,
-                nullptr,
-                reinterpret_cast<void**>(&page.mappedData)),
-            "ID3D12Resource::Map(text instances)");
-        page.capacity = capacity;
-        page.used = requiredCapacity;
-        firstInstance = 0;
-        frame.pages.push_back(std::move(page));
-        return frame.pages.back();
-    }
-
-    void CreateDescriptorHeap(std::uint32_t capacity = DefaultAtlasPages)
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC description{};
-        description.Type =
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        description.NumDescriptors = capacity;
-        description.Flags =
-            D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        ThrowIfFailed(
-            device->CreateDescriptorHeap(
-                &description,
-                IID_PPV_ARGS(
-                    atlasDescriptorHeap.ReleaseAndGetAddressOf())),
-            "ID3D12Device::CreateDescriptorHeap(text atlas)");
-        atlasDescriptorSize =
-            device->GetDescriptorHandleIncrementSize(
-                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        atlasDescriptorCapacity = capacity;
-    }
 
     void RequireInitialized() const
     {
@@ -1505,20 +1577,11 @@ struct TextRenderSystem::Impl final
         }
     }
 
-    ID3D12Device* device{};
     LayoutCache layouts;
-    ComPtr<ID3D12DescriptorHeap> atlasDescriptorHeap;
     TextPipeline pipeline;
-    std::uint32_t atlasDescriptorSize{};
-    std::vector<AtlasPage> atlasPages;
-    std::unordered_map<GlyphKey, GlyphEntry, GlyphKeyHash> glyphCache;
-    std::vector<PendingGlyphUpload> pendingUploads;
     std::vector<GlyphInstance> pendingInstances;
-    std::array<FrameInstanceBuffer, D3D12Detail::FrameCount> frameBuffers{};
-    std::uint32_t currentFrameIndex{};
-    std::uint64_t currentRenderIndex{};
-    std::uint32_t atlasDescriptorCapacity{};
     TextRenderStatistics statistics{};
+    GlyphAtlas atlas{statistics};
     bool initialized{};
     bool frameOpen{};
 };
@@ -1983,7 +2046,7 @@ void TextRenderSystem::Submit(const TextLayoutHandle &layout, const TextDrawComm
 TextRenderStatistics TextRenderSystem::Statistics() const noexcept
 {
     auto result = implementation_->statistics;
-    result.atlasPages = implementation_->atlasPages.size();
+    result.atlasPages = implementation_->atlas.PageCount();
     return result;
 }
 
