@@ -14,6 +14,10 @@
 TextRenderSystem의 Impl은 이 객체를 조립하며 글리프 cache나 프레임 업로드와
 파이프라인 소유를 섞지 않는다. 리소스 해제는 기존 GPU 대기 뒤의 같은 단계에서 수행한다.
 
+비공개 `LayoutCache`는 DirectWrite factory, 글꼴 로드, TextFormat과 준비된 배치의
+2,048항목 LRU를 소유한다. Impl은 입력 검증과 제출을 조립하고 통계를 전달한다.
+아틀라스는 이 factory를 빌려 사용하며 cache 정리와 factory 해제의 기존 순서를 유지한다.
+
 ## 수명과 호출 시점
 
 1. `D3D12Renderer::Initialize`가 `TextRenderSystem`을 초기화한다.
