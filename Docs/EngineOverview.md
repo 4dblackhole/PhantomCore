@@ -42,6 +42,9 @@ Client 저장소의 `Docs/ExecutionFlow.md`를 참고한다.
 6. `Shutdown`에서 Scene 소유 handle을 해제한다.
 7. Debug/Release x64 빌드와 관련 테스트를 모두 실행한다.
 
+FMOD 없는 CPU 테스트는 [Testing](Testing.md)의 별도 프로젝트와 CI를 사용한다.
+실제 GPU·오디오 통합 테스트는 기존 SDK 테스트에서 유지한다.
+
 최소 진입점은 다음과 같다.
 
 ```cpp
@@ -338,6 +341,7 @@ backend 프로젝트에 둔다.
 
 | 문서 | 읽어야 할 때 |
 | --- | --- |
+| [Testing.md](Testing.md) | FMOD 없는 CPU 검사와 실제 장치 통합 검사를 구분할 때 |
 | [ProjectStructure.md](ProjectStructure.md) | 저장소·프로젝트 경계를 찾을 때 |
 | [EngineIntegration.md](EngineIntegration.md) | 새 Client나 바이너리 SDK를 연결할 때 |
 | [AudioOutput.md](AudioOutput.md) | FMOD, WASAPI/ASIO, 장치와 DSP buffer를 다룰 때 |

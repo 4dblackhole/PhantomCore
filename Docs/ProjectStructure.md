@@ -25,6 +25,11 @@ PhantomCore/
 기능별 프로젝트는 원본 파일의 소유 경계를 나타낸다. 소비자는 이 모듈들을 여러
 개 링크하지 않고 `Engine/SDK/PhantomCore.vcxproj` 하나만 참조한다.
 
+`Tests/PhantomCore.Cpu.Tests.vcxproj`는 실제 CPU 구현만 빌드하는 테스트 전용
+프로젝트이며, 통합 SDK/FMOD를 참조하지 않는다. 테스트 본문은 기존 SDK 검사와 공유한다.
+`Tests/PhantomCore.Collision.Tests.vcxproj`는 전체 SDK와 실제 장치 경로를 검증한다.
+실행 범위는 [Testing](Testing.md)을 따른다.
+
 ## Client 연결 경계
 
 Client가 지원받는 엔진 표면은 다음뿐이다.
