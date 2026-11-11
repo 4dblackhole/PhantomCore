@@ -1,0 +1,36 @@
+name: CPU tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+        with:
+          msbuild-architecture: x64
+      - name: Build CPU tests without FMOD
+        shell: pwsh
+        run: |
+          msbuild Tests/PhantomCore.Cpu.Tests.vcxproj /m /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /p:RunCodeAnalysis=true "/p:FmodRoot=$env:RUNNER_TEMP/no-fmod-sdk" /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run CPU tests
+        shell: pwsh
+        run: |
+          & './bin/CpuTests/x64/${{ matrix.configuration }}/PhantomCore.Cpu.Tests.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

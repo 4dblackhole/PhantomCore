@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="App" />
+    <Filter Include="Collision" />
+    <Filter Include="Engine" />
+    <Filter Include="Engine\Collision" />
+    <Filter Include="Engine\Collision\Query" />
+    <Filter Include="Engine\Core" />
+    <Filter Include="Engine\Core\System" />
+    <Filter Include="Engine\Core\Visual2D" />
+    <Filter Include="Engine\Geometry" />
+    <Filter Include="Engine\Geometry\Primitive" />
+    <Filter Include="Engine\Geometry\Shape" />
+    <Filter Include="Engine\Platform.Win32" />
+    <Filter Include="Engine\Platform.Win32\Input" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="CpuTestsMain.cpp"></ClCompile>
+    <ClCompile Include="Collision\CollisionTests.cpp"><Filter>Collision</Filter></ClCompile>
+    <ClCompile Include="App\InputStateTests.cpp"><Filter>App</Filter></ClCompile>
+    <ClInclude Include="Collision\CollisionTests.h"><Filter>Collision</Filter></ClInclude>
+    <ClInclude Include="App\InputStateTests.h"><Filter>App</Filter></ClInclude>
+    <ClCompile Include="..\Engine\Core\System\Camera.cpp"><Filter>Engine\Core\System</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Core\System\TransformNode.cpp"><Filter>Engine\Core\System</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Core\Visual2D\Visual2DNode.cpp"><Filter>Engine\Core\Visual2D</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Core\Visual2D\Visual2DCanvas.cpp"><Filter>Engine\Core\Visual2D</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Core\Visual2D\ScreenVisual2DManager.cpp"><Filter>Engine\Core\Visual2D</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Core\Visual2D\Visual2DComponents.cpp"><Filter>Engine\Core\Visual2D</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Core\Visual2D\Visual2DInputRouter.cpp"><Filter>Engine\Core\Visual2D</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Core\Visual2D\Visual2DSurface.cpp"><Filter>Engine\Core\Visual2D</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Core\Visual2D\Visual2DWidgets.cpp"><Filter>Engine\Core\Visual2D</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Collision\Query\Collision.cpp"><Filter>Engine\Collision\Query</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Geometry\Shape\Shape.cpp"><Filter>Engine\Geometry\Shape</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Geometry\Primitive\RectangleShape.cpp"><Filter>Engine\Geometry\Primitive</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Geometry\Primitive\CurvedRectangleShape.cpp"><Filter>Engine\Geometry\Primitive</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Geometry\Primitive\CubeShape.cpp"><Filter>Engine\Geometry\Primitive</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Geometry\Primitive\SphereShape.cpp"><Filter>Engine\Geometry\Primitive</Filter></ClCompile>
+    <ClCompile Include="..\Engine\Platform.Win32\Input\Input.cpp"><Filter>Engine\Platform.Win32\Input</Filter></ClCompile>
+  </ItemGroup>
+</Project>

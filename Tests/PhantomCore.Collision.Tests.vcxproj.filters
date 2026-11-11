@@ -30,4 +30,10 @@
   <ItemGroup><ClInclude Include="App\WindowControlTests.h"><Filter>App</Filter></ClInclude></ItemGroup>
   <ItemGroup><ClCompile Include="App\WindowControlTests.cpp"><Filter>App</Filter></ClCompile></ItemGroup>
   <ItemGroup><Filter Include="Audio" /><ClInclude Include="Audio\AudioPcmTests.h"><Filter>Audio</Filter></ClInclude><ClCompile Include="Audio\AudioPcmTests.cpp"><Filter>Audio</Filter></ClCompile></ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="RuntimeTestsMain.cpp" />
+    <ClCompile Include="Audio\ManagedPlaybackTests.cpp"><Filter>Audio</Filter></ClCompile>
+    <ClInclude Include="Audio\ManagedPlaybackTests.h"><Filter>Audio</Filter></ClInclude>
+    <ClInclude Include="Collision\CollisionTests.h"><Filter>Collision</Filter></ClInclude>
+  </ItemGroup>
 </Project>

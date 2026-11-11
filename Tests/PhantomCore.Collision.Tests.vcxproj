@@ -62,7 +62,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="RuntimeTestsMain.cpp" />
     <ClCompile Include="Collision\CollisionTests.cpp" />
+    <ClCompile Include="Audio\ManagedPlaybackTests.cpp" />
+    <ClInclude Include="Collision\CollisionTests.h" />
+    <ClInclude Include="Audio\ManagedPlaybackTests.h" />
     <ClCompile Include="App\InputStateTests.cpp" />
     <ClCompile Include="App\TextureLifetimeTests.cpp" />
     <ClInclude Include="App\InputStateTests.h" />
