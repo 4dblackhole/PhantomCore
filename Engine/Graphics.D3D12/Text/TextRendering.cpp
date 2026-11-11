@@ -915,18 +915,45 @@ struct TextRenderSystem::Impl final
         const std::uint32_t viewportHeight)
     {
         RequireFrameOpen();
-        if (viewportWidth == 0 || viewportHeight == 0)
+        if (viewportWidth != 0 && viewportHeight != 0)
         {
-            pendingInstances.clear();
-            pendingUploads.clear();
-            frameOpen = false;
-            return;
+            RecordInstances(commandList, viewportWidth, viewportHeight, pendingInstances);
         }
+        pendingInstances.clear();
+        pendingUploads.clear();
+        frameOpen = false;
+    }
 
+    void DrawCanvasBatch(
+        ID3D12GraphicsCommandList& commandList,
+        const std::uint32_t viewportWidth,
+        const std::uint32_t viewportHeight,
+        const std::span<const CanvasDraw> draws)
+    {
+        RequireFrameOpen();
+        // Direct text stays queued for the final pass. Atlas uploads are
+        // shared so either pass can use a glyph prepared by the other.
+        const auto first = pendingInstances.size();
+        for (const auto& draw : draws)
+        {
+            Submit(draw.layout, draw.command);
+        }
+        RecordInstances(commandList, viewportWidth, viewportHeight,
+            std::span<const GlyphInstance>(pendingInstances).subspan(first));
+        pendingInstances.resize(first);
+    }
+
+    void RecordInstances(
+        ID3D12GraphicsCommandList& commandList,
+        const std::uint32_t viewportWidth,
+        const std::uint32_t viewportHeight,
+        const std::span<const GlyphInstance> instances)
+    {
         // New glyph bitmaps must reach their atlas pages before any
         // instance in this frame samples them.
         UploadNewGlyphs(commandList);
-        if (!pendingInstances.empty())
+        pendingUploads.clear();
+        if (!instances.empty())
         {
             // Preserve paint order, including overlapping translucent text.
             // Consecutive pages are batched below; no per-frame glyph sorting.
@@ -935,16 +962,16 @@ struct TextRenderSystem::Impl final
             std::size_t allocationStart = 0;
             FrameInstancePage& page = AllocateInstanceRange(
                 frame,
-                pendingInstances.size(),
+                instances.size(),
                 allocationStart);
             auto* destination =
                 reinterpret_cast<GpuGlyphInstance*>(page.mappedData) +
                 allocationStart;
             for (std::size_t index = 0;
-                 index < pendingInstances.size();
+                 index < instances.size();
                  ++index)
             {
-                const GlyphInstance& source = pendingInstances[index];
+                const GlyphInstance& source = instances[index];
                 destination[index] = GpuGlyphInstance{
                     source.transform,
                     source.positionPixels,
@@ -982,13 +1009,13 @@ struct TextRenderSystem::Impl final
                 atlasDescriptorHeap->
                     GetGPUDescriptorHandleForHeapStart();
             std::size_t firstInstance = 0;
-            while (firstInstance < pendingInstances.size())
+            while (firstInstance < instances.size())
             {
                 const std::uint32_t pageIndex =
-                    pendingInstances[firstInstance].pageIndex;
+                    instances[firstInstance].pageIndex;
                 std::size_t endInstance = firstInstance + 1;
-                while (endInstance < pendingInstances.size() &&
-                    pendingInstances[endInstance].pageIndex == pageIndex)
+                while (endInstance < instances.size() &&
+                    instances[endInstance].pageIndex == pageIndex)
                 {
                     ++endInstance;
                 }
@@ -1014,10 +1041,6 @@ struct TextRenderSystem::Impl final
                 firstInstance = endInstance;
             }
         }
-
-        pendingInstances.clear();
-        pendingUploads.clear();
-        frameOpen = false;
     }
 
     static constexpr std::size_t CachedLayoutLimit = 2048;
@@ -1891,4 +1914,13 @@ void TextRenderSystem::Flush(
         commandList,
         viewportWidth,
         viewportHeight);
+}
+
+void TextRenderSystem::DrawCanvasBatch(
+    ID3D12GraphicsCommandList& commandList,
+    const std::uint32_t viewportWidth,
+    const std::uint32_t viewportHeight,
+    const std::span<const CanvasDraw> draws)
+{
+    implementation_->DrawCanvasBatch(commandList, viewportWidth, viewportHeight, draws);
 }

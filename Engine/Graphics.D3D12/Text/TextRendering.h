@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string_view>
 
 
@@ -156,6 +157,18 @@ public:
         std::uint32_t viewportHeight);
 
 private:
+    friend class D3D12Visual2DRenderer;
+    struct CanvasDraw
+    {
+        TextLayoutHandle layout;
+        TextDrawCommand command;
+    };
+    void DrawCanvasBatch(
+        ID3D12GraphicsCommandList& commandList,
+        std::uint32_t viewportWidth,
+        std::uint32_t viewportHeight,
+        std::span<const CanvasDraw> draws);
+
     struct Impl;
     std::unique_ptr<Impl> implementation_;
 };

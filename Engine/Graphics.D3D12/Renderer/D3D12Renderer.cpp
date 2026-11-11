@@ -158,7 +158,8 @@ void D3D12Renderer::Initialize(
         std::make_unique<D3D12Visual2DRenderer>();
     visual2DBackend->Initialize(
         *meshRenderSystem_,
-        *textRenderSystem_);
+        *textRenderSystem_,
+        depthStencilFormat_);
     visual2DRenderSystem_ = std::move(visual2DBackend);
     imageReadbacks_ = std::make_unique<FrameImageReadbackQueue>(*device_.Get(), FrameCount);
 }
@@ -270,6 +271,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     const std::uint64_t renderIndex = nextRenderIndex_++;
     meshRenderSystem_->BeginFrame(frameIndex_);
     textRenderSystem_->BeginFrame(frameIndex_, renderIndex);
+    static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).BeginScreenFrame(renderIndex);
     imageReadbacks_->BeginFrame(frameIndex_, renderIndex, *renderTargets_[frameIndex_].Get());
     frameOpen_ = true;
     RenderContext context;
@@ -302,6 +304,8 @@ void D3D12Renderer::EndFrame()
     // resolves material pipelines, batches instances, and records draws
     // before the back buffer transitions to PRESENT.
     meshRenderSystem_->Flush(*commandList_.Get());
+    static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).DrawScreen(
+        *commandList_.Get(), frameIndex_, width_, height_);
     textRenderSystem_->Flush(
         *commandList_.Get(),
         width_,

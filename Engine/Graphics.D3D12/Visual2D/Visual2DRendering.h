@@ -43,7 +43,10 @@ public:
     // Renders a centered, Y-up Canvas at pixel size. screenOrigin remains
     // the Canvas panel's top-left point in Win32 screen pixels. A larger
     // Canvas Z-order places the complete tree in front of a smaller one.
-    // Values above 31 are clamped to the front-most band.
+    // Equal Z uses submission order. The engine snapshots the draw list and
+    // composites rectangles, images and text in tree paint order at frame end.
+    // Depth testing against world geometry uses bands clamped at Z 31.
+    // Direct TextRenderSystem submissions follow all screen Canvases.
     virtual void SubmitScreen(
         const Visual2DCanvas& canvas,
         const RenderContext& context,

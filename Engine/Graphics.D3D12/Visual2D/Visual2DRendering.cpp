@@ -153,6 +153,26 @@ struct D3D12Visual2DRenderer::Impl
         MaterialInstanceHandle material;
     };
 
+    struct CanvasDrawing
+    {
+        Size logicalSize;
+        Point origin;
+        float scaleX;
+        float scaleY;
+        std::uint32_t zOrder;
+        std::vector<DrawPacket> commands;
+    };
+
+    struct CanvasTarget
+    {
+        ID3D12GraphicsCommandList& commands;
+        std::uint32_t frameIndex;
+        std::uint32_t width;
+        std::uint32_t height;
+        std::uint64_t renderIndex;
+        bool screen;
+    };
+
     struct FrameRenderTargetLifetime
     {
         std::vector<RenderTargetTextureHandle> targets;
@@ -266,7 +286,7 @@ struct D3D12Visual2DRenderer::Impl
         return layout;
     }
 
-    void Initialize(MeshRenderSystem &meshes, TextRenderSystem &text)
+    void Initialize(MeshRenderSystem &meshes, TextRenderSystem &text, const DXGI_FORMAT depthStencilFormat)
     {
         if (initialized)
         {
@@ -297,8 +317,8 @@ struct D3D12Visual2DRenderer::Impl
             *device,
             DXGI_FORMAT_R8G8B8A8_UNORM);
         textureFont = textureTextRendering.LoadSystemFont(L"Segoe UI");
-        CreateRectanglePipeline();
-        CreateVisualPipeline();
+        CreateRectanglePipeline(depthStencilFormat);
+        CreateVisualPipeline(depthStencilFormat);
         initialized = true;
     }
 
@@ -326,6 +346,9 @@ struct D3D12Visual2DRenderer::Impl
             }
             arena = {};
         }
+        screenCanvases.clear();
+        screenRectanglePipeline.Reset();
+        screenImagePipeline.Reset();
         rectanglePipeline.Reset();
         rectangleRootSignature.Reset();
         visualPipeline.Reset();
@@ -466,7 +489,24 @@ struct D3D12Visual2DRenderer::Impl
             static_cast<float>(info.height)};
     }
 
-    void CreateRectanglePipeline()
+    void CreateScreenPipeline(
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline,
+        const DXGI_FORMAT depthStencilFormat,
+        const D3D12_COMPARISON_FUNC depthComparison,
+        ComPtr<ID3D12PipelineState>& state)
+    {
+        pipeline.DepthStencilState.DepthEnable = TRUE;
+        pipeline.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        pipeline.DepthStencilState.DepthFunc = depthComparison;
+        pipeline.DSVFormat = depthStencilFormat;
+        D3D12Detail::ThrowIfFailed(
+            device->CreateGraphicsPipelineState(
+                &pipeline,
+                IID_PPV_ARGS(state.ReleaseAndGetAddressOf())),
+            "Create screen Canvas pipeline");
+    }
+
+    void CreateRectanglePipeline(const DXGI_FORMAT depthStencilFormat)
     {
         std::array<D3D12_ROOT_PARAMETER, 2> parameters{};
         parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -554,9 +594,11 @@ struct D3D12Visual2DRenderer::Impl
                 &pipeline,
                 IID_PPV_ARGS(rectanglePipeline.ReleaseAndGetAddressOf())),
             "Create UI rectangle pipeline");
+        CreateScreenPipeline(
+            pipeline, depthStencilFormat, D3D12_COMPARISON_FUNC_LESS, screenRectanglePipeline);
     }
 
-    void CreateVisualPipeline()
+    void CreateVisualPipeline(const DXGI_FORMAT depthStencilFormat)
     {
         D3D12_DESCRIPTOR_RANGE textureRange{};
         textureRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -667,6 +709,8 @@ struct D3D12Visual2DRenderer::Impl
                 &pipeline,
                 IID_PPV_ARGS(visualPipeline.ReleaseAndGetAddressOf())),
             "Create Visual2D image pipeline");
+        CreateScreenPipeline(
+            pipeline, depthStencilFormat, D3D12_COMPARISON_FUNC_LESS_EQUAL, screenImagePipeline);
     }
 
     [[nodiscard]] FrameBufferPage& AllocateUploadRange(
@@ -729,21 +773,18 @@ struct D3D12Visual2DRenderer::Impl
     }
 
     void DrawRectangles(
-        ID3D12GraphicsCommandList& commandList,
-        const std::uint32_t frameIndex,
-        const std::uint64_t renderIndex,
-        const std::uint32_t width,
-        const std::uint32_t height,
+        const CanvasTarget& target,
         const std::vector<RectangleInstance>& rectangles)
     {
         if (rectangles.empty())
         {
             return;
         }
+        auto& commandList = target.commands;
         std::size_t firstInstance = 0;
         FrameBufferPage& page = AllocateUploadRange(
-            rectangleArenas[frameIndex],
-            renderIndex,
+            rectangleArenas[target.frameIndex],
+            target.renderIndex,
             rectangles.size(),
             sizeof(RectangleInstance),
             "Create Visual2D rectangle upload arena page",
@@ -755,7 +796,8 @@ struct D3D12Visual2DRenderer::Impl
 
         commandList.SetGraphicsRootSignature(
             rectangleRootSignature.Get());
-        commandList.SetPipelineState(rectanglePipeline.Get());
+        commandList.SetPipelineState(
+            (target.screen ? screenRectanglePipeline : rectanglePipeline).Get());
         commandList.IASetPrimitiveTopology(
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         commandList.SetGraphicsRootShaderResourceView(
@@ -763,8 +805,8 @@ struct D3D12Visual2DRenderer::Impl
             page.resource->GetGPUVirtualAddress() +
                 firstInstance * sizeof(RectangleInstance));
         const std::array constants{
-            std::bit_cast<std::uint32_t>(static_cast<float>(width)),
-            std::bit_cast<std::uint32_t>(static_cast<float>(height))};
+            std::bit_cast<std::uint32_t>(static_cast<float>(target.width)),
+            std::bit_cast<std::uint32_t>(static_cast<float>(target.height))};
         commandList.SetGraphicsRoot32BitConstants(
             1,
             static_cast<UINT>(constants.size()),
@@ -778,11 +820,7 @@ struct D3D12Visual2DRenderer::Impl
     }
 
     void DrawVisuals(
-        ID3D12GraphicsCommandList& commandList,
-        const std::uint32_t frameIndex,
-        const std::uint64_t renderIndex,
-        const std::uint32_t width,
-        const std::uint32_t height,
+        const CanvasTarget& target,
         const TextureSetHandle& textures,
         const std::vector<VisualInstance>& visuals)
     {
@@ -790,10 +828,11 @@ struct D3D12Visual2DRenderer::Impl
         {
             return;
         }
+        auto& commandList = target.commands;
         std::size_t firstInstance = 0;
         FrameBufferPage& page = AllocateUploadRange(
-            visualArenas[frameIndex],
-            renderIndex,
+            visualArenas[target.frameIndex],
+            target.renderIndex,
             visuals.size(),
             sizeof(VisualInstance),
             "Create Visual2D image upload arena page",
@@ -807,7 +846,8 @@ struct D3D12Visual2DRenderer::Impl
             meshRendering->Textures().DescriptorHeap()};
         commandList.SetDescriptorHeaps(1, descriptorHeaps);
         commandList.SetGraphicsRootSignature(visualRootSignature.Get());
-        commandList.SetPipelineState(visualPipeline.Get());
+        commandList.SetPipelineState(
+            (target.screen ? screenImagePipeline : visualPipeline).Get());
         commandList.IASetPrimitiveTopology(
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         commandList.SetGraphicsRootShaderResourceView(
@@ -815,8 +855,8 @@ struct D3D12Visual2DRenderer::Impl
             page.resource->GetGPUVirtualAddress() +
                 firstInstance * sizeof(VisualInstance));
         const std::array constants{
-            std::bit_cast<std::uint32_t>(static_cast<float>(width)),
-            std::bit_cast<std::uint32_t>(static_cast<float>(height))};
+            std::bit_cast<std::uint32_t>(static_cast<float>(target.width)),
+            std::bit_cast<std::uint32_t>(static_cast<float>(target.height))};
         commandList.SetGraphicsRoot32BitConstants(
             1,
             static_cast<UINT>(constants.size()),
@@ -830,6 +870,157 @@ struct D3D12Visual2DRenderer::Impl
             static_cast<UINT>(visuals.size()),
             0,
             0);
+    }
+
+    void RecordCanvases(
+        const CanvasTarget& target,
+        const std::span<const CanvasDrawing> canvases)
+    {
+        enum class BatchType { None, Rectangles, Images, Text };
+        BatchType batch = BatchType::None;
+        std::uint32_t imagePage = 0;
+        std::vector<RectangleInstance> rectangles;
+        std::vector<VisualInstance> images;
+        std::vector<TextRenderSystem::CanvasDraw> text;
+        const auto flush = [&]()
+        {
+            switch (batch)
+            {
+            case BatchType::Rectangles:
+                DrawRectangles(target, rectangles);
+                rectangles.clear();
+                break;
+            case BatchType::Images:
+                DrawVisuals(target, imagePages[imagePage].textures, images);
+                images.clear();
+                break;
+            case BatchType::Text:
+                if (target.screen)
+                {
+                    screenTextRendering->DrawCanvasBatch(
+                        target.commands, target.width, target.height, text);
+                }
+                else
+                {
+                    textureTextRendering.BeginFrame(target.frameIndex, target.renderIndex);
+                    for (const auto& draw : text)
+                    {
+                        textureTextRendering.Submit(draw.layout, draw.command);
+                    }
+                    textureTextRendering.Flush(target.commands, target.width, target.height);
+                }
+                text.clear();
+                break;
+            case BatchType::None:
+                break;
+            }
+        };
+        const auto selectBatch = [&](const BatchType next, const std::uint32_t page = 0)
+        {
+            if (batch != next || (next == BatchType::Images && imagePage != page))
+            {
+                flush();
+                batch = next;
+                imagePage = page;
+            }
+        };
+
+        // Preserve the submitted Canvas order and each tree paint sequence.
+        PruneTextCaches(target.renderIndex);
+        for (const auto& canvas : canvases)
+        {
+            const Size size = canvas.logicalSize;
+            const float scaleX = canvas.scaleX;
+            const float scaleY = canvas.scaleY;
+            const Point center{
+                canvas.origin.x + size.width * scaleX * 0.5F,
+                canvas.origin.y + size.height * scaleY * 0.5F};
+            const auto pixelScale = DirectX::XMMatrixScaling(scaleX, -scaleY, 0.0001F);
+            const float canvasFarDepth = ScreenUiDepthRange -
+                static_cast<float>(std::min(canvas.zOrder, MaximumScreenCanvasZOrder)) * ScreenVisual2DCanvasDepthBand;
+            const auto depthStep = target.screen
+                ? ScreenVisual2DCanvasDepthBand / static_cast<float>(DrawPrimitiveCount(canvas.commands) + 1)
+                : 0.0F;
+            std::size_t primitiveIndex = 0;
+            ForEachDrawPrimitive(canvas.commands, [&](const DrawPacket& command)
+            {
+                // Screen primitives test against the world at their existing
+                // depths. Canvas overlap is resolved by paint order.
+                const float depth = target.screen
+                    ? canvasFarDepth - depthStep * static_cast<float>(++primitiveIndex)
+                    : 0.0F;
+                const auto bounds = command.bounds;
+                if (bounds.width <= 0.0F || bounds.height <= 0.0F)
+                {
+                    return;
+                }
+                const auto clip = ToPixelClipRect(command.clipBounds, size, scaleX, scaleY,
+                    canvas.origin, static_cast<float>(target.width), static_cast<float>(target.height));
+                if (target.screen)
+                {
+                    // Skip fully clipped rows before shaping their text.
+                    const auto logical = TransformBounds(bounds, command.nodeTransform);
+                    const float left = center.x + logical.x * scaleX;
+                    const float top = center.y - (logical.y + logical.height) * scaleY;
+                    if (left >= clip.z || top >= clip.w || left + logical.width * scaleX <= clip.x ||
+                        top + logical.height * scaleY <= clip.y)
+                        return;
+                }
+
+                const auto localToPixels = DirectX::XMLoadFloat4x4(&command.nodeTransform) * pixelScale;
+                if (command.type == DrawPacketType::Text)
+                {
+                    if (!command.text)
+                    {
+                        throw std::invalid_argument("A text packet requires content.");
+                    }
+                    selectBatch(BatchType::Text);
+                    TextDrawCommand draw{};
+                    draw.positionPixels = {(bounds.x + command.textOffset.x) * scaleX,
+                        -(bounds.y + bounds.height + command.textOffset.y) * scaleY};
+                    draw.layoutSizePixels = {bounds.width * scaleX, bounds.height * scaleY};
+                    draw.depth = depth;
+                    DirectX::XMStoreFloat4x4(&draw.transform,
+                        DirectX::XMMatrixScaling(1.0F / scaleX, -1.0F / scaleY, 1.0F) *
+                        localToPixels * DirectX::XMMatrixTranslation(center.x, center.y, 0.0F));
+                    draw.verticalAlignment = TextVerticalAlignment::Center;
+                    draw.style.fontSizePixels = command.text->fontSize * std::min(scaleX, scaleY);
+                    draw.style.color = ToFloat4(command.color);
+                    draw.clipRectPixels = clip;
+                    const auto layout = target.screen
+                        ? ResolveLayout(*screenTextRendering, screenFont, screenFonts, screenTextCache,
+                                        command.text, draw, {scaleX, scaleY}, target.renderIndex)
+                        : ResolveLayout(textureTextRendering, textureFont, textureFonts, textureTextCache,
+                                        command.text, draw, {scaleX, scaleY}, target.renderIndex);
+                    text.push_back({layout, std::move(draw)});
+                    return;
+                }
+
+                DirectX::XMFLOAT4X4 transform{};
+                DirectX::XMStoreFloat4x4(&transform,
+                    localToPixels * DirectX::XMMatrixTranslation(center.x, center.y, depth));
+                const DirectX::XMFLOAT4 instanceBounds{bounds.x, bounds.y, bounds.width, bounds.height};
+                const DirectX::XMFLOAT4 roundedRect{0.0F, 0.0F, bounds.width, bounds.height};
+                const float radius = std::min(command.cornerRadius, std::min(bounds.width, bounds.height) * 0.5F);
+                if (command.type == DrawPacketType::Rectangle)
+                {
+                    selectBatch(BatchType::Rectangles);
+                    rectangles.push_back({instanceBounds, ToFloat4(command.color), transform, clip, roundedRect, radius});
+                    return;
+                }
+                const auto image = imagesByHandle.find(command.image.value);
+                if (image == imagesByHandle.end())
+                {
+                    return;
+                }
+                selectBatch(BatchType::Images, image->second.pageIndex);
+                images.push_back({instanceBounds, ToFloat4(command.color), transform,
+                    {command.uvScale.x, -command.uvScale.y, command.uvOffset.x,
+                     command.uvOffset.y + command.uvScale.y},
+                    clip, roundedRect, radius, image->second.textureIndex});
+            });
+        }
+        flush();
     }
 
     MeshRenderSystem* meshRendering{};
@@ -850,6 +1041,10 @@ struct D3D12Visual2DRenderer::Impl
     TextCache screenTextCache;
     TextCache textureTextCache;
     std::uint64_t textPruneIndex{};
+    std::vector<CanvasDrawing> screenCanvases;
+    std::uint64_t screenRenderIndex{};
+    ComPtr<ID3D12PipelineState> screenRectanglePipeline;
+    ComPtr<ID3D12PipelineState> screenImagePipeline;
     ComPtr<ID3D12RootSignature> rectangleRootSignature;
     ComPtr<ID3D12PipelineState> rectanglePipeline;
     std::array<FrameUploadArena, D3D12Renderer::FrameCount>
@@ -871,9 +1066,10 @@ D3D12Visual2DRenderer::~D3D12Visual2DRenderer() = default;
 
 void D3D12Visual2DRenderer::Initialize(
     MeshRenderSystem& meshRendering,
-    TextRenderSystem& textRendering)
+    TextRenderSystem& textRendering,
+    const DXGI_FORMAT depthStencilFormat)
 {
-    implementation_->Initialize(meshRendering, textRendering);
+    implementation_->Initialize(meshRendering, textRendering, depthStencilFormat);
 }
 
 void D3D12Visual2DRenderer::Shutdown() noexcept
@@ -904,6 +1100,12 @@ bool D3D12Visual2DRenderer::PrepareImages(std::span<const std::filesystem::path>
     return implementation_->meshRendering->Textures().PrepareImages(missing, error);
 }
 
+void D3D12Visual2DRenderer::BeginScreenFrame(const std::uint64_t renderIndex)
+{
+    implementation_->screenCanvases.clear();
+    implementation_->screenRenderIndex = renderIndex;
+}
+
 void D3D12Visual2DRenderer::SubmitScreen(
     const Visual2DCanvas& canvas,
     const RenderContext& context,
@@ -912,169 +1114,36 @@ void D3D12Visual2DRenderer::SubmitScreen(
 {
     Impl& state = *implementation_;
     if (!IsInitialized() || context.meshRendering != state.meshRendering ||
-        context.textRendering != state.screenTextRendering)
+        context.textRendering != state.screenTextRendering || context.renderIndex != state.screenRenderIndex)
     {
-        throw std::logic_error(
-            "The D3D12 Visual2D renderer is not initialized for this context.");
+        throw std::logic_error("The D3D12 Visual2D renderer is not initialized for this context.");
     }
 
-    state.PruneTextCaches(context.renderIndex);
-    const std::vector<DrawPacket> commands = canvas.BuildDrawList();
-    DirectX::XMFLOAT4X4 viewProjection{};
-    DirectX::XMStoreFloat4x4(
-        &viewProjection,
-        DirectX::XMMatrixOrthographicOffCenterLH(
-            0.0F,
-            static_cast<float>(context.width),
-            0.0F,
-            static_cast<float>(context.height),
-            0.0F,
-            1.0F));
-
-    const float pixelScale = canvas.PixelScale();
-    const Size canvasSize = canvas.LogicalSize();
-    const float canvasCenterX =
-        screenOrigin.x + canvasSize.width * pixelScale * 0.5F;
-    const float canvasCenterY =
-        static_cast<float>(context.height) - screenOrigin.y -
-        canvasSize.height * pixelScale * 0.5F;
-    const float canvasCenterInScreenPixelsY =
-        screenOrigin.y + canvasSize.height * pixelScale * 0.5F;
-
-    const float canvasFarDepth = ScreenUiDepthRange -
-        static_cast<float>(std::min(
-            canvasZOrder,
-            MaximumScreenCanvasZOrder)) * ScreenVisual2DCanvasDepthBand;
-    const auto primitiveCount = DrawPrimitiveCount(commands);
-    std::size_t primitiveIndex = 0;
-    ForEachDrawPrimitive(commands, [&](const DrawPacket &command)
+    auto commands = canvas.BuildDrawList();
+    if (!commands.empty())
     {
-        // Visual2DCanvas already returns the tree in paint order. Keep every
-        // Canvas inside its own depth band so opening a popup can change
-        // its local command count without crossing another Canvas.
-        const float normalizedOrder = primitiveCount == 0
-            ? 0.0F
-            : static_cast<float>(++primitiveIndex) /
-                static_cast<float>(primitiveCount + 1);
-        const float depth = canvasFarDepth -
-            ScreenVisual2DCanvasDepthBand * normalizedOrder;
-        const Rect logicalBounds = state.TransformBounds(
-            command.bounds,
-            command.nodeTransform);
-        const Rect bounds{
-            canvasCenterX + logicalBounds.x * pixelScale,
-            screenOrigin.y +
-                (canvasSize.height * 0.5F - logicalBounds.y -
-                 logicalBounds.height) * pixelScale,
-            logicalBounds.width * pixelScale,
-            logicalBounds.height * pixelScale};
-        const DirectX::XMFLOAT4 clipRectPixels = ToPixelClipRect(
-            command.clipBounds,
-            canvasSize,
-            pixelScale,
-            pixelScale,
-            screenOrigin,
-            static_cast<float>(context.width),
-            static_cast<float>(context.height));
-        // Clip before text shaping or instance submission. A shader clip
-        // alone still paid all CPU work for off-screen list rows/cells.
-        if (bounds.x >= clipRectPixels.z || bounds.y >= clipRectPixels.w ||
-            bounds.x + bounds.width <= clipRectPixels.x || bounds.y + bounds.height <= clipRectPixels.y)
-            return;
-        const DirectX::XMFLOAT4 roundedRectLocal{
-            0.0F,
-            0.0F,
-            command.bounds.width,
-            command.bounds.height};
-        const float cornerRadiusLocal = std::min(
-            command.cornerRadius,
-            std::min(command.bounds.width, command.bounds.height) * 0.5F);
-        if (command.type == DrawPacketType::Text)
-        {
-            if (!command.text)
-                throw std::invalid_argument("A text packet requires content.");
-            TextDrawCommand text{};
-            text.positionPixels = {(command.bounds.x + command.textOffset.x) * pixelScale,
-                                   -(command.bounds.y + command.bounds.height + command.textOffset.y) * pixelScale};
-            text.layoutSizePixels = {
-                command.bounds.width * pixelScale,
-                command.bounds.height * pixelScale};
-            text.depth = depth;
-            DirectX::XMStoreFloat4x4(
-                &text.transform,
-                DirectX::XMMatrixScaling(1.0F / pixelScale, -1.0F / pixelScale, 1.0F) *
-                    DirectX::XMLoadFloat4x4(&command.nodeTransform) *
-                    DirectX::XMMatrixScaling(pixelScale, -pixelScale, 0.0001F) *
-                    DirectX::XMMatrixTranslation(canvasCenterX, canvasCenterInScreenPixelsY, 0.0F));
-            text.verticalAlignment = TextVerticalAlignment::Center;
-            text.style.fontSizePixels = command.text->fontSize * pixelScale;
-            text.style.color = ToFloat4(command.color);
-            text.clipRectPixels = clipRectPixels;
-            const auto prepared = state.ResolveLayout(*state.screenTextRendering, state.screenFont,
-                                                      state.screenFonts, state.screenTextCache, command.text, text,
-                                                      {pixelScale, pixelScale}, context.renderIndex);
-            state.screenTextRendering->Submit(prepared, text);
-            return;
-        }
-        if (command.type == DrawPacketType::Image)
-        {
-            const auto image = state.imagesByHandle.find(command.image.value);
-            if (image == state.imagesByHandle.end() || bounds.width <= 0.0F || bounds.height <= 0.0F)
-            {
-                return;
-            }
+        const auto scale = canvas.PixelScale();
+        state.screenCanvases.push_back(
+            {canvas.LogicalSize(), screenOrigin, scale, scale, canvasZOrder, std::move(commands)});
+    }
+}
 
-            DirectX::XMFLOAT4X4 world{};
-            DirectX::XMStoreFloat4x4(&world, state.QuadToLocal(command.bounds) *
-                                                 DirectX::XMLoadFloat4x4(&command.nodeTransform) *
-                                                 DirectX::XMMatrixScaling(pixelScale, pixelScale, 0.0001F) *
-                                                 DirectX::XMMatrixTranslation(canvasCenterX, canvasCenterY, depth));
-
-            state.meshRendering->Submit(
-                state.imageMesh,
-                state.imagePages[image->second.pageIndex].material,
-                world,
-                viewProjection,
-                ToFloat4(command.color),
-                command.uvScale,
-                command.uvOffset,
-                image->second.textureIndex,
-                clipRectPixels,
-                roundedRectLocal,
-                cornerRadiusLocal);
-            return;
-        }
-        if (bounds.width <= 0.0F || bounds.height <= 0.0F)
-        {
-            return;
-        }
-
-        DirectX::XMFLOAT4X4 world{};
-        DirectX::XMStoreFloat4x4(
-            &world,
-            state.QuadToLocal(command.bounds) *
-            DirectX::XMLoadFloat4x4(&command.nodeTransform) *
-            DirectX::XMMatrixScaling(
-                pixelScale,
-                pixelScale,
-                0.0001F) *
-            DirectX::XMMatrixTranslation(
-                canvasCenterX,
-                canvasCenterY,
-                depth));
-        state.meshRendering->Submit(
-            state.rectangleMesh,
-            state.rectangleMaterial,
-            world,
-            viewProjection,
-            ToFloat4(command.color),
-            {1.0F, 1.0F},
-            {0.0F, 0.0F},
-            NoTextureIndex,
-            clipRectPixels,
-            roundedRectLocal,
-            cornerRadiusLocal);
-    });
+void D3D12Visual2DRenderer::DrawScreen(
+    ID3D12GraphicsCommandList& commands,
+    const std::uint32_t frameIndex,
+    const std::uint32_t width,
+    const std::uint32_t height)
+{
+    Impl& state = *implementation_;
+    // Equal Z uses submission order. DrawList already contains tree paint order.
+    std::stable_sort(state.screenCanvases.begin(), state.screenCanvases.end(),
+        [](const auto& left, const auto& right) { return left.zOrder < right.zOrder; });
+    if (!state.screenCanvases.empty())
+    {
+        state.RecordCanvases({commands, frameIndex, width, height, state.screenRenderIndex, true},
+            state.screenCanvases);
+        state.screenCanvases.clear();
+    }
 }
 
 void D3D12Visual2DRenderer::SubmitPlane(
@@ -1213,179 +1282,11 @@ void D3D12Visual2DRenderer::RenderToTexture(
     const std::uint32_t targetHeight = target->Height();
 
     const Size canvasSize = canvas.LogicalSize();
-    const float scaleX =
-        static_cast<float>(targetWidth) / canvasSize.width;
-    const float scaleY =
-        static_cast<float>(targetHeight) / canvasSize.height;
-    const std::vector<DrawPacket> commands = canvas.BuildDrawList();
-    std::vector<Impl::RectangleInstance> rectangles;
-    rectangles.reserve(commands.size());
-    std::vector<Impl::VisualInstance> visuals;
-    visuals.reserve(commands.size());
-
-    struct PendingText
-    {
-        TextLayoutHandle layout;
-        TextDrawCommand command;
-    };
-    std::vector<PendingText> textCommands;
-    textCommands.reserve(commands.size());
-
-    enum class BatchType
-    {
-        None,
-        Rectangles,
-        Visuals,
-        Text,
-    };
-    BatchType batchType = BatchType::None;
-    std::uint32_t batchImagePage = 0;
-
-    // Preserve the Canvas tree's paint order. Consecutive primitives that
-    // use the same pipeline and descriptor page remain instanced, while a
-    // pipeline/page change closes the current batch before recording the
-    // next one.
-    const auto flushBatch = [&]()
-    {
-        switch (batchType)
-        {
-        case BatchType::Rectangles:
-            state.DrawRectangles(
-                commandList,
-                context.frameIndex,
-                context.renderIndex,
-                targetWidth,
-                targetHeight,
-                rectangles);
-            rectangles.clear();
-            break;
-
-        case BatchType::Visuals:
-            state.DrawVisuals(
-                commandList,
-                context.frameIndex,
-                context.renderIndex,
-                targetWidth,
-                targetHeight,
-                state.imagePages[batchImagePage].textures,
-                visuals);
-            visuals.clear();
-            break;
-
-        case BatchType::Text:
-            state.textureTextRendering.BeginFrame(
-                context.frameIndex,
-                context.renderIndex);
-            for (const PendingText& text : textCommands)
-            {
-                state.textureTextRendering.Submit(text.layout, text.command);
-            }
-            state.textureTextRendering.Flush(
-                commandList,
-                targetWidth,
-                targetHeight);
-            textCommands.clear();
-            break;
-
-        case BatchType::None:
-            break;
-        }
-        batchType = BatchType::None;
-    };
-
-    const auto selectBatch = [&flushBatch, &batchType, &batchImagePage](
-        const BatchType requestedType,
-        const std::uint32_t requestedImagePage = 0)
-    {
-        if (batchType != requestedType ||
-            (requestedType == BatchType::Visuals &&
-             batchImagePage != requestedImagePage))
-        {
-            flushBatch();
-            batchType = requestedType;
-            batchImagePage = requestedImagePage;
-        }
-    };
-
-    ForEachDrawPrimitive(
-        commands,
-        [&](const DrawPacket &command)
-        {
-            if (command.bounds.width <= 0.0F || command.bounds.height <= 0.0F)
-            {
-                return;
-            }
-
-            DirectX::XMFLOAT4X4 primitiveTransform{};
-            DirectX::XMStoreFloat4x4(&primitiveTransform, DirectX::XMLoadFloat4x4(&command.nodeTransform) *
-                                                              DirectX::XMMatrixScaling(scaleX, -scaleY, 0.0001F) *
-                                                              DirectX::XMMatrixTranslation(
-                                                                  static_cast<float>(targetWidth) * 0.5F,
-                                                                  static_cast<float>(targetHeight) * 0.5F, 0.0F));
-            const DirectX::XMFLOAT4 clipRectPixels =
-                ToPixelClipRect(command.clipBounds, canvasSize, scaleX, scaleY, {}, static_cast<float>(targetWidth),
-                                static_cast<float>(targetHeight));
-            const DirectX::XMFLOAT4 roundedRectLocal{0.0F, 0.0F, command.bounds.width, command.bounds.height};
-            const float cornerRadiusLocal =
-                std::min(command.cornerRadius, std::min(command.bounds.width, command.bounds.height) * 0.5F);
-            if (command.type == DrawPacketType::Rectangle)
-            {
-                selectBatch(BatchType::Rectangles);
-                rectangles.push_back(
-                    {{command.bounds.x, command.bounds.y, command.bounds.width, command.bounds.height},
-                     ToFloat4(command.color),
-                     primitiveTransform,
-                     clipRectPixels,
-                     roundedRectLocal,
-                     cornerRadiusLocal});
-                return;
-            }
-
-            if (command.type == DrawPacketType::Image)
-            {
-                const auto image = state.imagesByHandle.find(command.image.value);
-                if (image == state.imagesByHandle.end())
-                {
-                    return;
-                }
-                selectBatch(BatchType::Visuals, image->second.pageIndex);
-                visuals.push_back(
-                    {{command.bounds.x, command.bounds.y, command.bounds.width, command.bounds.height},
-                     ToFloat4(command.color),
-                     primitiveTransform,
-                     {command.uvScale.x, -command.uvScale.y, command.uvOffset.x,
-                      command.uvOffset.y + command.uvScale.y},
-                     clipRectPixels,
-                     roundedRectLocal,
-                     cornerRadiusLocal,
-                     image->second.textureIndex});
-                return;
-            }
-
-            TextDrawCommand text{};
-            if (!command.text)
-                throw std::invalid_argument("A text packet requires content.");
-            text.positionPixels = {(command.bounds.x + command.textOffset.x) * scaleX,
-                                   -(command.bounds.y + command.bounds.height + command.textOffset.y) * scaleY};
-            text.layoutSizePixels = {command.bounds.width * scaleX, command.bounds.height * scaleY};
-            DirectX::XMStoreFloat4x4(
-                &text.transform, DirectX::XMMatrixScaling(1.0F / scaleX, -1.0F / scaleY, 1.0F) *
-                                     DirectX::XMLoadFloat4x4(&command.nodeTransform) *
-                                     DirectX::XMMatrixScaling(scaleX, -scaleY, 0.0001F) *
-                                     DirectX::XMMatrixTranslation(static_cast<float>(targetWidth) * 0.5F,
-                                                                  static_cast<float>(targetHeight) * 0.5F, 0.0F));
-            text.verticalAlignment = TextVerticalAlignment::Center;
-            text.style.fontSizePixels = command.text->fontSize * std::min(scaleX, scaleY);
-            text.style.color = ToFloat4(command.color);
-            text.clipRectPixels = clipRectPixels;
-            selectBatch(BatchType::Text);
-            state.PruneTextCaches(context.renderIndex);
-            const auto prepared = state.ResolveLayout(state.textureTextRendering, state.textureFont,
-                                                      state.textureFonts, state.textureTextCache, command.text,
-                                                      text, {scaleX, scaleY}, context.renderIndex);
-            textCommands.push_back({prepared, std::move(text)});
-        });
-    flushBatch();
+    const Impl::CanvasDrawing drawing{canvasSize, {},
+        static_cast<float>(targetWidth) / canvasSize.width,
+        static_cast<float>(targetHeight) / canvasSize.height, 0, canvas.BuildDrawList()};
+    state.RecordCanvases({commandList, context.frameIndex, targetWidth, targetHeight, context.renderIndex, false},
+        std::span{&drawing, 1});
 
     textureManager.EndRenderTargetPass(commandList, target);
 

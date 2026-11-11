@@ -22,8 +22,12 @@ public:
 
     void Initialize(
         MeshRenderSystem& meshRendering,
-        TextRenderSystem& textRendering);
+        TextRenderSystem& textRendering,
+        DXGI_FORMAT depthStencilFormat);
     void Shutdown() noexcept;
+    void BeginScreenFrame(std::uint64_t renderIndex);
+    void DrawScreen(ID3D12GraphicsCommandList& commands, std::uint32_t frameIndex,
+                    std::uint32_t width, std::uint32_t height);
 
     [[nodiscard]] ImageHandle LoadImage(
         const std::filesystem::path& path) override;
