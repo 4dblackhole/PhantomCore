@@ -89,6 +89,8 @@
     <ClInclude Include="..\Core\Visual2D\Visual2DSurface.h" />
     <ClInclude Include="..\Core\Visual2D\Visual2DWidgets.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12Renderer.h" />
+    <ClInclude Include="..\Core\Rendering\RenderContext.h" />
+    <ClInclude Include="..\Graphics.D3D12\Renderer\RenderFrameContext.h" />
     <ClInclude Include="..\Core\Rendering\ImageReadback.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h" />
     <ClInclude Include="..\Graphics.D3D12\Mesh\MeshRendering.h" />

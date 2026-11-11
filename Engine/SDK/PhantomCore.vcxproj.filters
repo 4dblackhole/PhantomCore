@@ -112,6 +112,8 @@
     <ClInclude Include="..\Core\Visual2D\Visual2DSurface.h"><Filter>Core\Visual2D</Filter></ClInclude>
     <ClInclude Include="..\Core\Visual2D\Visual2DWidgets.h"><Filter>Core\Visual2D</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12Renderer.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
+    <ClInclude Include="..\Core\Rendering\RenderContext.h"><Filter>Core\Rendering</Filter></ClInclude>
+    <ClInclude Include="..\Graphics.D3D12\Renderer\RenderFrameContext.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Core\Rendering\ImageReadback.h"><Filter>Core\Rendering</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Mesh\MeshRendering.h"><Filter>Graphics.D3D12\Mesh</Filter></ClInclude>

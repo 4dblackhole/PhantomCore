@@ -93,9 +93,10 @@ namespace
 
 std::shared_future<RgbaImage> RenderContext::ReadImage() const
 {
-    if (imageReadbacks_ == nullptr)
+    const auto* frame = RenderFrameContext::Find(*this);
+    if (frame == nullptr || frame->imageReadbacks == nullptr)
         throw std::logic_error("ReadImage requires an active engine RenderContext.");
-    return imageReadbacks_->Request(renderIndex);
+    return frame->imageReadbacks->Request(renderIndex);
 }
 
 D3D12Renderer::D3D12Renderer() = default;
@@ -275,21 +276,21 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     imageReadbacks_->BeginFrame(frameIndex_, renderIndex, *renderTargets_[frameIndex_].Get());
     frameOpen_ = true;
     RenderContext context;
-    context.commandList = commandList_.Get();
-    context.viewport = viewport_;
-    context.scissorRectangle = scissorRectangle_;
+    frameContext_.commandList = commandList_.Get();
+    frameContext_.viewport = viewport_;
+    frameContext_.scissorRectangle = scissorRectangle_;
     context.width = width_;
     context.height = height_;
     context.frameIndex = frameIndex_;
     context.renderIndex = renderIndex;
-    context.renderTargetFormat = renderTargetFormat_;
-    context.depthStencilFormat = depthStencilFormat_;
-    context.renderTargetView = renderTargetView;
-    context.depthStencilView = depthStencilView;
+    frameContext_.renderTargetView = renderTargetView;
+    frameContext_.depthStencilView = depthStencilView;
     context.meshRendering = meshRenderSystem_.get();
     context.textRendering = textRenderSystem_.get();
     context.visual2DRendering = visual2DRenderSystem_.get();
-    context.imageReadbacks_ = imageReadbacks_.get();
+    frameContext_.renderIndex = renderIndex;
+    frameContext_.imageReadbacks = imageReadbacks_.get();
+    frameContext_.Attach(context);
     return context;
 }
 

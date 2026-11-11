@@ -1,4 +1,5 @@
 #include "App/Engine.h"
+#include "Renderer/D3D12Renderer.h"
 
 #include "System/ComApartment.h"
 #include "System/HighResolutionClock.h"

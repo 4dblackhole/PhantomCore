@@ -4,8 +4,8 @@
 // backend and exposes only Canvas/resource operations through this contract.
 
 #include "Visual2D/Visual2DCanvas.h"
-#include "Mesh/MeshRendering.h"
-#include "Renderer/D3D12Renderer.h"
+#include "Texture/TextureManager.h"
+#include "Rendering/RenderContext.h"
 
 #include <DirectXMath.h>
 

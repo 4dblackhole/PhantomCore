@@ -1,6 +1,8 @@
 #include "Visual2D/D3D12Visual2DRenderer.h"
 #include "Visual2D/ImageCacheKey.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/D3D12Renderer.h"
+#include "Mesh/MeshRendering.h"
 
 #include "Primitive/RectangleShape.h"
 #include "Shader/ShaderCompiler.h"
@@ -1252,8 +1254,9 @@ void D3D12Visual2DRenderer::RenderToTexture(
     const RenderContext& context)
 {
     Impl& state = *implementation_;
-    if (!IsInitialized() || target == nullptr ||
-        context.commandList == nullptr ||
+    const auto* frame = RenderFrameContext::Find(context);
+    if (!IsInitialized() || target == nullptr || frame == nullptr ||
+        frame->commandList == nullptr ||
         context.frameIndex >= D3D12Renderer::FrameCount)
     {
         throw std::invalid_argument(
@@ -1272,7 +1275,7 @@ void D3D12Visual2DRenderer::RenderToTexture(
     }
     retainedTargets.targets.push_back(target);
 
-    ID3D12GraphicsCommandList& commandList = *context.commandList;
+    ID3D12GraphicsCommandList& commandList = *frame->commandList;
     TextureManager& textureManager = state.meshRendering->Textures();
     textureManager.BeginRenderTargetPass(
         commandList,
@@ -1290,9 +1293,9 @@ void D3D12Visual2DRenderer::RenderToTexture(
 
     textureManager.EndRenderTargetPass(commandList, target);
 
-    commandList.RSSetViewports(1, &context.viewport);
-    commandList.RSSetScissorRects(1, &context.scissorRectangle);
-    commandList.OMSetRenderTargets(1, &context.renderTargetView, FALSE, &context.depthStencilView);
+    commandList.RSSetViewports(1, &frame->viewport);
+    commandList.RSSetScissorRects(1, &frame->scissorRectangle);
+    commandList.OMSetRenderTargets(1, &frame->renderTargetView, FALSE, &frame->depthStencilView);
 }
 
 bool D3D12Visual2DRenderer::IsInitialized() const noexcept

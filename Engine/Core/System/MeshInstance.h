@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Mesh/MeshRendering.h"
-#include "Renderer/D3D12Renderer.h"
+#include "Rendering/RenderContext.h"
 #include "System/Camera.h"
 #include "System/TransformNode.h"
 

@@ -2,7 +2,7 @@
 
 #include "Input/Input.h"
 #include "Mesh/MeshRendering.h"
-#include "Renderer/D3D12Renderer.h"
+#include "Rendering/RenderContext.h"
 #include "System/AudioSystem.h"
 #include "Text/TextRendering.h"
 #include "Window/WindowControl.h"
