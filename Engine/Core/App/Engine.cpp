@@ -20,6 +20,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 namespace
 {
     GraphicsDiagnostics ReadGraphicsDiagnostics(ID3D12InfoQueue& queue) noexcept
@@ -410,3 +412,5 @@ int RunWithGraphicsDiagnostics(std::unique_ptr<IGameClient> client, GraphicsDiag
         diagnostics = ReadGraphicsDiagnostics(*queue.Get());
     return exitCode;
 }
+
+} // namespace PhantomCore

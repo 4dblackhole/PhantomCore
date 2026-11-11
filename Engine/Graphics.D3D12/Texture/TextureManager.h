@@ -15,6 +15,8 @@
 // One descriptor table reserves this many entries.  Each entry can point
 // at an independently sized Texture2D resource; this is not a
 // D3D12 Texture2DArray and therefore does not require equal dimensions.
+namespace PhantomCore
+{
 inline constexpr std::uint32_t MaxTexturesPerSet = 64;
 
 struct TextureInfo final
@@ -108,3 +110,5 @@ private:
     struct Impl;
     std::unique_ptr<Impl> implementation_;
 };
+
+} // namespace PhantomCore

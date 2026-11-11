@@ -4,6 +4,8 @@
 
 #include <string>
 
+namespace PhantomCore
+{
 namespace FmodDetail
 {
     [[nodiscard]] inline std::string MakeFmodError(const char* operation, const FMOD_RESULT result)
@@ -13,3 +15,5 @@ namespace FmodDetail
             std::to_string(static_cast<int>(result)) + ")";
     }
 }
+
+} // namespace PhantomCore

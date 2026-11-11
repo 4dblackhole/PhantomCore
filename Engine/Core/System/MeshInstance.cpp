@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <utility>
 
+namespace PhantomCore
+{
 using namespace DirectX;
 
 
@@ -189,3 +191,5 @@ void MeshInstance::Submit(
         uvOffset_,
         textureIndex_);
 }
+
+} // namespace PhantomCore

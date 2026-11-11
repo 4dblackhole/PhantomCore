@@ -5,6 +5,8 @@
 #include <fstream>
 #include <stdexcept>
 
+namespace PhantomCore
+{
 void DecodeAudioPcm(const std::filesystem::path& path,
                     const std::stop_token stop, const AudioPcmConsumer& consume)
 {
@@ -52,3 +54,5 @@ void DecodeAudioPcm(const std::filesystem::path& path,
     else
         DecodeMediaFoundation(path, stop, consume);
 }
+
+} // namespace PhantomCore

@@ -7,6 +7,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 std::unique_ptr<IAudioBackend> CreateFmodAudioBackend()
 {
     return std::make_unique<FmodAudioBackend>();
@@ -471,3 +473,5 @@ bool AudioSystem::CanRestartMixer(std::string& errorMessage) const
     }
     return true;
 }
+
+} // namespace PhantomCore

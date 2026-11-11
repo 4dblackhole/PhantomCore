@@ -22,6 +22,8 @@
 
 #pragma comment(lib, "windowscodecs.lib")
 
+namespace PhantomCore
+{
 using Microsoft::WRL::ComPtr;
 
 
@@ -1183,3 +1185,5 @@ void TextureRenderingBackend::EndRenderTargetPass(TextureManager& textures,
 {
     textures.implementation_->EndRenderTargetPass(commands, target);
 }
+
+} // namespace PhantomCore

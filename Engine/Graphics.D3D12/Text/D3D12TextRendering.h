@@ -5,6 +5,8 @@
 #include <span>
 
 // Keeps native initialization and recording outside the public text contract.
+namespace PhantomCore
+{
 struct TextRenderingBackend final
 {
     struct CanvasDraw
@@ -26,3 +28,5 @@ struct TextRenderingBackend final
         ID3D12GraphicsCommandList& commands, std::uint32_t width,
         std::uint32_t height, std::span<const CanvasDraw> draws);
 };
+
+} // namespace PhantomCore

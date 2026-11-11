@@ -15,6 +15,8 @@
 
 // Scene lifetime is a route-registration policy, not a decision made by
 // the Scene object itself.
+namespace PhantomCore
+{
 enum class SceneRetention : std::uint8_t
 {
     // Construct on first entry, then retain and reuse the same object.
@@ -146,3 +148,5 @@ private:
     bool initialized_{};
     bool started_{};
 };
+
+} // namespace PhantomCore

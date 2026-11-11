@@ -14,6 +14,8 @@
 // Engine-owned measurement data. The Client decides whether, where, and
 // how to present these values; an unavailable sample has `hasMeasurement`
 // set to false during the first reporting interval.
+namespace PhantomCore
+{
 struct PerformanceStatistics final
 {
     std::uint64_t framesPerSecond{};
@@ -89,3 +91,5 @@ public:
     virtual void OnResize(std::uint32_t width, std::uint32_t height) = 0;
     virtual void Shutdown() noexcept = 0;
 };
+
+} // namespace PhantomCore

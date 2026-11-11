@@ -9,6 +9,8 @@
 #include <thread>
 #include <vector>
 
+using namespace PhantomCore;
+
 namespace
 {
     constexpr std::array<Color, 5> Colors{{

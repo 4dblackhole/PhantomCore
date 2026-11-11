@@ -9,6 +9,8 @@
 
 
 // Owns one FMOD sound for as long as the Client-owned AudioClip exists.
+namespace PhantomCore
+{
 class FmodAudioClip final : public IAudioClipBackend
 {
 public:
@@ -31,3 +33,5 @@ private:
     FMOD::Sound* sound_{};
     std::uint64_t generation_{};
 };
+
+} // namespace PhantomCore

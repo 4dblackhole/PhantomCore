@@ -9,6 +9,8 @@
 #include <string>
 
 
+namespace PhantomCore
+{
 struct FmodBusLifetime final
 {
     ~FmodBusLifetime();
@@ -90,3 +92,5 @@ private:
     std::shared_ptr<FmodBusLifetime> busLifetime_;
     std::string name_;
 };
+
+} // namespace PhantomCore

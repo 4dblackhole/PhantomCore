@@ -14,6 +14,8 @@
 #include <filesystem>
 
 
+namespace PhantomCore
+{
 class Visual2DRenderSystem
 {
 public:
@@ -79,3 +81,5 @@ public:
 protected:
     Visual2DRenderSystem() = default;
 };
+
+} // namespace PhantomCore

@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <vector>
 
+namespace PhantomCore
+{
 void DecodeMp3(const std::filesystem::path& path, const std::stop_token stop,
                const AudioPcmConsumer& consume)
 {
@@ -32,3 +34,5 @@ void DecodeMp3(const std::filesystem::path& path, const std::stop_token stop,
                 std::span{samples}.first(static_cast<std::size_t>(frames) * decoder->channels));
     }
 }
+
+} // namespace PhantomCore

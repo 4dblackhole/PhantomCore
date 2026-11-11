@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+namespace PhantomCore
+{
 class Shape
 {
 public:
@@ -49,3 +51,5 @@ private:
     std::vector<VertexAttributes> vertices_;
     std::vector<std::uint32_t> indices_;
 };
+
+} // namespace PhantomCore

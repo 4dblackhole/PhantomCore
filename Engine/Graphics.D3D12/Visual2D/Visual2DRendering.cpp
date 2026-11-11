@@ -27,6 +27,8 @@
 #include <utility>
 #include <vector>
 
+namespace PhantomCore
+{
 using Microsoft::WRL::ComPtr;
 
 
@@ -1308,3 +1310,5 @@ bool D3D12Visual2DRenderer::IsInitialized() const noexcept
 {
     return implementation_ != nullptr && implementation_->initialized;
 }
+
+} // namespace PhantomCore

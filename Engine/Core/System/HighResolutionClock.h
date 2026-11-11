@@ -3,6 +3,8 @@
 #include <cstdint>
 
 // General-purpose QueryPerformanceCounter clock used by the engine loop.
+namespace PhantomCore
+{
 class HighResolutionClock final
 {
 public:
@@ -16,3 +18,5 @@ private:
     std::int64_t startCounter_{};
     double previousSeconds_{};
 };
+
+} // namespace PhantomCore

@@ -13,6 +13,8 @@
 #include <string_view>
 
 
+namespace PhantomCore
+{
 enum class TextHorizontalAlignment : std::uint8_t
 {
     Leading,
@@ -142,3 +144,5 @@ private:
     struct Impl;
     std::unique_ptr<Impl> implementation_;
 };
+
+} // namespace PhantomCore

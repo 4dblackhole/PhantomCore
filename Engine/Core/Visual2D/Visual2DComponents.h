@@ -8,6 +8,8 @@
 #include <string_view>
 
 
+namespace PhantomCore
+{
 class SpriteVisualComponent final : public Visual2DComponent
 {
 public:
@@ -278,3 +280,5 @@ private:
     bool trackingDrag_{};
     bool dragMoved_{};
 };
+
+} // namespace PhantomCore

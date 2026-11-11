@@ -6,6 +6,8 @@
 #include <cstdint>
 
 
+namespace PhantomCore
+{
 enum class BuiltInShader : std::uint8_t
 {
     UnlitVertexColorInstanced,
@@ -18,3 +20,5 @@ enum class BuiltInShader : std::uint8_t
     BuiltInShader shader,
     const char* entryPoint,
     const char* target);
+
+} // namespace PhantomCore

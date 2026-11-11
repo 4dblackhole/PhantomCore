@@ -4,6 +4,8 @@
 
 #include <cstdint>
 
+namespace PhantomCore
+{
 class SphereShape final : public Shape
 {
 public:
@@ -12,3 +14,5 @@ public:
         std::uint32_t sliceCount = 32,
         std::uint32_t stackCount = 16);
 };
+
+} // namespace PhantomCore

@@ -11,6 +11,8 @@
 #include <memory>
 
 
+namespace PhantomCore
+{
 class TextRenderSystem;
 
 class D3D12Visual2DRenderer final : public Visual2DRenderSystem
@@ -61,3 +63,5 @@ private:
     struct Impl;
     std::unique_ptr<Impl> implementation_;
 };
+
+} // namespace PhantomCore

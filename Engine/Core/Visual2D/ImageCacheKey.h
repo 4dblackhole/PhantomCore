@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <string>
 
+namespace PhantomCore
+{
 namespace Visual2DDetail
 {
     [[nodiscard]] inline std::wstring ImageCacheKey(const std::filesystem::path& path)
@@ -17,3 +19,5 @@ namespace Visual2DDetail
         return key;
     }
 }
+
+} // namespace PhantomCore

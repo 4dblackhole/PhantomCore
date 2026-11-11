@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+namespace PhantomCore
+{
 using namespace DirectX;
 
 
@@ -236,3 +238,5 @@ void TransformNode::UpdateWorld() const
 
     worldDirty_ = false;
 }
+
+} // namespace PhantomCore

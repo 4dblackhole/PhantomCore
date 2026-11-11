@@ -1,6 +1,8 @@
 #include "Visual2D/Visual2DWidgets.h"
 
 
+namespace PhantomCore
+{
 namespace
 {
     [[nodiscard]] VisualStyle TransparentStyle() noexcept
@@ -131,3 +133,5 @@ Visual2DNode& CreateComboBox(
     behavior.SetItems(std::move(items));
     return node;
 }
+
+} // namespace PhantomCore

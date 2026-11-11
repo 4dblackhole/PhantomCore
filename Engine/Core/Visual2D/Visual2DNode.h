@@ -18,6 +18,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 using NodeId = std::uint64_t;
 
 struct ImageHandle
@@ -420,3 +422,5 @@ private:
     bool hovered_{};
     bool pressed_{};
 };
+
+} // namespace PhantomCore

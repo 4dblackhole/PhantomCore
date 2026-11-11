@@ -7,6 +7,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 CurvedRectangleShape::CurvedRectangleShape(
     const float width,
     const float height,
@@ -79,3 +81,5 @@ CurvedRectangleShape::CurvedRectangleShape(
 
     SetMeshData(std::move(vertices), std::move(indices));
 }
+
+} // namespace PhantomCore

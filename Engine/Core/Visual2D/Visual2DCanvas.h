@@ -7,6 +7,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 enum class CanvasScaleMode : std::uint8_t
 {
     Fixed,
@@ -75,3 +77,5 @@ private:
     Size viewportSize,
     const Visual2DCanvas& canvas,
     Point canvasOrigin = {}) noexcept;
+
+} // namespace PhantomCore

@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <vector>
 
+namespace PhantomCore
+{
 RectangleShape::RectangleShape(const float width, const float height)
 {
     if (width <= 0.0F || height <= 0.0F)
@@ -24,3 +26,5 @@ RectangleShape::RectangleShape(const float width, const float height)
     std::vector<std::uint32_t> indices{0, 1, 2, 0, 2, 3};
     SetMeshData(std::move(vertices), std::move(indices));
 }
+
+} // namespace PhantomCore

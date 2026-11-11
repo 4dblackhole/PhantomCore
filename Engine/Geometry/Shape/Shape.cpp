@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <utility>
 
+namespace PhantomCore
+{
 Shape::~Shape() = default;
 
 std::span<const VertexAttributes> Shape::Vertices() const noexcept
@@ -51,3 +53,5 @@ void Shape::SetMeshData(
     vertices_ = std::move(vertices);
     indices_ = std::move(indices);
 }
+
+} // namespace PhantomCore

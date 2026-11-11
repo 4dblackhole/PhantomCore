@@ -9,6 +9,8 @@
 #include <system_error>
 #include <utility>
 
+namespace PhantomCore
+{
 namespace
 {
     constexpr std::size_t InitialPathCapacity = MAX_PATH;
@@ -70,3 +72,5 @@ std::filesystem::path ResolveExecutableRelativePath(
         ? path
         : ExecutableDirectory() / path;
 }
+
+} // namespace PhantomCore

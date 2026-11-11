@@ -6,6 +6,8 @@
 #include <limits>
 #include <ranges>
 
+namespace PhantomCore
+{
 using namespace DirectX;
 
 
@@ -604,3 +606,5 @@ void Visual2DNode::UpdateTransformLayout() noexcept
         position_.y - size_.height * pivot_.y,
         transform_.Position().z);
 }
+
+} // namespace PhantomCore

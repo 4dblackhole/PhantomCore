@@ -12,6 +12,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 struct SurfaceHit
 {
     float rayParameter{};
@@ -136,3 +138,5 @@ private:
     Point screenPosition,
     Size viewportSize,
     const DirectX::XMFLOAT4X4& viewProjection) noexcept;
+
+} // namespace PhantomCore

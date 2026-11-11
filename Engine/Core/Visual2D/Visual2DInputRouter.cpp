@@ -1,6 +1,8 @@
 #include "Visual2D/Visual2DInputRouter.h"
 
 
+namespace PhantomCore
+{
 void Visual2DInputRouter::Process(
     Visual2DCanvas& canvas,
     const PointerInput& input)
@@ -168,3 +170,5 @@ void Visual2DInputRouter::ChangeHovered(
         Dispatch(canvas, *next, PointerEventType::Enter, input);
     }
 }
+
+} // namespace PhantomCore

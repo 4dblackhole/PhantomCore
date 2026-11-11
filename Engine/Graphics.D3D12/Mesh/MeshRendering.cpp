@@ -18,6 +18,8 @@
 #include <string>
 #include <tuple>
 
+namespace PhantomCore
+{
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
@@ -1341,3 +1343,5 @@ void MeshRenderingBackend::Flush(MeshRenderSystem& meshes, ID3D12GraphicsCommand
 {
     meshes.implementation_->Flush(commands);
 }
+
+} // namespace PhantomCore

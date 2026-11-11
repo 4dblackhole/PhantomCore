@@ -9,6 +9,8 @@
 
 // Public canonical attributes retained by Shape regardless of the GPU vertex
 // layout selected by a Client.
+namespace PhantomCore
+{
 struct VertexAttributes final
 {
     DirectX::XMFLOAT3 position{};
@@ -134,3 +136,5 @@ static_assert(ShapeVertex<VertexPositionUvColor>);
 static_assert(ShapeVertex<VertexPositionNormal>);
 static_assert(ShapeVertex<VertexPositionNormalUv>);
 static_assert(ShapeVertex<VertexPositionNormalUvColor>);
+
+} // namespace PhantomCore

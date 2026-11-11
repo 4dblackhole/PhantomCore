@@ -3,6 +3,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 AudioPlaybackManager::~AudioPlaybackManager()
 {
     StopAll();
@@ -158,3 +160,5 @@ std::size_t AudioPlaybackManager::PlaybackCount() const noexcept
 {
     return playbacks_.size();
 }
+
+} // namespace PhantomCore

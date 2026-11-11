@@ -6,6 +6,8 @@
 
 #include <filesystem>
 
+namespace PhantomCore
+{
 [[nodiscard]] std::filesystem::path ExecutablePath();
 [[nodiscard]] std::filesystem::path ExecutableDirectory();
 
@@ -13,3 +15,5 @@
 // the directory containing the current process executable.
 [[nodiscard]] std::filesystem::path ResolveExecutableRelativePath(
     const std::filesystem::path& path);
+
+} // namespace PhantomCore

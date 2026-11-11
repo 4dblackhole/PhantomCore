@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <string>
 
+namespace PhantomCore
+{
 namespace D3D12Detail
 {
     inline void ThrowIfFailed(const HRESULT result, const char* operation)
@@ -17,3 +19,5 @@ namespace D3D12Detail
         }
     }
 }
+
+} // namespace PhantomCore

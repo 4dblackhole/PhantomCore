@@ -12,6 +12,8 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 
+namespace PhantomCore
+{
 namespace
 {
     struct ShaderSource final
@@ -93,3 +95,5 @@ Microsoft::WRL::ComPtr<ID3DBlob> CompileShader(
 
     return byteCode;
 }
+
+} // namespace PhantomCore

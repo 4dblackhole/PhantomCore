@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+namespace PhantomCore
+{
 SphereShape::SphereShape(
     const float radius,
     const std::uint32_t sliceCount,
@@ -102,3 +104,5 @@ SphereShape::SphereShape(
 
     SetMeshData(std::move(vertices), std::move(indices));
 }
+
+} // namespace PhantomCore

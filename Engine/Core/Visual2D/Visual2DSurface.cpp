@@ -7,6 +7,8 @@
 #include <stdexcept>
 
 
+namespace PhantomCore
+{
 namespace
 {
     using namespace DirectX;
@@ -553,3 +555,5 @@ std::optional<Ray3D> CreateWorldPointerRay(
     DirectX::XMStoreFloat3(&result.direction, direction);
     return result;
 }
+
+} // namespace PhantomCore

@@ -16,6 +16,8 @@
 #include <memory>
 
 
+namespace PhantomCore
+{
 class MeshRenderSystem;
 class TextRenderSystem;
 class Visual2DRenderSystem;
@@ -103,3 +105,5 @@ private:
     std::unique_ptr<Visual2DRenderSystem> visual2DRenderSystem_;
     std::unique_ptr<FrameImageReadbackQueue> imageReadbacks_;
 };
+
+} // namespace PhantomCore

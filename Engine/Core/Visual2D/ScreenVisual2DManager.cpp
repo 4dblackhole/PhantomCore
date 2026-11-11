@@ -9,6 +9,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 ScreenCanvasHandle::ScreenCanvasHandle(
     ScreenVisual2DManager& manager,
     const ScreenCanvasId id) noexcept
@@ -272,3 +274,5 @@ std::size_t ScreenVisual2DManager::ImageCount() const noexcept
 {
     return images_.size();
 }
+
+} // namespace PhantomCore

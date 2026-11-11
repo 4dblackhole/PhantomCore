@@ -9,6 +9,8 @@
 #include <optional>
 
 
+namespace PhantomCore
+{
 inline constexpr float DefaultEpsilon = 1.0e-5F;
 
 struct Line2D
@@ -255,3 +257,5 @@ struct TriangleHit3D
     const Obb3D& box,
     const Sphere3D& sphere,
     float epsilon = DefaultEpsilon) noexcept;
+
+} // namespace PhantomCore

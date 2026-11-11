@@ -4,6 +4,8 @@
 #include <exception>
 #include <stdexcept>
 
+namespace PhantomCore
+{
 FrameImageReadbackQueue::FrameImageReadbackQueue(ID3D12Device& device, std::uint32_t frameCount)
     : device_(device), frames_(frameCount)
 {
@@ -128,3 +130,5 @@ void FrameImageReadbackQueue::CompleteAll()
     for (std::uint32_t index = 0; index < frames_.size(); ++index)
         CompleteFrame(index);
 }
+
+} // namespace PhantomCore

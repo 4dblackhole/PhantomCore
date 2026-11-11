@@ -10,6 +10,8 @@
 
 // Shared only with Client-owned FmodAudioClip objects so they can detect
 // that their native FMOD objects were invalidated by system shutdown.
+namespace PhantomCore
+{
 struct FmodSystemLifetime
 {
     FMOD::System* system{};
@@ -107,3 +109,5 @@ private:
     void* nativeWindowHandle_{};
     bool initialized_{};
 };
+
+} // namespace PhantomCore

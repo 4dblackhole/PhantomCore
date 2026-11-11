@@ -7,6 +7,8 @@
 #include <iostream>
 #include <stdexcept>
 
+using namespace PhantomCore;
+
 namespace
 {
     enum class Phase { Initialize, Begin, Resize, UpdateReturned, End, Shutdown, Destroy };

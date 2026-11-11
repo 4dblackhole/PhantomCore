@@ -30,6 +30,8 @@
 // handled by the decoder; intentional silence remains part of the source.
 // The first callback supplies format with an empty span. Spans are borrowed
 // only for the callback. Cancellation stops between bounded PCM chunks.
+namespace PhantomCore
+{
 using AudioPcmConsumer = std::function<void(
     std::uint32_t channels, std::uint32_t sampleRate, std::span<const float> samples)>;
 
@@ -38,6 +40,8 @@ using AudioPcmConsumer = std::function<void(
 // have delivered a prefix; callers must discard it rather than publish it.
 void DecodeAudioPcm(const std::filesystem::path& path,
                     std::stop_token stop, const AudioPcmConsumer& consume);
+
+} // namespace PhantomCore
 // ===== END Engine\Audio\Decode\AudioPcmDecoder.h =====
 
 // ===== BEGIN Engine\Audio\Processing\TimeStretch.h =====
@@ -46,8 +50,12 @@ void DecodeAudioPcm(const std::filesystem::path& path,
 #include <stop_token>
 #include <vector>
 // Offline fixed-rate conversion. Output sample zero shares the source origin.
+namespace PhantomCore
+{
 std::vector<float> TimeStretchPcm(std::span<const float> source, std::uint32_t channels,
                                   std::uint32_t sampleRate, double playbackRate, std::stop_token stop);
+
+} // namespace PhantomCore
 // ===== END Engine\Audio\Processing\TimeStretch.h =====
 
 // ===== BEGIN Engine\Audio\System\AudioPlayback.h =====
@@ -61,6 +69,8 @@ std::vector<float> TimeStretchPcm(std::span<const float> source, std::uint32_t c
 #include <string_view>
 
 
+namespace PhantomCore
+{
 enum class AudioLoadMode : std::uint8_t
 {
     Sample,
@@ -303,6 +313,8 @@ private:
     std::unique_ptr<IAudioBusBackend> implementation_;
     std::shared_ptr<std::atomic_size_t> liveObjectCount_;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Audio\System\AudioPlayback.h =====
 
 // ===== BEGIN Engine\Audio\System\AudioSystem.h =====
@@ -319,6 +331,8 @@ private:
 #include <vector>
 
 
+namespace PhantomCore
+{
 enum class AudioOutputBackend
 {
     Automatic,
@@ -563,6 +577,8 @@ private:
     bool initialized_{};
     std::vector<std::shared_ptr<AudioClip>> retiredClips_;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Audio\System\AudioSystem.h =====
 
 // ===== BEGIN Engine\Audio\System\AudioPlaybackManager.h =====
@@ -571,6 +587,8 @@ private:
 #include <map>
 
 
+namespace PhantomCore
+{
 using AudioPlaybackId = std::uint64_t;
 inline constexpr AudioPlaybackId InvalidAudioPlaybackId = 0;
 
@@ -618,6 +636,8 @@ private:
     std::map<AudioPlaybackId, Playback> playbacks_;
     AudioPlaybackId nextId_{1};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Audio\System\AudioPlaybackManager.h =====
 
 // ===== BEGIN Engine\Platform.Win32\System\RuntimePaths.h =====
@@ -628,6 +648,8 @@ private:
 
 #include <filesystem>
 
+namespace PhantomCore
+{
 [[nodiscard]] std::filesystem::path ExecutablePath();
 [[nodiscard]] std::filesystem::path ExecutableDirectory();
 
@@ -635,6 +657,8 @@ private:
 // the directory containing the current process executable.
 [[nodiscard]] std::filesystem::path ResolveExecutableRelativePath(
     const std::filesystem::path& path);
+
+} // namespace PhantomCore
 // ===== END Engine\Platform.Win32\System\RuntimePaths.h =====
 
 // ===== BEGIN Engine\Platform.Win32\Input\Input.h =====
@@ -648,6 +672,8 @@ private:
 #include <vector>
 
 
+namespace PhantomCore
+{
 enum class MouseButton : std::uint8_t
 {
     Left,
@@ -757,6 +783,8 @@ private:
     bool eventStorageFailed_{};
     std::int64_t performanceCounterFrequency_{};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Platform.Win32\Input\Input.h =====
 
 // ===== BEGIN Engine\Platform.Win32\Input\TextInput.h =====
@@ -764,6 +792,8 @@ private:
 #include <string>
 #include <string_view>
 
+namespace PhantomCore
+{
 struct TextInputBounds
 {
     std::int32_t x{}, y{};
@@ -792,6 +822,8 @@ class ITextInput
     virtual bool TakeSubmit() noexcept = 0;
     virtual bool TakeCancel() noexcept = 0;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Platform.Win32\Input\TextInput.h =====
 
 // ===== BEGIN Engine\Platform.Win32\Window\WindowControl.h =====
@@ -802,6 +834,8 @@ class ITextInput
 #include <vector>
 
 
+namespace PhantomCore
+{
 struct WindowResolution
 {
     std::uint32_t width{}, height{};
@@ -820,6 +854,8 @@ class IWindowControl
     // Optional for offscreen/test implementations. The caller owns the editor.
     [[nodiscard]] virtual std::unique_ptr<ITextInput> CreateTextInput() { return {}; }
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Platform.Win32\Window\WindowControl.h =====
 
 // ===== BEGIN Engine\Collision\Query\Collision.h =====
@@ -833,6 +869,8 @@ class IWindowControl
 #include <optional>
 
 
+namespace PhantomCore
+{
 inline constexpr float DefaultEpsilon = 1.0e-5F;
 
 struct Line2D
@@ -1079,6 +1117,8 @@ struct TriangleHit3D
     const Obb3D& box,
     const Sphere3D& sphere,
     float epsilon = DefaultEpsilon) noexcept;
+
+} // namespace PhantomCore
 // ===== END Engine\Collision\Query\Collision.h =====
 
 // ===== BEGIN Engine\Geometry\Shape\Vertex.h =====
@@ -1092,6 +1132,8 @@ struct TriangleHit3D
 
 // Public canonical attributes retained by Shape regardless of the GPU vertex
 // layout selected by a Client.
+namespace PhantomCore
+{
 struct VertexAttributes final
 {
     DirectX::XMFLOAT3 position{};
@@ -1217,6 +1259,8 @@ static_assert(ShapeVertex<VertexPositionUvColor>);
 static_assert(ShapeVertex<VertexPositionNormal>);
 static_assert(ShapeVertex<VertexPositionNormalUv>);
 static_assert(ShapeVertex<VertexPositionNormalUvColor>);
+
+} // namespace PhantomCore
 // ===== END Engine\Geometry\Shape\Vertex.h =====
 
 // ===== BEGIN Engine\Geometry\Shape\Shape.h =====
@@ -1228,6 +1272,8 @@ static_assert(ShapeVertex<VertexPositionNormalUvColor>);
 #include <utility>
 #include <vector>
 
+namespace PhantomCore
+{
 class Shape
 {
 public:
@@ -1269,17 +1315,23 @@ private:
     std::vector<VertexAttributes> vertices_;
     std::vector<std::uint32_t> indices_;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Geometry\Shape\Shape.h =====
 
 // ===== BEGIN Engine\Geometry\Primitive\RectangleShape.h =====
 
 
 // XY-plane rectangle centered at the origin and facing negative Z.
+namespace PhantomCore
+{
 class RectangleShape final : public Shape
 {
 public:
     explicit RectangleShape(float width = 2.0F, float height = 2.0F);
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Geometry\Primitive\RectangleShape.h =====
 
 // ===== BEGIN Engine\Geometry\Primitive\CurvedRectangleShape.h =====
@@ -1290,6 +1342,8 @@ public:
 
 // A vertically straight, horizontally curved rectangle centered at the
 // origin. UVs span the complete surface, so it can host a rendered canvas.
+namespace PhantomCore
+{
 class CurvedRectangleShape final : public Shape
 {
 public:
@@ -1299,6 +1353,8 @@ public:
         float curvatureRadians = 0.785398163F,
         std::uint32_t horizontalSegments = 32);
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Geometry\Primitive\CurvedRectangleShape.h =====
 
 // ===== BEGIN Engine\Geometry\Primitive\CubeShape.h =====
@@ -1306,11 +1362,15 @@ public:
 
 // Cube centered at the origin. Vertices are duplicated per face so each
 // face has an unambiguous normal and complete UV range.
+namespace PhantomCore
+{
 class CubeShape final : public Shape
 {
 public:
     explicit CubeShape(float sideLength = 2.0F);
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Geometry\Primitive\CubeShape.h =====
 
 // ===== BEGIN Engine\Geometry\Primitive\SphereShape.h =====
@@ -1318,6 +1378,8 @@ public:
 
 #include <cstdint>
 
+namespace PhantomCore
+{
 class SphereShape final : public Shape
 {
 public:
@@ -1326,6 +1388,8 @@ public:
         std::uint32_t sliceCount = 32,
         std::uint32_t stackCount = 16);
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Geometry\Primitive\SphereShape.h =====
 
 // ===== BEGIN Engine\Core\System\TransformNode.h =====
@@ -1338,6 +1402,8 @@ public:
 
 
 // Public hierarchical local/world transform used by Client scene objects.
+namespace PhantomCore
+{
 class TransformNode final
 {
 public:
@@ -1391,6 +1457,8 @@ private:
     std::vector<TransformNode*> children_;
     mutable bool worldDirty_{true};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\System\TransformNode.h =====
 
 // ===== BEGIN Engine\Core\Visual2D\Visual2DNode.h =====
@@ -1412,6 +1480,8 @@ private:
 #include <vector>
 
 
+namespace PhantomCore
+{
 using NodeId = std::uint64_t;
 
 struct ImageHandle
@@ -1814,6 +1884,8 @@ private:
     bool hovered_{};
     bool pressed_{};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Visual2D\Visual2DNode.h =====
 
 // ===== BEGIN Engine\Core\Visual2D\Visual2DCanvas.h =====
@@ -1824,6 +1896,8 @@ private:
 #include <vector>
 
 
+namespace PhantomCore
+{
 enum class CanvasScaleMode : std::uint8_t
 {
     Fixed,
@@ -1892,6 +1966,8 @@ private:
     Size viewportSize,
     const Visual2DCanvas& canvas,
     Point canvasOrigin = {}) noexcept;
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Visual2D\Visual2DCanvas.h =====
 
 // ===== BEGIN Engine\Core\Visual2D\ScreenVisual2DManager.h =====
@@ -1904,6 +1980,8 @@ private:
 #include <string>
 
 
+namespace PhantomCore
+{
 struct RenderContext;
 class Visual2DRenderSystem;
 
@@ -2015,6 +2093,8 @@ private:
     std::map<std::wstring, ImageHandle, std::less<>> images_;
     ScreenCanvasId nextCanvasId_{1};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Visual2D\ScreenVisual2DManager.h =====
 
 // ===== BEGIN Engine\Core\Visual2D\Visual2DComponents.h =====
@@ -2026,6 +2106,8 @@ private:
 #include <string_view>
 
 
+namespace PhantomCore
+{
 class SpriteVisualComponent final : public Visual2DComponent
 {
 public:
@@ -2296,12 +2378,16 @@ private:
     bool trackingDrag_{};
     bool dragMoved_{};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Visual2D\Visual2DComponents.h =====
 
 // ===== BEGIN Engine\Core\Visual2D\Visual2DInputRouter.h =====
 
 
 
+namespace PhantomCore
+{
 struct PointerInput
 {
     Point position{};
@@ -2345,6 +2431,8 @@ private:
     bool hasPointerSnapshot_{};
     bool hitTestInvalidated_{true};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Visual2D\Visual2DInputRouter.h =====
 
 // ===== BEGIN Engine\Core\Visual2D\Visual2DSurface.h =====
@@ -2358,6 +2446,8 @@ private:
 #include <vector>
 
 
+namespace PhantomCore
+{
 struct SurfaceHit
 {
     float rayParameter{};
@@ -2482,6 +2572,8 @@ private:
     Point screenPosition,
     Size viewportSize,
     const DirectX::XMFLOAT4X4& viewProjection) noexcept;
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Visual2D\Visual2DSurface.h =====
 
 // ===== BEGIN Engine\Core\Visual2D\Visual2DWidgets.h =====
@@ -2490,6 +2582,8 @@ private:
 
 // Widget factories assemble reusable component combinations. The returned
 // object is still a regular Visual2DNode and can gain or lose components.
+namespace PhantomCore
+{
 [[nodiscard]] Visual2DNode& CreateSprite(
     Visual2DNode& parent,
     Rect bounds,
@@ -2530,6 +2624,8 @@ private:
     Rect bounds,
     std::vector<std::wstring> items,
     std::string name = "ComboBox");
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Visual2D\Visual2DWidgets.h =====
 
 // ===== BEGIN Engine\Graphics.D3D12\Text\TextRendering.h =====
@@ -2547,6 +2643,8 @@ private:
 #include <string_view>
 
 
+namespace PhantomCore
+{
 enum class TextHorizontalAlignment : std::uint8_t
 {
     Leading,
@@ -2676,6 +2774,8 @@ private:
     struct Impl;
     std::unique_ptr<Impl> implementation_;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Graphics.D3D12\Text\TextRendering.h =====
 
 // ===== BEGIN Engine\Graphics.D3D12\Texture\TextureManager.h =====
@@ -2695,6 +2795,8 @@ private:
 // One descriptor table reserves this many entries.  Each entry can point
 // at an independently sized Texture2D resource; this is not a
 // D3D12 Texture2DArray and therefore does not require equal dimensions.
+namespace PhantomCore
+{
 inline constexpr std::uint32_t MaxTexturesPerSet = 64;
 
 struct TextureInfo final
@@ -2788,6 +2890,8 @@ private:
     struct Impl;
     std::unique_ptr<Impl> implementation_;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Graphics.D3D12\Texture\TextureManager.h =====
 
 // ===== BEGIN Engine\Graphics.D3D12\Mesh\MeshRendering.h =====
@@ -2804,6 +2908,8 @@ private:
 #include <vector>
 
 
+namespace PhantomCore
+{
 inline constexpr std::uint32_t NoTextureIndex =
     std::numeric_limits<std::uint32_t>::max();
 
@@ -3012,6 +3118,8 @@ private:
     [[nodiscard]] static Sphere3D ComputeLocalBoundingSphere(
         const Shape& shape) noexcept;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Graphics.D3D12\Mesh\MeshRendering.h =====
 
 // ===== BEGIN Engine\Core\Rendering\ImageReadback.h =====
@@ -3022,12 +3130,16 @@ private:
 // CPU-owned image of a completed frame. Pixels are tightly packed RGBA bytes,
 // four bytes per pixel, with rows running from the top of the image to the bottom.
 // Channels contain the rendered output values without an additional color transform.
+namespace PhantomCore
+{
 struct RgbaImage final
 {
     std::uint32_t width{};
     std::uint32_t height{};
     std::vector<std::uint8_t> pixels;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Rendering\ImageReadback.h =====
 
 // ===== BEGIN Engine\Core\Rendering\RenderContext.h =====
@@ -3036,6 +3148,8 @@ struct RgbaImage final
 #include <cstdint>
 #include <future>
 
+namespace PhantomCore
+{
 class MeshRenderSystem;
 class TextRenderSystem;
 class Visual2DRenderSystem;
@@ -3071,6 +3185,8 @@ private:
     friend struct RenderFrameContext;
     const RenderFrameContext* frame_{};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Rendering\RenderContext.h =====
 
 // ===== BEGIN Engine\Graphics.D3D12\Visual2D\Visual2DRendering.h =====
@@ -3086,6 +3202,8 @@ private:
 #include <filesystem>
 
 
+namespace PhantomCore
+{
 class Visual2DRenderSystem
 {
 public:
@@ -3151,6 +3269,8 @@ public:
 protected:
     Visual2DRenderSystem() = default;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Graphics.D3D12\Visual2D\Visual2DRendering.h =====
 
 // ===== BEGIN Engine\Core\Client\IGameClient.h =====
@@ -3163,6 +3283,8 @@ protected:
 // Engine-owned measurement data. The Client decides whether, where, and
 // how to present these values; an unavailable sample has `hasMeasurement`
 // set to false during the first reporting interval.
+namespace PhantomCore
+{
 struct PerformanceStatistics final
 {
     std::uint64_t framesPerSecond{};
@@ -3238,6 +3360,8 @@ public:
     virtual void OnResize(std::uint32_t width, std::uint32_t height) = 0;
     virtual void Shutdown() noexcept = 0;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Client\IGameClient.h =====
 
 // ===== BEGIN Engine\Core\System\HighResolutionClock.h =====
@@ -3245,6 +3369,8 @@ public:
 #include <cstdint>
 
 // General-purpose QueryPerformanceCounter clock used by the engine loop.
+namespace PhantomCore
+{
 class HighResolutionClock final
 {
 public:
@@ -3258,6 +3384,8 @@ private:
     std::int64_t startCounter_{};
     double previousSeconds_{};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\System\HighResolutionClock.h =====
 
 // ===== BEGIN Engine\Core\System\Camera.h =====
@@ -3270,6 +3398,8 @@ private:
 #include <cstdint>
 
 
+namespace PhantomCore
+{
 enum class CameraProjectionType : std::uint8_t
 {
     Perspective,
@@ -3363,6 +3493,8 @@ private:
     mutable bool viewProjectionDirty_{true};
     mutable bool frustumDirty_{true};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\System\Camera.h =====
 
 // ===== BEGIN Engine\Core\App\Engine.h =====
@@ -3375,6 +3507,8 @@ private:
 
 // Takes exclusive ownership of the Client and runs the complete engine
 // lifetime. See Docs/EngineOverview.md for the engine call order.
+namespace PhantomCore
+{
 int Run(std::unique_ptr<IGameClient> client);
 
 // Error and corruption messages from one engine run, when the graphics
@@ -3405,6 +3539,8 @@ struct GraphicsDiagnostics
 // Fills diagnostics after Client and engine resource cleanup. The messages
 // own their descriptions and remain usable after Run returns.
 int RunWithGraphicsDiagnostics(std::unique_ptr<IGameClient> client, GraphicsDiagnostics& diagnostics);
+
+} // namespace PhantomCore
 // ===== END Engine\Core\App\Engine.h =====
 
 // ===== BEGIN Engine\Core\Scene\GameScene.h =====
@@ -3412,6 +3548,8 @@ int RunWithGraphicsDiagnostics(std::unique_ptr<IGameClient> client, GraphicsDiag
 
 #include <cstdint>
 
+namespace PhantomCore
+{
 class SceneManager;
 
 // Base lifecycle for one switchable Client scene.
@@ -3439,6 +3577,8 @@ public:
     // resources retain submitted GPU handles until their fences complete.
     virtual void Shutdown() noexcept;
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Scene\GameScene.h =====
 
 // ===== BEGIN Engine\Core\System\MeshInstance.h =====
@@ -3451,6 +3591,8 @@ public:
 
 // Reusable wrapper that combines one GPU mesh, one material,
 // and per-instance state.  Shape itself stays renderer-independent.
+namespace PhantomCore
+{
 class MeshInstance final
 {
 public:
@@ -3503,6 +3645,8 @@ private:
     DirectX::XMFLOAT2 uvOffset_{0.0F, 0.0F};
     std::uint32_t textureIndex_{NoTextureIndex};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\System\MeshInstance.h =====
 
 // ===== BEGIN Engine\Core\Scene\SceneManager.h =====
@@ -3521,6 +3665,8 @@ private:
 
 // Scene lifetime is a route-registration policy, not a decision made by
 // the Scene object itself.
+namespace PhantomCore
+{
 enum class SceneRetention : std::uint8_t
 {
     // Construct on first entry, then retain and reuse the same object.
@@ -3652,6 +3798,8 @@ private:
     bool initialized_{};
     bool started_{};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Scene\SceneManager.h =====
 
 // ===== BEGIN Engine\Core\Client\SceneGameClient.h =====
@@ -3663,6 +3811,8 @@ private:
 // Client contract adapter for games organized as switchable scenes.
 // Initialize creates the manager, calls RegisterScenes, then activates
 // InitialSceneId.  All later callbacks are forwarded to SceneManager.
+namespace PhantomCore
+{
 class SceneGameClient : public IGameClient
 {
 public:
@@ -3708,4 +3858,6 @@ private:
     bool initialized_{};
     double playbackMaintenanceSeconds_{};
 };
+
+} // namespace PhantomCore
 // ===== END Engine\Core\Client\SceneGameClient.h =====

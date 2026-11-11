@@ -4,6 +4,8 @@
 
 #include <stdexcept>
 
+namespace PhantomCore
+{
 HighResolutionClock::HighResolutionClock()
 {
     LARGE_INTEGER frequency{};
@@ -37,3 +39,5 @@ double HighResolutionClock::NowSeconds() const noexcept
         static_cast<std::int64_t>(current.QuadPart) -
         startCounter_) * inverseFrequency_;
 }
+
+} // namespace PhantomCore

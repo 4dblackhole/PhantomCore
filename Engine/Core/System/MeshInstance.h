@@ -12,6 +12,8 @@
 
 // Reusable wrapper that combines one GPU mesh, one material,
 // and per-instance state.  Shape itself stays renderer-independent.
+namespace PhantomCore
+{
 class MeshInstance final
 {
 public:
@@ -64,3 +66,5 @@ private:
     DirectX::XMFLOAT2 uvOffset_{0.0F, 0.0F};
     std::uint32_t textureIndex_{NoTextureIndex};
 };
+
+} // namespace PhantomCore

@@ -9,6 +9,8 @@
 #include <string_view>
 
 
+namespace PhantomCore
+{
 enum class AudioLoadMode : std::uint8_t
 {
     Sample,
@@ -251,3 +253,5 @@ private:
     std::unique_ptr<IAudioBusBackend> implementation_;
     std::shared_ptr<std::atomic_size_t> liveObjectCount_;
 };
+
+} // namespace PhantomCore

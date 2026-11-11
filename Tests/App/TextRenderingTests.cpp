@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
+using namespace PhantomCore;
+
 namespace
 {
     void Require(bool condition, const char *message)

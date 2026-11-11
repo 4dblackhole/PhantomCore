@@ -3,6 +3,10 @@
 #include <iostream>
 
 // Test-only access keeps event injection outside the consumer API.
+using namespace PhantomCore;
+
+namespace PhantomCore
+{
 struct InputStateTestAccess final
 {
     static void Begin(InputState &input)
@@ -26,6 +30,8 @@ struct InputStateTestAccess final
         input.SetKey('F', down, time);
     }
 };
+} // namespace PhantomCore
+
 
 int TestInputState()
 {

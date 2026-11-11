@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <future>
 
+namespace PhantomCore
+{
 class MeshRenderSystem;
 class TextRenderSystem;
 class Visual2DRenderSystem;
@@ -40,3 +42,5 @@ private:
     friend struct RenderFrameContext;
     const RenderFrameContext* frame_{};
 };
+
+} // namespace PhantomCore

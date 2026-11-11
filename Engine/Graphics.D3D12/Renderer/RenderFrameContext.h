@@ -4,6 +4,8 @@
 
 #include <d3d12.h>
 
+namespace PhantomCore
+{
 class FrameImageReadbackQueue;
 
 // Engine-owned recording state, borrowed for one BeginFrame/EndFrame pair.
@@ -30,3 +32,5 @@ struct RenderFrameContext final
             ? frame : nullptr;
     }
 };
+
+} // namespace PhantomCore

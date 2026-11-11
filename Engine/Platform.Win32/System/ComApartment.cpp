@@ -3,6 +3,8 @@
 #include <stdexcept>
 
 
+namespace PhantomCore
+{
 ComApartment::ComApartment(const DWORD concurrencyModel)
 {
     result_ = CoInitializeEx(nullptr, concurrencyModel);
@@ -24,3 +26,5 @@ ComApartment::~ComApartment()
         CoUninitialize();
     }
 }
+
+} // namespace PhantomCore

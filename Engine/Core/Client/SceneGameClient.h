@@ -11,6 +11,8 @@
 // Client contract adapter for games organized as switchable scenes.
 // Initialize creates the manager, calls RegisterScenes, then activates
 // InitialSceneId.  All later callbacks are forwarded to SceneManager.
+namespace PhantomCore
+{
 class SceneGameClient : public IGameClient
 {
 public:
@@ -56,3 +58,5 @@ private:
     bool initialized_{};
     double playbackMaintenanceSeconds_{};
 };
+
+} // namespace PhantomCore

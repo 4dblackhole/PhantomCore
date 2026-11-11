@@ -7,6 +7,8 @@
 #include <cmath>
 #include <limits>
 
+namespace PhantomCore
+{
 namespace
 {
     using DirectX::XMFLOAT2;
@@ -924,3 +926,5 @@ bool Intersects(
 {
     return Intersects(sphere, box, epsilon);
 }
+
+} // namespace PhantomCore

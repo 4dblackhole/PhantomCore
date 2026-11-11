@@ -9,6 +9,8 @@
 #include <string>
 
 
+namespace PhantomCore
+{
 struct WindowConfig
 {
     std::wstring title{L"My Rhythm Game"};
@@ -83,3 +85,5 @@ private:
     bool refreshRateChanged_{};
     double refreshRateHz_{60.0};
 };
+
+} // namespace PhantomCore

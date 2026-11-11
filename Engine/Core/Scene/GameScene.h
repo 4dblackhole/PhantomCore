@@ -4,6 +4,8 @@
 
 #include <cstdint>
 
+namespace PhantomCore
+{
 class SceneManager;
 
 // Base lifecycle for one switchable Client scene.
@@ -31,3 +33,5 @@ public:
     // resources retain submitted GPU handles until their fences complete.
     virtual void Shutdown() noexcept;
 };
+
+} // namespace PhantomCore

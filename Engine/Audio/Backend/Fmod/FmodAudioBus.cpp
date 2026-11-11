@@ -9,6 +9,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 namespace
 {
     [[nodiscard]] FMOD_DSP_TYPE ToFmodEffectType(
@@ -374,3 +376,5 @@ bool FmodAudioBus::HasLiveSystem() const noexcept
 {
     return busLifetime_ != nullptr && busLifetime_->IsValid();
 }
+
+} // namespace PhantomCore

@@ -3,6 +3,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 namespace
 {
     void AcquireObject(
@@ -294,3 +296,5 @@ std::unique_ptr<AudioEffect> AudioBus::AddEffect(
         std::move(effect),
         liveObjectCount_));
 }
+
+} // namespace PhantomCore

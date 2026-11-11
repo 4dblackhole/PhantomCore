@@ -13,6 +13,8 @@
 #include <stop_token>
 #include <vector>
 
+namespace PhantomCore
+{
 namespace
 {
     struct SourcePcm
@@ -243,3 +245,5 @@ std::unique_ptr<IAudioClipBackend> CreateFmodPcmClip(
         return nullptr;
     }
 }
+
+} // namespace PhantomCore

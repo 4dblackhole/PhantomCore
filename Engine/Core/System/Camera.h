@@ -9,6 +9,8 @@
 #include <cstdint>
 
 
+namespace PhantomCore
+{
 enum class CameraProjectionType : std::uint8_t
 {
     Perspective,
@@ -102,3 +104,5 @@ private:
     mutable bool viewProjectionDirty_{true};
     mutable bool frustumDirty_{true};
 };
+
+} // namespace PhantomCore

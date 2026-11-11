@@ -9,6 +9,8 @@
 
 // Takes exclusive ownership of the Client and runs the complete engine
 // lifetime. See Docs/EngineOverview.md for the engine call order.
+namespace PhantomCore
+{
 int Run(std::unique_ptr<IGameClient> client);
 
 // Error and corruption messages from one engine run, when the graphics
@@ -39,3 +41,5 @@ struct GraphicsDiagnostics
 // Fills diagnostics after Client and engine resource cleanup. The messages
 // own their descriptions and remain usable after Run returns.
 int RunWithGraphicsDiagnostics(std::unique_ptr<IGameClient> client, GraphicsDiagnostics& diagnostics);
+
+} // namespace PhantomCore

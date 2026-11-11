@@ -9,6 +9,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 enum class MouseButton : std::uint8_t
 {
     Left,
@@ -118,3 +120,5 @@ private:
     bool eventStorageFailed_{};
     std::int64_t performanceCounterFrequency_{};
 };
+
+} // namespace PhantomCore

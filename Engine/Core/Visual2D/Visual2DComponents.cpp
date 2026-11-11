@@ -4,6 +4,8 @@
 #include <cmath>
 
 
+namespace PhantomCore
+{
 namespace
 {
     constexpr std::size_t NoItemIndex = static_cast<std::size_t>(-1);
@@ -1057,3 +1059,5 @@ const VisualStyle& ComboBoxBehaviorComponent::OwnerStyle() const noexcept
     }
     return fallback;
 }
+
+} // namespace PhantomCore

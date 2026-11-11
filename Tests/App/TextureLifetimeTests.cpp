@@ -8,6 +8,8 @@
 #include <iostream>
 #include <stdexcept>
 
+using namespace PhantomCore;
+
 namespace
 {
     void Require(bool value, const char *message)

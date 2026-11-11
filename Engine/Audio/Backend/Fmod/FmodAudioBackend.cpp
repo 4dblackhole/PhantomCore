@@ -13,6 +13,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 namespace
 {
     FMOD_OUTPUTTYPE ToFmodOutput(const AudioOutputBackend backend) noexcept
@@ -787,3 +789,5 @@ void FmodAudioBackend::InvalidateNativeObjects() noexcept
         ++lifetime_->generation;
     }
 }
+
+} // namespace PhantomCore

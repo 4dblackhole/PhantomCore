@@ -14,6 +14,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 namespace
 {
 
@@ -647,3 +649,5 @@ void D3D12Renderer::WaitForFrame(const std::uint32_t frameIndex)
         "ID3D12Fence::SetEventOnCompletion");
     WaitForSingleObject(fenceEvent_, INFINITE);
 }
+
+} // namespace PhantomCore

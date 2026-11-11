@@ -13,6 +13,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 namespace
 {
     FMOD_RESULT SoundTiming(FMOD::Sound* sound, unsigned int& frames, float& frequency)
@@ -511,3 +513,5 @@ std::unique_ptr<IAudioClipBackend> CreateFmodAudioClipBackend(
 
     return CreateFmodPcmClip(*fmodBackend, path, loadMode, errorMessage);
 }
+
+} // namespace PhantomCore

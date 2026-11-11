@@ -3,6 +3,8 @@
 #include <stdexcept>
 
 
+namespace PhantomCore
+{
 SceneGameClient::~SceneGameClient() = default;
 
 void SceneGameClient::Initialize(const EngineServices& services)
@@ -137,3 +139,5 @@ void SceneGameClient::OnClientRendered(const RenderContext&)
 void SceneGameClient::OnClientShuttingDown() noexcept
 {
 }
+
+} // namespace PhantomCore

@@ -4,6 +4,8 @@
 #include <d3d12.h>
 
 // Device and frame recording operations belong to the engine backend.
+namespace PhantomCore
+{
 struct MeshRenderingBackend final
 {
     static void Initialize(MeshRenderSystem& meshes, ID3D12Device& device,
@@ -13,3 +15,5 @@ struct MeshRenderingBackend final
     static void BeginFrame(MeshRenderSystem& meshes, std::uint32_t frameIndex);
     static void Flush(MeshRenderSystem& meshes, ID3D12GraphicsCommandList& commands);
 };
+
+} // namespace PhantomCore

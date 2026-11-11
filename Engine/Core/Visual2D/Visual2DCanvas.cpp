@@ -6,6 +6,8 @@
 #include <utility>
 
 
+namespace PhantomCore
+{
 namespace
 {
     [[nodiscard]] bool IsPositiveFinite(const Size size) noexcept
@@ -261,3 +263,5 @@ std::optional<Point> MapScreenPointer(
         canvas.LogicalSize().height * 0.5F -
             localPixels.y / canvas.PixelScale()};
 }
+
+} // namespace PhantomCore

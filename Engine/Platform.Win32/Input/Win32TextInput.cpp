@@ -9,6 +9,8 @@
 #pragma comment(lib, "imm32.lib")
 #pragma comment(lib, "gdi32.lib")
 
+namespace PhantomCore
+{
 namespace
 {
     constexpr wchar_t InputProperty[] = L"PhantomCore.TextInput";
@@ -232,3 +234,5 @@ HBRUSH PaintWin32TextInput(HWND window, HDC dc) noexcept
     const auto *input = Find(window);
     return input ? input->Paint(dc) : nullptr;
 }
+
+} // namespace PhantomCore

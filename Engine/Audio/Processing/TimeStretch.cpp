@@ -5,6 +5,8 @@
 #include <limits>
 #include <stdexcept>
 
+namespace PhantomCore
+{
 namespace
 {
     struct Input
@@ -70,3 +72,5 @@ std::vector<float> TimeStretchPcm(const std::span<const float> source, const std
     std::vector<float> result(delayed.begin() + static_cast<std::ptrdiff_t>(latency * channels), delayed.end());
     return result;
 }
+
+} // namespace PhantomCore

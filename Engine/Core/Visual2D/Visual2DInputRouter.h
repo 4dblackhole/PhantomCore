@@ -3,6 +3,8 @@
 #include "Visual2D/Visual2DCanvas.h"
 
 
+namespace PhantomCore
+{
 struct PointerInput
 {
     Point position{};
@@ -46,3 +48,5 @@ private:
     bool hasPointerSnapshot_{};
     bool hitTestInvalidated_{true};
 };
+
+} // namespace PhantomCore

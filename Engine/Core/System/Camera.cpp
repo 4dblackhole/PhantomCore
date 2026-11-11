@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 
+namespace PhantomCore
+{
 using namespace DirectX;
 
 
@@ -444,3 +446,5 @@ void Camera::UpdateFrustum() const noexcept
     frustum_ = MakeViewFrustum(viewProjectionMatrix_);
     frustumDirty_ = false;
 }
+
+} // namespace PhantomCore

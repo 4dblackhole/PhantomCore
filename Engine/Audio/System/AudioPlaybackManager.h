@@ -5,6 +5,8 @@
 #include <map>
 
 
+namespace PhantomCore
+{
 using AudioPlaybackId = std::uint64_t;
 inline constexpr AudioPlaybackId InvalidAudioPlaybackId = 0;
 
@@ -52,3 +54,5 @@ private:
     std::map<AudioPlaybackId, Playback> playbacks_;
     AudioPlaybackId nextId_{1};
 };
+
+} // namespace PhantomCore

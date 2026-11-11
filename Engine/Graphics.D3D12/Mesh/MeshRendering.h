@@ -16,6 +16,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 inline constexpr std::uint32_t NoTextureIndex =
     std::numeric_limits<std::uint32_t>::max();
 
@@ -224,3 +226,5 @@ private:
     [[nodiscard]] static Sphere3D ComputeLocalBoundingSphere(
         const Shape& shape) noexcept;
 };
+
+} // namespace PhantomCore

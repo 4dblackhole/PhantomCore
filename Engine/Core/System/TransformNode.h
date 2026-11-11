@@ -8,6 +8,8 @@
 
 
 // Public hierarchical local/world transform used by Client scene objects.
+namespace PhantomCore
+{
 class TransformNode final
 {
 public:
@@ -61,3 +63,5 @@ private:
     std::vector<TransformNode*> children_;
     mutable bool worldDirty_{true};
 };
+
+} // namespace PhantomCore

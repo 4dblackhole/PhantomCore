@@ -5,6 +5,8 @@
 
 
 // RAII wrapper for one COM apartment on the calling thread.
+namespace PhantomCore
+{
 class ComApartment final
 {
 public:
@@ -19,3 +21,5 @@ public:
 private:
     HRESULT result_{};
 };
+
+} // namespace PhantomCore

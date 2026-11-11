@@ -27,6 +27,8 @@
 
 #pragma comment(lib, "dwrite.lib")
 
+namespace PhantomCore
+{
 namespace
 {
     using Microsoft::WRL::ComPtr;
@@ -1931,3 +1933,5 @@ void TextRenderingBackend::DrawCanvasBatch(
 {
     text.implementation_->DrawCanvasBatch(commandList, viewportWidth, viewportHeight, draws);
 }
+
+} // namespace PhantomCore

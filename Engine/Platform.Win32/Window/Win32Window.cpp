@@ -8,6 +8,8 @@
 #include <string>
 
 
+namespace PhantomCore
+{
 namespace
 {
     constexpr wchar_t WindowClassName[] = L"PhantomCore.D3D12.Window";
@@ -619,3 +621,5 @@ void Win32Window::RefreshDisplayRate() noexcept
         refreshRateChanged_ = true;
     }
 }
+
+} // namespace PhantomCore

@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+namespace PhantomCore
+{
 namespace
 {
     DirectX::XMFLOAT4 CornerColor(
@@ -143,3 +145,5 @@ CubeShape::CubeShape(const float sideLength)
 
     SetMeshData(std::move(vertices), std::move(indices));
 }
+
+} // namespace PhantomCore

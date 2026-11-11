@@ -5,6 +5,8 @@
 #include <memory>
 #include <stdexcept>
 
+using namespace PhantomCore;
+
 namespace
 {
     class FailingHiddenClient final : public IGameClient

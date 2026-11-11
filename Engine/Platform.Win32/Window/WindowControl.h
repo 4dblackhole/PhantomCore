@@ -7,6 +7,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 struct WindowResolution
 {
     std::uint32_t width{}, height{};
@@ -25,3 +27,5 @@ class IWindowControl
     // Optional for offscreen/test implementations. The caller owns the editor.
     [[nodiscard]] virtual std::unique_ptr<ITextInput> CreateTextInput() { return {}; }
 };
+
+} // namespace PhantomCore

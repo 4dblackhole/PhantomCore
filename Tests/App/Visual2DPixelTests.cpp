@@ -13,6 +13,8 @@
 #include <thread>
 #include <vector>
 
+using namespace PhantomCore;
+
 namespace
 {
     constexpr std::uint32_t Extent = 128;

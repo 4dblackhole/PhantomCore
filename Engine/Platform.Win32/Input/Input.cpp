@@ -5,6 +5,8 @@
 #include <stdexcept>
 
 
+namespace PhantomCore
+{
 namespace
 {
     constexpr std::size_t ToIndex(const MouseButton button) noexcept
@@ -244,3 +246,5 @@ void InputState::PushEvent(const InputEvent& event) noexcept
         eventStorageFailed_ = true;
     }
 }
+
+} // namespace PhantomCore

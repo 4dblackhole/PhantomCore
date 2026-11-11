@@ -9,6 +9,8 @@
 #include <string>
 
 
+namespace PhantomCore
+{
 struct RenderContext;
 class Visual2DRenderSystem;
 
@@ -120,3 +122,5 @@ private:
     std::map<std::wstring, ImageHandle, std::less<>> images_;
     ScreenCanvasId nextCanvasId_{1};
 };
+
+} // namespace PhantomCore

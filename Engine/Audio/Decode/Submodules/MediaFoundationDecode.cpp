@@ -13,6 +13,8 @@
 #pragma comment(lib, "mfuuid.lib")
 #pragma comment(lib, "ole32.lib")
 
+namespace PhantomCore
+{
 namespace
 {
     void Check(const HRESULT result)
@@ -111,3 +113,5 @@ void DecodeMediaFoundation(const std::filesystem::path& path, const std::stop_to
             break;
     }
 }
+
+} // namespace PhantomCore

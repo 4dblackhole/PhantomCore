@@ -10,6 +10,8 @@
 // handled by the decoder; intentional silence remains part of the source.
 // The first callback supplies format with an empty span. Spans are borrowed
 // only for the callback. Cancellation stops between bounded PCM chunks.
+namespace PhantomCore
+{
 using AudioPcmConsumer = std::function<void(
     std::uint32_t channels, std::uint32_t sampleRate, std::span<const float> samples)>;
 
@@ -18,3 +20,5 @@ using AudioPcmConsumer = std::function<void(
 // have delivered a prefix; callers must discard it rather than publish it.
 void DecodeAudioPcm(const std::filesystem::path& path,
                     std::stop_token stop, const AudioPcmConsumer& consume);
+
+} // namespace PhantomCore

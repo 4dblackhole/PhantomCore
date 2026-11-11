@@ -4,6 +4,8 @@
 #include <d3d12.h>
 
 // Native operations used by the engine's rendering implementation.
+namespace PhantomCore
+{
 struct TextureRenderingBackend final
 {
     static void Initialize(TextureManager& textures, ID3D12Device& device,
@@ -20,3 +22,5 @@ struct TextureRenderingBackend final
     static void EndRenderTargetPass(TextureManager& textures,
         ID3D12GraphicsCommandList& commands, const RenderTargetTextureHandle& target);
 };
+
+} // namespace PhantomCore

@@ -6,6 +6,8 @@
 
 // Widget factories assemble reusable component combinations. The returned
 // object is still a regular Visual2DNode and can gain or lose components.
+namespace PhantomCore
+{
 [[nodiscard]] Visual2DNode& CreateSprite(
     Visual2DNode& parent,
     Rect bounds,
@@ -46,3 +48,5 @@
     Rect bounds,
     std::vector<std::wstring> items,
     std::string name = "ComboBox");
+
+} // namespace PhantomCore

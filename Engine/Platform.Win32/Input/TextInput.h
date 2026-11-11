@@ -3,6 +3,8 @@
 #include <string>
 #include <string_view>
 
+namespace PhantomCore
+{
 struct TextInputBounds
 {
     std::int32_t x{}, y{};
@@ -31,3 +33,5 @@ class ITextInput
     virtual bool TakeSubmit() noexcept = 0;
     virtual bool TakeCancel() noexcept = 0;
 };
+
+} // namespace PhantomCore

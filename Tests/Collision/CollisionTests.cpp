@@ -18,6 +18,8 @@
 #include <string_view>
 #include <utility>
 
+using namespace PhantomCore;
+
 namespace
 {
     int failureCount = 0;

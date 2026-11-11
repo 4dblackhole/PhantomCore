@@ -13,6 +13,8 @@
 #include <vector>
 
 
+namespace PhantomCore
+{
 enum class AudioOutputBackend
 {
     Automatic,
@@ -257,3 +259,5 @@ private:
     bool initialized_{};
     std::vector<std::shared_ptr<AudioClip>> retiredClips_;
 };
+
+} // namespace PhantomCore

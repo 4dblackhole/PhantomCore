@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 
+namespace PhantomCore
+{
 SceneManager::~SceneManager()
 {
     Shutdown();
@@ -347,3 +349,5 @@ void SceneManager::DestroyActiveTransientScene() noexcept
     transientScene_->Shutdown();
     transientScene_.reset();
 }
+
+} // namespace PhantomCore

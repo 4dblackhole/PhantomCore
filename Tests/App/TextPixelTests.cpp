@@ -7,6 +7,8 @@
 #include <iostream>
 #include <stdexcept>
 
+using namespace PhantomCore;
+
 namespace
 {
     constexpr std::uint32_t Width = 300, Height = 120;

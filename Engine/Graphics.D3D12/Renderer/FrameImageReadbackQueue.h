@@ -12,6 +12,8 @@
 
 // Internal readback storage follows the renderer's existing frame-resource fences.
 // The renderer completes a slot only after its normal frame wait or full GPU wait.
+namespace PhantomCore
+{
 class FrameImageReadbackQueue final
 {
 public:
@@ -46,3 +48,5 @@ private:
     std::uint64_t renderIndex_{};
     bool recording_{};
 };
+
+} // namespace PhantomCore
