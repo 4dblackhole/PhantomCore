@@ -10,6 +10,10 @@
 받는 초기화와 프레임 준비·Flush·Canvas 배치 기록은 엔진 내부 TextRenderingBackend에
 있다. Text의 프레임 버퍼와 atlas 회수는 내부 공통 FrameCount를 사용한다.
 
+비공개 `TextPipeline`은 루트 서명과 PSO를 소유하고 초기화·바인딩·해제를 담당한다.
+TextRenderSystem의 Impl은 이 객체를 조립하며 글리프 cache나 프레임 업로드와
+파이프라인 소유를 섞지 않는다. 리소스 해제는 기존 GPU 대기 뒤의 같은 단계에서 수행한다.
+
 ## 수명과 호출 시점
 
 1. `D3D12Renderer::Initialize`가 `TextRenderSystem`을 초기화한다.
