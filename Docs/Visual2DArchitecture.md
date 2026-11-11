@@ -37,6 +37,33 @@ ComboBox     = Sprite + PointerReceiver + ComboBoxBehaviorComponent
 안전하게 구성할 뿐 별도 Widget 상속 객체를 생성하지 않는다. 컴포넌트는
 `AddComponent<T>`, `GetComponent<T>`, `RemoveComponent<T>`로 실행 중 변경할 수 있다.
 
+## Update 중 트리 변경과 콜백 오류
+
+Update는 노드의 컴포넌트 목록을 먼저 방문하고 자식 목록을 방문한다.
+각 목록의 순회가 시작되기 전에 추가한 항목은 이번 Update에 포함하며,
+해당 목록의 순회가 이미 시작된 뒤 추가한 항목은 다음 Update부터 방문한다.
+따라서 컴포넌트 Update에서 만든 자식은 자식 순회가 아직 시작되지 않았다면
+이번 Update에 포함된다.
+
+Update 중 삭제한 노드/컴포넌트는 FindNode/GetComponent와 후속 순회에서 즉시 제외된다.
+현재 콜백과 같은 Canvas의 Update가 끝날 때까지 실제 파괴를 미뤄 자기 자신·형제·
+조상을 삭제해도 실행 중인 객체의 수명이 유지된다. 삭제한 조상의 남은 컴포넌트와
+자손은 방문하지 않는다. 예외로 Update가 끝날 때도 지연 파괴를 정리한다.
+Update 밖에서 삭제하면 즉시 파괴한다.
+
+같은 Canvas의 Update를 콜백에서 다시 호출하면 logic_error를 던진다.
+Canvas 자체의 수명은 진행 중인 Update를 포함해야 하며 Scene 전환은 기존 지연 전환을 사용한다.
+
+CustomCollider2DComponent의 사용자 HitTestHandler는 예외를 던질 수 있다.
+기반 가상 HitTest, Node/Canvas의 HitTest와 입력 Router 경로는 이를 호출자에게 전달한다.
+실패한 hit test는 성공 결과로 캐시하지 않으므로 호출자가 예외를 처리하면 같은
+포인터 상태에서도 재시도할 수 있다. 단순 사각형·원 충돌처럼 예외를 던지지 않는
+구현은 noexcept를 유지한다. Run의 치명적 예외 처리는 종료 코드와 정리 계약을 따른다.
+
+회귀: [Visual2DUpdateTests](../Tests/Collision/Visual2DUpdateTests.cpp)와
+[공유 CPU/SDK 검사](../Tests/Collision/CollisionTests.cpp).
+FMOD 없는 실행과 실제 장치 검사는 [Testing](Testing.md)을 따른다.
+
 ## Transform과 소유권
 
 Canvas의 `Visual2DNode` 트리가 모든 노드의 유일한 소유자다. 각 노드는

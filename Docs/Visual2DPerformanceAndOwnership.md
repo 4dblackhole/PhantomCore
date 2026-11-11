@@ -17,6 +17,15 @@ BVH(Bounding Volume Hierarchy)를 한 번 만든다. 각 노드는 삼각형 묶
 메시와 ray 질의이므로 메시 로컬 BVH가 더 직접적이다. Surface의 world transform이
 바뀌어도 BVH를 다시 만들 필요가 없다.
 
+## Update 순회 수명
+
+Update의 각 목록은 시작 시 방문 표식을 정하고 벡터의 참조/반복자를 콜백 밖으로
+보관하지 않는다. 삭제로 인덱스가 바뀌면 표식으로 재방문을 막는다. 삭제한 객체는
+객체 내부의 소유 링크로 연결해 Canvas Update 종료 시 해제하므로 정상 순회마다
+스냅샷 벡터를 할당하지 않고 noexcept 삭제 경로에서 퇴역 목록을 확장 할당하지 않는다.
+삭제된 컴포넌트를 먼저 해제해 지연 파괴 중 Owner가 살아 있도록 한다.
+추가 시점과 예외 계약은 [Visual2DArchitecture](Visual2DArchitecture.md#update-중-트리-변경과-콜백-오류)를 따른다.
+
 ## Canvas 크기와 화면 원점
 
 `Visual2DCanvas`는 전체 화면일 필요가 없다.
