@@ -14,6 +14,9 @@
 - 공개 C++ 이름은 전역 범위에 선언한다. 내부 링크에는 익명 네임스페이스를 쓴다.
 - `Engine/SDK/PhantomCore.h`는 생성 파일이다. 직접 수정하지 않고 원본 기능 헤더를
   수정한 뒤 `Engine/SDK/GenerateCoreHeader.ps1`로 다시 생성한다.
+- 프레임 공개 계약은 `Engine/Core/Rendering/RenderContext.h`에 있다. 크기·프레임 번호,
+  렌더 서비스와 ReadImage를 제공하며 기록 상태는 엔진 내부 RenderFrameContext가 보유한다.
+  구체 D3D12Renderer 선언은 내부 헤더에서 관리한다.
 - 공개 헤더 선택과 선언 순서는 `Engine/SDK/PublicHeaders.props` 한 곳에서 관리한다.
   생성기와 MSBuild가 이 목록을 공유하며, 목록 자체와 모든 원본 헤더가 증분 생성의
   입력이다. 경로는 저장소 루트 기준이고 조건을 붙이지 않는다. 생성 시 내부 include를
@@ -71,7 +74,8 @@ SDK 테스트의 `--headless-error`는 실제 D3D12/NoSound 실행 중 Update �
 | 영역 | 실제 위치 | 주요 책임과 공개 개념 |
 | --- | --- | --- |
 | 애플리케이션 | `Engine/Core/App` | `Run`, subsystem 생성·메인 루프·종료 순서 |
-| Client 계약 | `Engine/Core/Client` | `IGameClient`, `SceneGameClient`, `EngineServices`, Update/Render context |
+| Client 계약 | `Engine/Core/Client` | `IGameClient`, `SceneGameClient`, `EngineServices`, Update context |
+| 렌더 프레임 계약 | `Engine/Core/Rendering` | `RenderContext`, `ClearColor`, `RgbaImage`, 이미지 읽기 결과 |
 | Scene | `Engine/Core/Scene` | `GameScene`, `SceneManager`, factory, 지연 전환, 수명 정책 |
 | 공통 시스템 | `Engine/Core/System` | `Camera`, `TransformNode`, `MeshInstance`, `HighResolutionClock` |
 | 입력·창 | `Engine/Platform.Win32` | HWND, 메시지 펌프, Raw Input, Virtual-Key, QPC 입력 이벤트; [창 크기·Unicode 텍스트 입력](WindowControl.md) |

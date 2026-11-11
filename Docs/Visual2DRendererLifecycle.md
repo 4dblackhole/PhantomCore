@@ -101,7 +101,10 @@ void ExampleScene::Render(const RenderContext& context)
 ```
 
 `RenderContext::visual2DRendering`은 엔진이 연 프레임에서만 사용하는
-비소유 포인터다. 보관하거나 삭제하면 안 된다.
+비소유 포인터다. Context의 크기·프레임 번호·렌더 서비스·ReadImage는 공개 계약이다.
+명령 목록·viewport·scissor·descriptor와 이미지 읽기 queue의 연결은 내부
+`RenderFrameContext`를 통해 현재 Renderer가 보유한다. Context의 유효 범위는
+해당 BeginFrame/EndFrame 쌍이다. ReadImage의 완료된 CPU 결과는 독립적으로 소유한다.
 
 ## 여러 Canvas와 오프스크린 패스
 
