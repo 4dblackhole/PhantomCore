@@ -1,4 +1,6 @@
 #include "Renderer/D3D12Renderer.h"
+#include "Mesh/D3D12MeshRendering.h"
+#include "Text/D3D12TextRendering.h"
 #include "Renderer/FrameImageReadbackQueue.h"
 
 #include "Mesh/MeshRendering.h"
@@ -14,8 +16,6 @@
 
 namespace
 {
-    static_assert(D3D12Renderer::FrameCount == MeshRenderSystem::FrameCount);
-    static_assert(D3D12Renderer::FrameCount == TextRenderSystem::FrameCount);
 
     void ThrowIfFailed(const HRESULT result, const char* operation)
     {
@@ -141,14 +141,16 @@ void D3D12Renderer::Initialize(
     UpdateViewport();
 
     meshRenderSystem_ = std::make_unique<MeshRenderSystem>();
-    meshRenderSystem_->Initialize(
+    MeshRenderingBackend::Initialize(
+        *meshRenderSystem_,
         *device_.Get(),
         *commandQueue_.Get(),
         renderTargetFormat_,
         depthStencilFormat_);
 
     textRenderSystem_ = std::make_unique<TextRenderSystem>();
-    textRenderSystem_->Initialize(
+    TextRenderingBackend::Initialize(
+        *textRenderSystem_,
         *device_.Get(),
         renderTargetFormat_,
         depthStencilFormat_);
@@ -162,7 +164,7 @@ void D3D12Renderer::Initialize(
         *textRenderSystem_,
         depthStencilFormat_);
     visual2DRenderSystem_ = std::move(visual2DBackend);
-    imageReadbacks_ = std::make_unique<FrameImageReadbackQueue>(*device_.Get(), FrameCount);
+    imageReadbacks_ = std::make_unique<FrameImageReadbackQueue>(*device_.Get(), D3D12Detail::FrameCount);
 }
 
 void D3D12Renderer::Resize(
@@ -191,7 +193,7 @@ void D3D12Renderer::Resize(
 
     ThrowIfFailed(
         swapChain_->ResizeBuffers(
-            FrameCount,
+            D3D12Detail::FrameCount,
             width,
             height,
             renderTargetFormat_,
@@ -270,8 +272,8 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
         nullptr);
 
     const std::uint64_t renderIndex = nextRenderIndex_++;
-    meshRenderSystem_->BeginFrame(frameIndex_);
-    textRenderSystem_->BeginFrame(frameIndex_, renderIndex);
+    MeshRenderingBackend::BeginFrame(*meshRenderSystem_, frameIndex_);
+    TextRenderingBackend::BeginFrame(*textRenderSystem_, frameIndex_, renderIndex);
     static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).BeginScreenFrame(renderIndex);
     imageReadbacks_->BeginFrame(frameIndex_, renderIndex, *renderTargets_[frameIndex_].Get());
     frameOpen_ = true;
@@ -304,10 +306,11 @@ void D3D12Renderer::EndFrame()
     // Client scenes only submit high-level MeshInstances.  The renderer
     // resolves material pipelines, batches instances, and records draws
     // before the back buffer transitions to PRESENT.
-    meshRenderSystem_->Flush(*commandList_.Get());
+    MeshRenderingBackend::Flush(*meshRenderSystem_, *commandList_.Get());
     static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).DrawScreen(
         *commandList_.Get(), frameIndex_, width_, height_);
-    textRenderSystem_->Flush(
+    TextRenderingBackend::Flush(
+        *textRenderSystem_,
         *commandList_.Get(),
         width_,
         height_);
@@ -505,7 +508,7 @@ void D3D12Renderer::CreateSwapChain(const HWND window)
     description.Stereo = FALSE;
     description.SampleDesc.Count = 1;
     description.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    description.BufferCount = FrameCount;
+    description.BufferCount = D3D12Detail::FrameCount;
     description.Scaling = DXGI_SCALING_STRETCH;
     description.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     description.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
@@ -537,7 +540,7 @@ void D3D12Renderer::CreateDescriptorHeaps()
 {
     D3D12_DESCRIPTOR_HEAP_DESC rtvDescription{};
     rtvDescription.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    rtvDescription.NumDescriptors = FrameCount;
+    rtvDescription.NumDescriptors = D3D12Detail::FrameCount;
     ThrowIfFailed(
         device_->CreateDescriptorHeap(
             &rtvDescription,
@@ -561,7 +564,7 @@ void D3D12Renderer::CreateRenderTargets()
     const D3D12_CPU_DESCRIPTOR_HANDLE start =
         rtvHeap_->GetCPUDescriptorHandleForHeapStart();
 
-    for (std::uint32_t index = 0; index < FrameCount; ++index)
+    for (std::uint32_t index = 0; index < D3D12Detail::FrameCount; ++index)
     {
         ThrowIfFailed(
             swapChain_->GetBuffer(

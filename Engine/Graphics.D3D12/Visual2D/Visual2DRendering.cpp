@@ -2,7 +2,10 @@
 #include "Visual2D/ImageCacheKey.h"
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
-#include "Renderer/D3D12Renderer.h"
+#include "Renderer/RenderFrameContext.h"
+#include "Renderer/FrameResources.h"
+#include "Mesh/D3D12MeshRendering.h"
+#include "Text/D3D12TextRendering.h"
 #include "Mesh/MeshRendering.h"
 
 #include "Primitive/RectangleShape.h"
@@ -295,14 +298,14 @@ struct D3D12Visual2DRenderer::Impl
         {
             throw std::logic_error("The D3D12 Visual2D renderer is already initialized.");
         }
-        if (meshes.Device() == nullptr)
+        if (MeshRenderingBackend::Device(meshes) == nullptr)
         {
             throw std::logic_error("The mesh renderer has no D3D12 device.");
         }
 
         meshRendering = &meshes;
         screenTextRendering = &text;
-        device = meshes.Device();
+        device = MeshRenderingBackend::Device(meshes);
 
         // Visual2D world matrices scale this mesh directly to the requested
         // pixel/logical Bounds. RectangleShape defaults to 2x2, so use an
@@ -316,7 +319,8 @@ struct D3D12Visual2DRenderer::Impl
             BuiltInMaterial::UnlitVertexColor);
         screenFont = text.LoadSystemFont(L"Segoe UI");
 
-        textureTextRendering.Initialize(
+        TextRenderingBackend::Initialize(
+            textureTextRendering,
             *device,
             DXGI_FORMAT_R8G8B8A8_UNORM);
         textureFont = textureTextRendering.LoadSystemFont(L"Segoe UI");
@@ -361,7 +365,7 @@ struct D3D12Visual2DRenderer::Impl
         screenTextCache.clear();
         textPruneIndex = 0;
         textureFont.reset();
-        textureTextRendering.Shutdown();
+        TextRenderingBackend::Shutdown(textureTextRendering);
         screenFonts.clear();
         screenFont.reset();
         rectangleMaterial.reset();
@@ -884,7 +888,7 @@ struct D3D12Visual2DRenderer::Impl
         std::uint32_t imagePage = 0;
         std::vector<RectangleInstance> rectangles;
         std::vector<VisualInstance> images;
-        std::vector<TextRenderSystem::CanvasDraw> text;
+        std::vector<TextRenderingBackend::CanvasDraw> text;
         const auto flush = [&]()
         {
             switch (batch)
@@ -900,17 +904,18 @@ struct D3D12Visual2DRenderer::Impl
             case BatchType::Text:
                 if (target.screen)
                 {
-                    screenTextRendering->DrawCanvasBatch(
+                    TextRenderingBackend::DrawCanvasBatch(
+                        *screenTextRendering,
                         target.commands, target.width, target.height, text);
                 }
                 else
                 {
-                    textureTextRendering.BeginFrame(target.frameIndex, target.renderIndex);
+                    TextRenderingBackend::BeginFrame(textureTextRendering, target.frameIndex, target.renderIndex);
                     for (const auto& draw : text)
                     {
                         textureTextRendering.Submit(draw.layout, draw.command);
                     }
-                    textureTextRendering.Flush(target.commands, target.width, target.height);
+                    TextRenderingBackend::Flush(textureTextRendering, target.commands, target.width, target.height);
                 }
                 text.clear();
                 break;
@@ -1050,12 +1055,12 @@ struct D3D12Visual2DRenderer::Impl
     ComPtr<ID3D12PipelineState> screenImagePipeline;
     ComPtr<ID3D12RootSignature> rectangleRootSignature;
     ComPtr<ID3D12PipelineState> rectanglePipeline;
-    std::array<FrameUploadArena, D3D12Renderer::FrameCount>
+    std::array<FrameUploadArena, D3D12Detail::FrameCount>
         rectangleArenas{};
     ComPtr<ID3D12RootSignature> visualRootSignature;
     ComPtr<ID3D12PipelineState> visualPipeline;
-    std::array<FrameUploadArena, D3D12Renderer::FrameCount> visualArenas{};
-    std::array<FrameRenderTargetLifetime, D3D12Renderer::FrameCount>
+    std::array<FrameUploadArena, D3D12Detail::FrameCount> visualArenas{};
+    std::array<FrameRenderTargetLifetime, D3D12Detail::FrameCount>
         renderTargetsInFlight{};
     bool initialized{};
 };
@@ -1258,7 +1263,7 @@ void D3D12Visual2DRenderer::RenderToTexture(
     const auto* frame = RenderFrameContext::Find(context);
     if (!IsInitialized() || target == nullptr || frame == nullptr ||
         frame->commandList == nullptr ||
-        context.frameIndex >= D3D12Renderer::FrameCount)
+        context.frameIndex >= D3D12Detail::FrameCount)
     {
         throw std::invalid_argument(
             "The Canvas texture pass received an invalid context.");

@@ -4,7 +4,6 @@
 // Public types intentionally hide DirectWrite objects and atlas resources.
 
 #include <DirectXMath.h>
-#include <d3d12.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -112,24 +111,16 @@ struct TextDrawCommand
 };
 
 // Text is submitted while a RenderContext is open. Prepared layouts retain
-// shaping; Submit records visible glyph instances and Flush uploads cache
-// misses and emits batched D3D12 draws at EndFrame.
+// shaping; Submit records visible glyph instances. The engine uploads cache
+// misses and records the text pass at the end of the frame.
 class TextRenderSystem final
 {
 public:
-    static constexpr std::uint32_t FrameCount = 2;
-
     TextRenderSystem();
     ~TextRenderSystem();
 
     TextRenderSystem(const TextRenderSystem&) = delete;
     TextRenderSystem& operator=(const TextRenderSystem&) = delete;
-
-    void Initialize(
-        ID3D12Device& device,
-        DXGI_FORMAT renderTargetFormat,
-        DXGI_FORMAT depthStencilFormat = DXGI_FORMAT_UNKNOWN);
-    void Shutdown() noexcept;
 
     [[nodiscard]] FontHandle LoadSystemFont(
         std::wstring_view familyName);
@@ -142,33 +133,12 @@ public:
     void Submit(const TextLayoutHandle &layout, const TextDrawCommand &command);
     [[nodiscard]] TextRenderStatistics Statistics() const noexcept;
 
-    // renderIndex identifies one engine frame. Multiple BeginFrame/Flush
-    // pairs with the same value are independent off-screen text passes
-    // and append to the same fence-protected upload arena.
-    void BeginFrame(
-        std::uint32_t frameIndex,
-        std::uint64_t renderIndex);
     void Submit(
         std::wstring_view text,
         const TextDrawCommand& command);
-    void Flush(
-        ID3D12GraphicsCommandList& commandList,
-        std::uint32_t viewportWidth,
-        std::uint32_t viewportHeight);
 
 private:
-    friend class D3D12Visual2DRenderer;
-    struct CanvasDraw
-    {
-        TextLayoutHandle layout;
-        TextDrawCommand command;
-    };
-    void DrawCanvasBatch(
-        ID3D12GraphicsCommandList& commandList,
-        std::uint32_t viewportWidth,
-        std::uint32_t viewportHeight,
-        std::span<const CanvasDraw> draws);
-
+    friend struct TextRenderingBackend;
     struct Impl;
     std::unique_ptr<Impl> implementation_;
 };

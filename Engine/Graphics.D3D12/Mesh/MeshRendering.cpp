@@ -1,4 +1,7 @@
 #include "Mesh/MeshRendering.h"
+#include "Mesh/D3D12MeshRendering.h"
+#include "Renderer/FrameResources.h"
+#include <wrl/client.h>
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
 
@@ -194,12 +197,123 @@ const TextureSetHandle& MaterialInstance::Textures() const noexcept
     return textureSet_;
 }
 
-MeshRenderSystem::~MeshRenderSystem()
+struct MeshRenderSystem::Impl final
+{
+    ~Impl();
+
+    void Initialize(
+        ID3D12Device& device,
+        ID3D12CommandQueue& commandQueue,
+        DXGI_FORMAT renderTargetFormat,
+        DXGI_FORMAT depthStencilFormat);
+    void Shutdown() noexcept;
+
+    [[nodiscard]] MaterialInstanceHandle CreateMaterial(
+        BuiltInMaterial material);
+    [[nodiscard]] TextureManager& Textures() noexcept;
+    [[nodiscard]] const TextureManager& Textures() const noexcept;
+    [[nodiscard]] ID3D12Device* Device() const noexcept;
+
+    // Called by D3D12Renderer after the selected frame resource is safe.
+    void BeginFrame(std::uint32_t frameIndex);
+
+    // Stores CPU-side instance data only.  Flush sorts equal mesh/material
+    // pairs and records one instanced draw for each batch.
+    void Submit(
+        GpuMeshHandle mesh,
+        MaterialInstanceHandle material,
+        const DirectX::XMFLOAT4X4& world,
+        const DirectX::XMFLOAT4X4& viewProjection,
+        const DirectX::XMFLOAT4& color,
+        const DirectX::XMFLOAT2& uvScale,
+        const DirectX::XMFLOAT2& uvOffset,
+        std::uint32_t textureIndex,
+        DirectX::XMFLOAT4 clipRectPixels = {
+            -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F},
+        DirectX::XMFLOAT4 roundedRectLocal = {},
+        float cornerRadiusLocal = 0.0F);
+
+    void Flush(ID3D12GraphicsCommandList& commandList);
+
+    struct InstanceData
+    {
+        DirectX::XMFLOAT4X4 worldViewProjection{};
+        DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
+        DirectX::XMFLOAT4 uvTransform{1.0F, 1.0F, 0.0F, 0.0F};
+        DirectX::XMFLOAT4 clipRectPixels{
+            -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
+        DirectX::XMFLOAT4 roundedRectLocal{};
+        float cornerRadiusLocal{};
+        std::uint32_t textureIndex{NoTextureIndex};
+        std::array<std::uint32_t, 2> padding{};
+    };
+
+    struct PendingItem
+    {
+        GpuMeshHandle mesh;
+        MaterialInstanceHandle material;
+        InstanceData instance;
+    };
+
+    struct FrameInstanceBuffer
+    {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        std::byte* mappedData{};
+        std::size_t capacity{};
+        // A scene may be destroyed immediately after it submits a frame.
+        // Keep the referenced GPU objects alive until this frame index is
+        // selected again after D3D12Renderer's fence wait.
+        std::vector<GpuMeshHandle> retainedMeshes;
+        std::vector<MaterialInstanceHandle> retainedMaterials;
+    };
+
+    [[nodiscard]] GpuMeshHandle CreateMeshData(
+        std::span<const std::byte> vertexBytes,
+        std::size_t vertexStrideBytes,
+        MeshVertexLayout layout,
+        std::span<const std::uint32_t> indices,
+        const Sphere3D& localBoundingSphere);
+    [[nodiscard]] std::shared_ptr<MaterialTemplate>
+        CreateUnlitVertexColorTemplate();
+    [[nodiscard]] std::shared_ptr<MaterialTemplate>
+        CreateUnlitVertexColorTextureArrayTemplate(
+            BuiltInMaterial materialType,
+            bool alphaBlended);
+    void SortPendingItems();
+    void UploadPendingInstances(FrameInstanceBuffer& instanceBuffer);
+    [[nodiscard]] std::size_t FindBatchEnd(
+        std::size_t batchStart) const noexcept;
+    void DrawBatch(
+        ID3D12GraphicsCommandList& commandList,
+        const FrameInstanceBuffer& instanceBuffer,
+        std::size_t batchStart,
+        std::size_t batchEnd);
+    void EnsureInstanceCapacity(
+        std::uint32_t frameIndex,
+        std::size_t requiredInstanceCount);
+
+    ID3D12Device* device_{};
+    DXGI_FORMAT renderTargetFormat_{DXGI_FORMAT_R8G8B8A8_UNORM};
+    DXGI_FORMAT depthStencilFormat_{DXGI_FORMAT_D32_FLOAT};
+    std::shared_ptr<MaterialTemplate> unlitVertexColorTemplate_;
+    std::shared_ptr<MaterialTemplate>
+        unlitVertexColorTextureArrayTemplate_;
+    std::shared_ptr<MaterialTemplate>
+        unlitVertexColorTextureArrayAlphaBlendTemplate_;
+    TextureManager textureManager_;
+    std::array<FrameInstanceBuffer, D3D12Detail::FrameCount> instanceBuffers_{};
+    std::vector<PendingItem> pendingItems_;
+    std::uint32_t currentFrameIndex_{};
+    bool initialized_{};
+    bool frameOpen_{};
+};
+
+MeshRenderSystem::Impl::~Impl()
 {
     Shutdown();
 }
 
-void MeshRenderSystem::Initialize(
+void MeshRenderSystem::Impl::Initialize(
     ID3D12Device& device,
     ID3D12CommandQueue& commandQueue,
     const DXGI_FORMAT renderTargetFormat,
@@ -241,7 +355,7 @@ void MeshRenderSystem::Initialize(
     }
 }
 
-void MeshRenderSystem::Shutdown() noexcept
+void MeshRenderSystem::Impl::Shutdown() noexcept
 {
     pendingItems_.clear();
 
@@ -268,7 +382,7 @@ void MeshRenderSystem::Shutdown() noexcept
     currentFrameIndex_ = 0;
 }
 
-MaterialInstanceHandle MeshRenderSystem::CreateMaterial(
+MaterialInstanceHandle MeshRenderSystem::Impl::CreateMaterial(
     const BuiltInMaterial material)
 {
     if (!initialized_)
@@ -303,24 +417,24 @@ MaterialInstanceHandle MeshRenderSystem::CreateMaterial(
         new MaterialInstance(std::move(materialTemplate))};
 }
 
-TextureManager& MeshRenderSystem::Textures() noexcept
+TextureManager& MeshRenderSystem::Impl::Textures() noexcept
 {
     return textureManager_;
 }
 
-const TextureManager& MeshRenderSystem::Textures() const noexcept
+const TextureManager& MeshRenderSystem::Impl::Textures() const noexcept
 {
     return textureManager_;
 }
 
-ID3D12Device* MeshRenderSystem::Device() const noexcept
+ID3D12Device* MeshRenderSystem::Impl::Device() const noexcept
 {
     return device_;
 }
 
-void MeshRenderSystem::BeginFrame(const std::uint32_t frameIndex)
+void MeshRenderSystem::Impl::BeginFrame(const std::uint32_t frameIndex)
 {
-    if (!initialized_ || frameIndex >= FrameCount)
+    if (!initialized_ || frameIndex >= D3D12Detail::FrameCount)
     {
         throw std::logic_error(
             "MeshRenderSystem received an invalid frame.");
@@ -341,7 +455,7 @@ void MeshRenderSystem::BeginFrame(const std::uint32_t frameIndex)
     frameOpen_ = true;
 }
 
-void MeshRenderSystem::Submit(
+void MeshRenderSystem::Impl::Submit(
     GpuMeshHandle mesh,
     MaterialInstanceHandle material,
     const XMFLOAT4X4& world,
@@ -413,7 +527,7 @@ void MeshRenderSystem::Submit(
         instance});
 }
 
-void MeshRenderSystem::Flush(ID3D12GraphicsCommandList& commandList)
+void MeshRenderSystem::Impl::Flush(ID3D12GraphicsCommandList& commandList)
 {
     if (!frameOpen_)
     {
@@ -463,7 +577,7 @@ void MeshRenderSystem::Flush(ID3D12GraphicsCommandList& commandList)
     frameOpen_ = false;
 }
 
-void MeshRenderSystem::SortPendingItems()
+void MeshRenderSystem::Impl::SortPendingItems()
 {
     // Opaque draws can be freely regrouped by material and mesh because
     // the depth buffer resolves their visibility. Alpha-blended draws run
@@ -502,7 +616,7 @@ void MeshRenderSystem::SortPendingItems()
         });
 }
 
-void MeshRenderSystem::UploadPendingInstances(
+void MeshRenderSystem::Impl::UploadPendingInstances(
     FrameInstanceBuffer& instanceBuffer)
 {
     for (std::size_t index = 0; index < pendingItems_.size(); ++index)
@@ -514,7 +628,7 @@ void MeshRenderSystem::UploadPendingInstances(
     }
 }
 
-std::size_t MeshRenderSystem::FindBatchEnd(
+std::size_t MeshRenderSystem::Impl::FindBatchEnd(
     const std::size_t batchStart) const noexcept
 {
     const PendingItem& first = pendingItems_[batchStart];
@@ -528,7 +642,7 @@ std::size_t MeshRenderSystem::FindBatchEnd(
     return batchEnd;
 }
 
-void MeshRenderSystem::DrawBatch(
+void MeshRenderSystem::Impl::DrawBatch(
     ID3D12GraphicsCommandList& commandList,
     const FrameInstanceBuffer& instanceBuffer,
     const std::size_t batchStart,
@@ -581,7 +695,7 @@ void MeshRenderSystem::DrawBatch(
         0);
 }
 
-GpuMeshHandle MeshRenderSystem::CreateMeshData(
+GpuMeshHandle MeshRenderSystem::Impl::CreateMeshData(
     const std::span<const std::byte> vertexBytes,
     const std::size_t vertexStrideBytes,
     const MeshVertexLayout layout,
@@ -696,7 +810,7 @@ Sphere3D MeshRenderSystem::ComputeLocalBoundingSphere(
 }
 
 std::shared_ptr<MaterialTemplate>
-    MeshRenderSystem::CreateUnlitVertexColorTemplate()
+    MeshRenderSystem::Impl::CreateUnlitVertexColorTemplate()
 {
     // Compile the embedded shader pair before creating any persistent
     // pipeline objects, so a shader error leaves no partial material.
@@ -893,7 +1007,7 @@ std::shared_ptr<MaterialTemplate>
 }
 
 std::shared_ptr<MaterialTemplate>
-    MeshRenderSystem::CreateUnlitVertexColorTextureArrayTemplate(
+    MeshRenderSystem::Impl::CreateUnlitVertexColorTextureArrayTemplate(
         const BuiltInMaterial materialType,
         const bool alphaBlended)
 {
@@ -1133,7 +1247,7 @@ std::shared_ptr<MaterialTemplate>
     return material;
 }
 
-void MeshRenderSystem::EnsureInstanceCapacity(
+void MeshRenderSystem::Impl::EnsureInstanceCapacity(
     const std::uint32_t frameIndex,
     const std::size_t requiredInstanceCount)
 {
@@ -1168,4 +1282,62 @@ void MeshRenderSystem::EnsureInstanceCapacity(
             &noReadRange,
             reinterpret_cast<void**>(&buffer.mappedData)),
         "Map mesh instance buffer");
+}
+
+MeshRenderSystem::MeshRenderSystem()
+    : implementation_(std::make_unique<Impl>())
+{
+}
+MeshRenderSystem::~MeshRenderSystem() = default;
+
+GpuMeshHandle MeshRenderSystem::CreateMeshData(
+    const std::span<const std::byte> vertices, const std::size_t stride,
+    const MeshVertexLayout layout, const std::span<const std::uint32_t> indices,
+    const Sphere3D& sphere)
+{
+    return implementation_->CreateMeshData(vertices, stride, layout, indices, sphere);
+}
+MaterialInstanceHandle MeshRenderSystem::CreateMaterial(const BuiltInMaterial material)
+{
+    return implementation_->CreateMaterial(material);
+}
+TextureManager& MeshRenderSystem::Textures() noexcept
+{
+    return implementation_->Textures();
+}
+const TextureManager& MeshRenderSystem::Textures() const noexcept
+{
+    return implementation_->Textures();
+}
+void MeshRenderSystem::Submit(GpuMeshHandle mesh, MaterialInstanceHandle material,
+    const XMFLOAT4X4& world, const XMFLOAT4X4& viewProjection,
+    const XMFLOAT4& color, const XMFLOAT2& uvScale, const XMFLOAT2& uvOffset,
+    const std::uint32_t textureIndex, const XMFLOAT4 clipRectPixels,
+    const XMFLOAT4 roundedRectLocal, const float cornerRadiusLocal)
+{
+    implementation_->Submit(std::move(mesh), std::move(material), world, viewProjection,
+        color, uvScale, uvOffset, textureIndex, clipRectPixels, roundedRectLocal,
+        cornerRadiusLocal);
+}
+void MeshRenderingBackend::Initialize(MeshRenderSystem& meshes, ID3D12Device& device,
+    ID3D12CommandQueue& queue, const DXGI_FORMAT color, const DXGI_FORMAT depth)
+{
+    meshes.implementation_->Initialize(device, queue, color, depth);
+}
+void MeshRenderingBackend::Shutdown(MeshRenderSystem& meshes) noexcept
+{
+    meshes.implementation_->Shutdown();
+}
+ID3D12Device* MeshRenderingBackend::Device(const MeshRenderSystem& meshes) noexcept
+{
+    return meshes.implementation_->Device();
+}
+void MeshRenderingBackend::BeginFrame(MeshRenderSystem& meshes,
+    const std::uint32_t frameIndex)
+{
+    meshes.implementation_->BeginFrame(frameIndex);
+}
+void MeshRenderingBackend::Flush(MeshRenderSystem& meshes, ID3D12GraphicsCommandList& commands)
+{
+    meshes.implementation_->Flush(commands);
 }

@@ -3,6 +3,7 @@
 // Renderer feature: D3D12 device, frame resources, and presentation.
 
 #include "Renderer/RenderFrameContext.h"
+#include "Renderer/FrameResources.h"
 
 #include <Windows.h>
 #include <d3d12.h>
@@ -23,12 +24,10 @@ class FrameImageReadbackQueue;
 // Internal D3D12 frame lifecycle, device, and presentation service.
 // Initialize creates the persistent device/swap-chain objects.  Each
 // BeginFrame/EndFrame pair records and submits one back-buffer frame;
-// FrameCount allocators and fences prevent reuse while the GPU owns them.
+// Frame-ring allocators and fences prevent reuse while the GPU owns them.
 class D3D12Renderer final
 {
 public:
-    static constexpr std::uint32_t FrameCount = 2;
-
     D3D12Renderer();
     ~D3D12Renderer();
 
@@ -88,14 +87,14 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FrameCount>
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, D3D12Detail::FrameCount>
         renderTargets_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> depthStencil_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, FrameCount>
+    std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, D3D12Detail::FrameCount>
         commandAllocators_{};
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
-    std::array<std::uint64_t, FrameCount> frameFenceValues_{};
+    std::array<std::uint64_t, D3D12Detail::FrameCount> frameFenceValues_{};
     std::uint64_t nextFenceValue_{1};
     HANDLE fenceEvent_{};
     std::unique_ptr<MeshRenderSystem> meshRenderSystem_;

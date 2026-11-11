@@ -1,4 +1,6 @@
 #include "Text/TextRendering.h"
+#include "Text/D3D12TextRendering.h"
+#include "Renderer/FrameResources.h"
 
 #include "Shader/ShaderCompiler.h"
 
@@ -277,6 +279,7 @@ struct TextLayout::Impl final
 
 struct TextRenderSystem::Impl final
 {
+    using CanvasDraw = TextRenderingBackend::CanvasDraw;
     struct GlyphInstance final
     {
         DirectX::XMFLOAT4X4 transform{};
@@ -780,7 +783,7 @@ struct TextRenderSystem::Impl final
         const std::uint64_t renderIndex)
     {
         RequireInitialized();
-        if (frameIndex >= FrameCount)
+        if (frameIndex >= D3D12Detail::FrameCount)
         {
             throw std::out_of_range(
                 "The text frame index is outside the frame ring.");
@@ -808,7 +811,7 @@ struct TextRenderSystem::Impl final
                 page.inFlightFrames &= static_cast<std::uint8_t>(~(1U << frameIndex));
                 // An inactive off-screen pass may skip one ring index.
                 // Engine frames older than the two-frame fence ring are complete.
-                if (renderIndex >= page.lastUsedRenderIndex && renderIndex - page.lastUsedRenderIndex >= FrameCount)
+                if (renderIndex >= page.lastUsedRenderIndex && renderIndex - page.lastUsedRenderIndex >= D3D12Detail::FrameCount)
                     page.inFlightFrames = 0;
             }
             TrimAtlasPages();
@@ -1818,7 +1821,7 @@ struct TextRenderSystem::Impl final
     std::unordered_map<LayoutKey, FormatEntry, LayoutKeyHash> formatCache;
     std::vector<PendingGlyphUpload> pendingUploads;
     std::vector<GlyphInstance> pendingInstances;
-    std::array<FrameInstanceBuffer, FrameCount> frameBuffers{};
+    std::array<FrameInstanceBuffer, D3D12Detail::FrameCount> frameBuffers{};
     std::uint32_t currentFrameIndex{};
     std::uint64_t currentRenderIndex{};
     std::uint32_t atlasDescriptorCapacity{};
@@ -1834,23 +1837,24 @@ TextRenderSystem::TextRenderSystem()
 
 TextRenderSystem::~TextRenderSystem()
 {
-    Shutdown();
+    implementation_->Shutdown();
 }
 
-void TextRenderSystem::Initialize(
+void TextRenderingBackend::Initialize(
+    TextRenderSystem& text,
     ID3D12Device& device,
     const DXGI_FORMAT renderTargetFormat,
     const DXGI_FORMAT depthStencilFormat)
 {
-    implementation_->Initialize(
+    text.implementation_->Initialize(
         device,
         renderTargetFormat,
         depthStencilFormat);
 }
 
-void TextRenderSystem::Shutdown() noexcept
+void TextRenderingBackend::Shutdown(TextRenderSystem& text) noexcept
 {
-    implementation_->Shutdown();
+    text.implementation_->Shutdown();
 }
 
 FontHandle TextRenderSystem::LoadSystemFont(
@@ -1891,11 +1895,12 @@ TextRenderStatistics TextRenderSystem::Statistics() const noexcept
     return result;
 }
 
-void TextRenderSystem::BeginFrame(
+void TextRenderingBackend::BeginFrame(
+    TextRenderSystem& text,
     const std::uint32_t frameIndex,
     const std::uint64_t renderIndex)
 {
-    implementation_->BeginFrame(frameIndex, renderIndex);
+    text.implementation_->BeginFrame(frameIndex, renderIndex);
 }
 
 void TextRenderSystem::Submit(
@@ -1905,22 +1910,24 @@ void TextRenderSystem::Submit(
     implementation_->Submit(text, command);
 }
 
-void TextRenderSystem::Flush(
+void TextRenderingBackend::Flush(
+    TextRenderSystem& text,
     ID3D12GraphicsCommandList& commandList,
     const std::uint32_t viewportWidth,
     const std::uint32_t viewportHeight)
 {
-    implementation_->Flush(
+    text.implementation_->Flush(
         commandList,
         viewportWidth,
         viewportHeight);
 }
 
-void TextRenderSystem::DrawCanvasBatch(
+void TextRenderingBackend::DrawCanvasBatch(
+    TextRenderSystem& text,
     ID3D12GraphicsCommandList& commandList,
     const std::uint32_t viewportWidth,
     const std::uint32_t viewportHeight,
     const std::span<const CanvasDraw> draws)
 {
-    implementation_->DrawCanvasBatch(commandList, viewportWidth, viewportHeight, draws);
+    text.implementation_->DrawCanvasBatch(commandList, viewportWidth, viewportHeight, draws);
 }

@@ -7,6 +7,7 @@
 #include "Texture/TextureManager.h"
 #include "Rendering/RenderContext.h"
 
+#include <Windows.h>
 #include <DirectXMath.h>
 
 #include <cstdint>
