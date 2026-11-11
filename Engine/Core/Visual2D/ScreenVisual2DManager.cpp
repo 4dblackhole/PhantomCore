@@ -208,7 +208,7 @@ ImageHandle ScreenVisual2DManager::RegisterImage(
         return cached->second;
     }
     const ImageHandle image = rendering_->LoadImage(normalized);
-    images_.emplace(std::move(key), image);
+    images_.emplace(key, image);
     return image;
 }
 

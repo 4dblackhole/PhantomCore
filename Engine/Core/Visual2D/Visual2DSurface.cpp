@@ -259,7 +259,7 @@ std::size_t MeshUvVisual2DSurface::BuildBvhNode(
     const std::size_t triangleCount)
 {
     constexpr std::size_t LeafTriangleCount = 6;
-    const float infinity = std::numeric_limits<float>::infinity();
+    constexpr float infinity = std::numeric_limits<float>::infinity();
     Bounds bounds{{infinity, infinity, infinity},
         {-infinity, -infinity, -infinity}};
     DirectX::XMFLOAT3 centroidMinimum{infinity, infinity, infinity};
@@ -375,7 +375,7 @@ std::optional<SurfaceHit> MeshUvVisual2DSurface::Raycast(
     }
 
     std::optional<TriangleHit3D> closest;
-    const SurfaceVertex* closestVertices[3]{};
+    std::size_t closestIndex{};
     float closestParameter = std::numeric_limits<float>::infinity();
     std::size_t nodeIndex = 0;
     while (nodeIndex < bvhNodes_.size())
@@ -424,9 +424,7 @@ std::optional<SurfaceHit> MeshUvVisual2DSurface::Raycast(
             }
             closest = hit;
             closestParameter = hit->parameter;
-            closestVertices[0] = &first;
-            closestVertices[1] = &second;
-            closestVertices[2] = &third;
+            closestIndex = index;
         }
         nodeIndex = node.escapeIndex;
     }
@@ -435,14 +433,17 @@ std::optional<SurfaceHit> MeshUvVisual2DSurface::Raycast(
         return std::nullopt;
     }
 
+    const SurfaceVertex& first = vertices_[indices_[closestIndex]];
+    const SurfaceVertex& second = vertices_[indices_[closestIndex + 1]];
+    const SurfaceVertex& third = vertices_[indices_[closestIndex + 2]];
     const DirectX::XMFLOAT3 weights = closest->barycentric;
     const DirectX::XMFLOAT2 uv{
-        closestVertices[0]->uv.x * weights.x +
-            closestVertices[1]->uv.x * weights.y +
-            closestVertices[2]->uv.x * weights.z,
-        closestVertices[0]->uv.y * weights.x +
-            closestVertices[1]->uv.y * weights.y +
-            closestVertices[2]->uv.y * weights.z};
+        first.uv.x * weights.x +
+            second.uv.x * weights.y +
+            third.uv.x * weights.z,
+        first.uv.y * weights.x +
+            second.uv.y * weights.y +
+            third.uv.y * weights.z};
     DirectX::XMFLOAT3 worldPoint{};
     DirectX::XMStoreFloat3(
         &worldPoint,

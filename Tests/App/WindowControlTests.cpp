@@ -125,7 +125,11 @@ namespace
             GetWindowThreadProcessId(parent, &process);
             Check(process == GetCurrentProcessId(), "Test owns native window.");
             HWND child = FindWindowExW(parent, nullptr, L"EDIT", nullptr);
-            Check(child != nullptr && IsWindowUnicode(child), "Native edit is Unicode.");
+            if (child == nullptr)
+            {
+                throw std::runtime_error("Native edit control was not created.");
+            }
+            Check(IsWindowUnicode(child), "Native edit is Unicode.");
             TestPlaceholder(child, *editor);
             editor->SetText(L"Angel Dream");
             std::wstring text;

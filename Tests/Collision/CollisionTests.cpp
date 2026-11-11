@@ -166,8 +166,12 @@ namespace
             NearlyEqual(canvas->PixelScale(), 1.5F),
             "manager resizes owned Canvas trees with the Client viewport");
         ScreenCanvasHandle movedHandle = std::move(canvasHandle);
-        Check(!canvasHandle && movedHandle.Get() == canvas,
+        Check(movedHandle.Get() == canvas && manager.CanvasCount() == 1,
             "moving a Canvas handle transfers ownership without removing it");
+        canvasHandle.Reset();
+        Check(!canvasHandle && movedHandle.Get() == canvas &&
+            manager.CanvasCount() == 1,
+            "resetting a moved-from handle preserves transferred Canvas ownership");
         movedHandle.Reset();
         Check(manager.CanvasCount() == 0 &&
             manager.FindCanvas(canvasId) == nullptr,
@@ -883,6 +887,48 @@ namespace
             "curved-surface BVH rejects a ray outside its root bounds");
     }
 
+    void TestMeshUvNearestTriangle()
+    {
+        class LayeredShape final : public Shape
+        {
+        public:
+            LayeredShape()
+            {
+                // The farther triangle is visited first from the front.
+                SetMeshData({
+                    {{-1.0F, -1.0F, 1.0F}, {0.0F, 0.0F}},
+                    {{0.0F, 1.0F, 1.0F}, {1.0F, 0.0F}},
+                    {{1.0F, -1.0F, 1.0F}, {1.0F, 1.0F}},
+                    {{-1.0F, -1.0F, 0.0F}, {0.0F, 0.0F}},
+                    {{0.0F, 1.0F, 0.0F}, {0.0F, 1.0F}},
+                    {{1.0F, -1.0F, 0.0F}, {1.0F, 0.0F}}},
+                    {0, 1, 2, 3, 4, 5});
+            }
+        };
+
+        DirectX::XMFLOAT4X4 identity{};
+        DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
+        const LayeredShape shape;
+        const MeshUvVisual2DSurface surface(shape, identity, true);
+        const auto front = surface.Raycast(
+            Ray3D{{0.0F, 0.0F, -2.0F}, {0.0F, 0.0F, 1.0F}});
+        Check(front.has_value() &&
+            NearlyEqual(front->rayParameter, 2.0F) &&
+            NearlyEqual(front->worldPosition.z, 0.0F) &&
+            NearlyEqual(front->uv.x, 0.25F) && NearlyEqual(front->uv.y, 0.5F),
+            "a closer triangle replaces both the ray hit and its interpolated UV");
+        const auto back = surface.Raycast(
+            Ray3D{{0.0F, 0.0F, 3.0F}, {0.0F, 0.0F, -1.0F}});
+        Check(back.has_value() &&
+            NearlyEqual(back->rayParameter, 2.0F) &&
+            NearlyEqual(back->worldPosition.z, 1.0F) &&
+            NearlyEqual(back->uv.x, 0.75F) && NearlyEqual(back->uv.y, 0.25F),
+            "a farther triangle cannot replace the nearest hit or its UV");
+        Check(!surface.Raycast(
+            Ray3D{{0.9F, 0.9F, -2.0F}, {0.0F, 0.0F, 1.0F}}).has_value(),
+            "a ray inside the BVH bounds can miss every triangle");
+    }
+
     void TestVisual2DRouting()
     {
         Visual2DCanvas canvas(
@@ -1460,6 +1506,7 @@ int main(int argc, char **argv)
     TestTwoDimensionalQueries();
     TestThreeDimensionalVolumes();
     TestTriangleAndUvSurfaces();
+    TestMeshUvNearestTriangle();
     TestVisual2DRouting();
     TestVisual2DClipping();
     TestVisual2DTreeZOrder();
