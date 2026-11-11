@@ -255,7 +255,7 @@ public:
 
     virtual void Update(double elapsedSeconds);
     virtual void AppendDrawPackets(std::vector<DrawPacket>& packets) const;
-    [[nodiscard]] virtual bool HitTest(Point localPosition) const noexcept;
+    [[nodiscard]] virtual bool HitTest(Point localPosition) const;
     virtual void OnPointerEvent(
         const PointerEvent& event,
         std::vector<Action>& actions);
@@ -266,6 +266,8 @@ protected:
 private:
     friend class Visual2DNode;
     Visual2DNode* owner_{};
+    std::unique_ptr<Visual2DComponent> retiredNext_;
+    bool updatePending_{};
 };
 
 class Visual2DNode final
@@ -366,7 +368,9 @@ public:
         {
             if (dynamic_cast<ComponentType*>(iterator->get()) != nullptr)
             {
+                auto removed = std::move(*iterator);
                 components_.erase(iterator);
+                RetireComponent(std::move(removed));
                 return true;
             }
         }
@@ -385,13 +389,19 @@ private:
 
     [[nodiscard]] HitResult HitTest(
         Point canvasPosition,
-        const std::optional<Rect>& inheritedClip = std::nullopt) noexcept;
+        const std::optional<Rect>& inheritedClip = std::nullopt);
     [[nodiscard]] bool MapCanvasPointToLocal(
         Point canvasPosition,
         Point& localPosition) noexcept;
     [[nodiscard]] Visual2DNode* Find(NodeId id) noexcept;
     [[nodiscard]] const Visual2DNode* Find(NodeId id) const noexcept;
+    struct UpdateContext;
     void UpdateRecursive(double elapsedSeconds);
+    void UpdateRecursive(double elapsedSeconds, UpdateContext& context);
+    [[nodiscard]] UpdateContext* ActiveUpdate() noexcept;
+    [[nodiscard]] bool HasRetiredAncestor() const noexcept;
+    void RetireComponent(std::unique_ptr<Visual2DComponent> component) noexcept;
+    static void DestroyRetired(UpdateContext& context) noexcept;
     void CollectDrawPackets(
         std::vector<DrawPacket>& packets,
         const std::optional<Rect>& inheritedClip = std::nullopt) const;
@@ -412,6 +422,10 @@ private:
     Point pivot_{};
     std::int32_t zIndex_{};
     Visual2DNode* parent_{};
+    UpdateContext* activeUpdate_{};
+    std::unique_ptr<Visual2DNode> retiredNext_;
+    bool retired_{};
+    bool updatePending_{};
     std::vector<std::unique_ptr<Visual2DNode>> children_;
     mutable std::vector<Visual2DNode*> paintOrder_;
     mutable bool paintOrderDirty_{true};

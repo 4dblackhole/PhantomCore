@@ -61,6 +61,8 @@
   <ItemGroup>
     <ClCompile Include="CpuTestsMain.cpp" />
     <ClCompile Include="Collision\CollisionTests.cpp" />
+    <ClCompile Include="Collision\Visual2DUpdateTests.cpp" />
+    <ClInclude Include="Collision\Visual2DUpdateTests.h" />
     <ClCompile Include="App\InputStateTests.cpp" />
     <ClInclude Include="Collision\CollisionTests.h" />
     <ClInclude Include="App\InputStateTests.h" />

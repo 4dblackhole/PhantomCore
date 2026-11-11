@@ -29,13 +29,15 @@ void Visual2DInputRouter::Process(
     {
         return;
     }
-    hitTestInvalidated_ = false;
+    // Keep the cache dirty if a user hit-test callback throws.
+    hitTestInvalidated_ = true;
 
     Visual2DNode::HitResult hit{};
     if (input.available)
     {
         hit = canvas.HitTest(input.position);
     }
+    hitTestInvalidated_ = false;
     ChangeHovered(canvas, hit.node, input);
 
     if (input.wheelDelta != 0.0F && hit.node != nullptr)

@@ -36,4 +36,8 @@
     <ClInclude Include="Audio\ManagedPlaybackTests.h"><Filter>Audio</Filter></ClInclude>
     <ClInclude Include="Collision\CollisionTests.h"><Filter>Collision</Filter></ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Collision\Visual2DUpdateTests.cpp"><Filter>Collision</Filter></ClCompile>
+    <ClInclude Include="Collision\Visual2DUpdateTests.h"><Filter>Collision</Filter></ClInclude>
+  </ItemGroup>
 </Project>

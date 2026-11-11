@@ -184,7 +184,7 @@ std::vector<Action> Visual2DCanvas::TakeActions()
 }
 
 Visual2DNode::HitResult Visual2DCanvas::HitTest(
-    const Point position) noexcept
+    const Point position)
 {
     return root_.HitTest(position);
 }

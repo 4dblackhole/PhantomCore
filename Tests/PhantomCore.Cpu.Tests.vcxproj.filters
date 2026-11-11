@@ -38,4 +38,8 @@
     <ClCompile Include="..\Engine\Geometry\Primitive\SphereShape.cpp"><Filter>Engine\Geometry\Primitive</Filter></ClCompile>
     <ClCompile Include="..\Engine\Platform.Win32\Input\Input.cpp"><Filter>Engine\Platform.Win32\Input</Filter></ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Collision\Visual2DUpdateTests.cpp"><Filter>Collision</Filter></ClCompile>
+    <ClInclude Include="Collision\Visual2DUpdateTests.h"><Filter>Collision</Filter></ClInclude>
+  </ItemGroup>
 </Project>

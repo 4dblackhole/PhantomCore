@@ -400,7 +400,7 @@ void CustomCollider2DComponent::SetHandler(HitTestHandler handler)
 }
 
 bool CustomCollider2DComponent::HitTest(
-    const Point localPosition) const noexcept
+    const Point localPosition) const
 {
     return handler_ && handler_(Owner(), localPosition);
 }

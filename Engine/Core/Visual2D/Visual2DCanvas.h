@@ -52,7 +52,7 @@ public:
 private:
     friend class Visual2DInputRouter;
 
-    [[nodiscard]] Visual2DNode::HitResult HitTest(Point position) noexcept;
+    [[nodiscard]] Visual2DNode::HitResult HitTest(Point position);
     void CreateAnchors();
     void UpdateAnchorTransforms();
     [[nodiscard]] static std::size_t AnchorIndex(Anchor anchor) noexcept;

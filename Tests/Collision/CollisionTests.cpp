@@ -1,4 +1,5 @@
 #include "CollisionTests.h"
+#include "Visual2DUpdateTests.h"
 #include "../App/InputStateTests.h"
 #include "PhantomCore.h"
 
@@ -691,6 +692,42 @@ namespace
             "a ray inside the BVH bounds can miss every triangle");
     }
 
+    void TestCustomColliderExceptions()
+    {
+        static_assert(!noexcept(std::declval<Visual2DComponent&>().HitTest(Point{})));
+        static_assert(noexcept(std::declval<RectangleCollider2DComponent&>().HitTest(Point{})));
+        static_assert(noexcept(std::declval<CircleCollider2DComponent&>().HitTest(Point{})));
+        Visual2DCanvas canvas;
+        auto& node = canvas.Root().CreateChild("throwing custom collider");
+        node.SetBounds({-10, -10, 20, 20});
+        int calls{};
+        auto& collider = node.AddComponent<CustomCollider2DComponent>(
+            [&](const Visual2DNode&, Point) -> bool
+            {
+                ++calls;
+                throw std::runtime_error("custom hit-test failure");
+            });
+        node.AddComponent<PointerReceiverComponent>();
+        Visual2DInputRouter router;
+        const PointerInput input{{0, 0}, true, false, false, false, 0.0F, 1};
+        bool caught{};
+        try { router.Process(canvas, input); }
+        catch (const std::runtime_error& error)
+        { caught = std::string_view(error.what()) == "custom hit-test failure"; }
+        Check(caught && calls == 1 && router.HoveredNode() == 0 && router.CapturedNode() == 0,
+            "CustomCollider exceptions propagate through the component, node, Canvas and router");
+        collider.SetHandler([&](const Visual2DNode&, Point)
+        {
+            ++calls;
+            return true;
+        });
+        router.Process(canvas, input);
+        Check(calls == 2 && router.HoveredNode() == node.Id(),
+            "a failed hit test leaves the cache dirty so the same pointer snapshot can retry");
+        router.Process(canvas, input);
+        Check(calls == 2, "a successful retry restores stationary-pointer cache reuse");
+    }
+
     void TestVisual2DRouting()
     {
         Visual2DCanvas canvas(
@@ -1249,6 +1286,8 @@ int TestCollisionAndVisual2D()
     TestThreeDimensionalVolumes();
     TestTriangleAndUvSurfaces();
     TestMeshUvNearestTriangle();
+    TestCustomColliderExceptions();
+    failureCount += TestVisual2DUpdates();
     TestVisual2DRouting();
     TestVisual2DClipping();
     TestVisual2DTreeZOrder();

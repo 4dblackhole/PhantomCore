@@ -121,7 +121,7 @@ class CustomCollider2DComponent final : public Visual2DComponent
 public:
     explicit CustomCollider2DComponent(HitTestHandler handler);
     void SetHandler(HitTestHandler handler);
-    [[nodiscard]] bool HitTest(Point localPosition) const noexcept override;
+    [[nodiscard]] bool HitTest(Point localPosition) const override;
 
 private:
     HitTestHandler handler_;

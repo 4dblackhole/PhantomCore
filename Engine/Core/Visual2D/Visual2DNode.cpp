@@ -93,6 +93,31 @@ bool Rect::Contains(const Point point) const noexcept
         point.x <= x + width && point.y <= y + height;
 }
 
+struct Visual2DNode::UpdateContext final
+{
+    explicit UpdateContext(Visual2DNode& owner) : root(owner)
+    {
+        if (root.activeUpdate_ != nullptr)
+            throw std::logic_error("A Visual2D tree cannot be updated recursively.");
+        root.activeUpdate_ = this;
+    }
+    ~UpdateContext()
+    {
+        running = false;
+        root.activeUpdate_ = nullptr;
+        Visual2DNode::DestroyRetired(*this);
+    }
+
+    Visual2DNode& root;
+    bool running{true};
+    std::size_t removalRevision{};
+    std::unique_ptr<Visual2DComponent> components;
+    Visual2DComponent* componentTail{};
+    std::unique_ptr<Visual2DNode> nodes;
+    Visual2DNode* nodeTail{};
+};
+
+
 Visual2DComponent::~Visual2DComponent() = default;
 
 Visual2DNode& Visual2DComponent::Owner() noexcept
@@ -114,7 +139,7 @@ void Visual2DComponent::AppendDrawPackets(
 {
 }
 
-bool Visual2DComponent::HitTest(const Point) const noexcept
+bool Visual2DComponent::HitTest(const Point) const
 {
     return false;
 }
@@ -366,25 +391,34 @@ Visual2DNode& Visual2DNode::CreateChild(std::string name)
 bool Visual2DNode::RemoveChild(const NodeId id) noexcept
 {
     const auto iterator = std::ranges::find_if(
-        children_,
-        [id](const std::unique_ptr<Visual2DNode>& child)
-        {
-            return child->Id() == id;
-        });
+        children_, [id](const auto& child) { return child->Id() == id; });
     if (iterator == children_.end())
-    {
         return false;
-    }
-    (*iterator)->transform_.SetParent(nullptr);
-    (*iterator)->parent_ = nullptr;
+
+    auto* context = ActiveUpdate();
+    auto removed = std::move(*iterator);
+    removed->transform_.SetParent(nullptr);
+    removed->parent_ = nullptr;
     children_.erase(iterator);
     InvalidatePaintOrder();
+    if (context != nullptr)
+    {
+        removed->retired_ = true;
+        removed->activeUpdate_ = context;
+        auto* tail = removed.get();
+        if (context->nodeTail != nullptr)
+            context->nodeTail->retiredNext_ = std::move(removed);
+        else
+            context->nodes = std::move(removed);
+        context->nodeTail = tail;
+        ++context->removalRevision;
+    }
     return true;
 }
 
 Visual2DNode::HitResult Visual2DNode::HitTest(
     const Point canvasPosition,
-    const std::optional<Rect>& inheritedClip) noexcept
+    const std::optional<Rect>& inheritedClip)
 {
     if (!visible_ || !enabled_)
     {
@@ -490,19 +524,111 @@ const Visual2DNode* Visual2DNode::Find(const NodeId id) const noexcept
     return const_cast<Visual2DNode*>(this)->Find(id);
 }
 
+Visual2DNode::UpdateContext* Visual2DNode::ActiveUpdate() noexcept
+{
+    for (auto* node = this; node != nullptr; node = node->parent_)
+    {
+        if (node->activeUpdate_ != nullptr)
+            return node->activeUpdate_->running ? node->activeUpdate_ : nullptr;
+    }
+    return nullptr;
+}
+
+bool Visual2DNode::HasRetiredAncestor() const noexcept
+{
+    for (auto* node = this; node != nullptr; node = node->parent_)
+    {
+        if (node->retired_)
+            return true;
+    }
+    return false;
+}
+
+void Visual2DNode::RetireComponent(std::unique_ptr<Visual2DComponent> component) noexcept
+{
+    if (auto* context = ActiveUpdate())
+    {
+        auto* tail = component.get();
+        if (context->componentTail != nullptr)
+            context->componentTail->retiredNext_ = std::move(component);
+        else
+            context->components = std::move(component);
+        context->componentTail = tail;
+        ++context->removalRevision;
+    }
+    // Outside Update, the local owner destroys the removed component now.
+}
+
+void Visual2DNode::DestroyRetired(UpdateContext& context) noexcept
+{
+    // Removed components may inspect their still-live Owner in destruction.
+    // Unlink each entry before destruction to avoid a recursive queue teardown.
+    while (context.components)
+    {
+        auto component = std::move(context.components);
+        context.components = std::move(component->retiredNext_);
+    }
+    while (context.nodes)
+    {
+        auto node = std::move(context.nodes);
+        context.nodes = std::move(node->retiredNext_);
+    }
+}
+
 void Visual2DNode::UpdateRecursive(const double elapsedSeconds)
 {
+    UpdateContext context(*this);
+    UpdateRecursive(elapsedSeconds, context);
+}
+
+void Visual2DNode::UpdateRecursive(
+    const double elapsedSeconds, UpdateContext& context)
+{
     if (!visible_)
-    {
         return;
-    }
-    for (const std::unique_ptr<Visual2DComponent>& component : components_)
+
+    // Mark only entries present when this phase starts. Additions before a
+    // later node/child phase are eligible there; additions during it wait.
+    for (const auto& component : components_)
+        component->updatePending_ = true;
+    std::size_t index{};
+    while (index < components_.size())
     {
+        auto* component = components_[index].get();
+        if (!component->updatePending_)
+        {
+            ++index;
+            continue;
+        }
+        component->updatePending_ = false;
+        const auto revision = context.removalRevision;
         component->Update(elapsedSeconds);
+        if (context.removalRevision != revision && HasRetiredAncestor())
+            return;
+        // Vector storage/indices may have changed. The object remains alive
+        // until the root Update ends, so comparing its address is safe.
+        index = index < components_.size() && components_[index].get() == component
+            ? index + 1 : 0;
     }
-    for (const std::unique_ptr<Visual2DNode>& child : children_)
+
+    for (const auto& child : children_)
+        child->updatePending_ = true;
+    index = 0;
+    while (index < children_.size())
     {
-        child->UpdateRecursive(elapsedSeconds);
+        auto* child = children_[index].get();
+        if (!child->updatePending_)
+        {
+            ++index;
+            continue;
+        }
+        child->updatePending_ = false;
+        const auto revision = context.removalRevision;
+        child->UpdateRecursive(elapsedSeconds, context);
+        if (context.removalRevision != revision && HasRetiredAncestor())
+            return;
+        index = index < children_.size() && children_[index].get() == child
+            ? index + 1 : 0;
     }
 }
 
