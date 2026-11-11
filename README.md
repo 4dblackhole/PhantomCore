@@ -3,6 +3,7 @@
 PhantomCore은 Visual Studio 2022, C++20, DirectX 12 기반의 Windows 게임 엔진
 저장소다. 게임 전용 코드는 포함하지 않으며, 소비 프로젝트에는 통합 정적
 라이브러리 `PhantomCore.lib`와 단일 공개 헤더 `PhantomCore.h`를 제공한다.
+공개 타입과 함수는 `PhantomCore` 네임스페이스에 있으며 이전 전역 별칭은 제공하지 않는다.
 3D `MeshInstance`는 Camera의 Perspective/Orthographic 절두체와 로컬 Bounding
 Sphere를 사용해 화면 밖 인스턴스를 제출 전에 제외한다.
 Visual2D Canvas는 화면과 월드 표면 모두 정중앙 원점과 Y-up 논리 좌표를 사용한다.

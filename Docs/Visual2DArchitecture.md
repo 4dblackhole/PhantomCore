@@ -172,18 +172,18 @@ world transform을 사용해야 한다.
 ## 간단한 사용 예
 
 ```cpp
-Visual2DCanvas canvas;
+PhantomCore::Visual2DCanvas canvas;
 canvas.SetViewportSize({1920.0F, 1080.0F});
 
 auto& sprite = canvas.CreateNode(
-    Anchor::BottomCenter,
+    PhantomCore::Anchor::BottomCenter,
     "Character");
 sprite.SetBounds({0.0F, 48.0F, 128.0F, 128.0F});
-sprite.AddComponent<SpriteVisualComponent>().SetImage(image);
-sprite.AddComponent<RectangleCollider2DComponent>();
-sprite.AddComponent<PointerReceiverComponent>(handler);
+sprite.AddComponent<PhantomCore::SpriteVisualComponent>().SetImage(image);
+sprite.AddComponent<PhantomCore::RectangleCollider2DComponent>();
+sprite.AddComponent<PhantomCore::PointerReceiverComponent>(handler);
 
-Visual2DInputRouter input;
+PhantomCore::Visual2DInputRouter input;
 input.Process(canvas, pointerSnapshot);
 
 renderContext.visual2DRendering->SubmitScreen(canvas, renderContext);

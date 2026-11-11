@@ -11,7 +11,8 @@
   `PhantomCore.h`로 Client에 제공된다.
 - Client는 `Engine/SDK/PhantomCore.vcxproj` 하나만 참조하고 `PhantomCore.h`만
   포함한다.
-- 공개 C++ 이름은 전역 범위에 선언한다. 내부 링크에는 익명 네임스페이스를 쓴다.
+- 엔진 공개 C++ 이름은 `PhantomCore` 네임스페이스에 선언한다. 이전 전역 이름의
+  호환 별칭은 제공하지 않는다. 내부 링크에는 익명 네임스페이스를 쓴다.
 - `Engine/SDK/PhantomCore.h`는 생성 파일이다. 직접 수정하지 않고 원본 기능 헤더를
   수정한 뒤 `Engine/SDK/GenerateCoreHeader.ps1`로 다시 생성한다.
 - 프레임 공개 계약은 `Engine/Core/Rendering/RenderContext.h`에 있다. 크기·프레임 번호,
@@ -51,7 +52,7 @@ Client 저장소의 `Docs/ExecutionFlow.md`를 참고한다.
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 {
     auto game = std::make_unique<MyGameClient>();
-    return Run(std::move(game));
+    return PhantomCore::Run(std::move(game));
 }
 ```
 

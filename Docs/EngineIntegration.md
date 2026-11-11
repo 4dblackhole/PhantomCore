@@ -58,6 +58,14 @@ Release 엔진과 `fmod_vc.lib`/`fmod.dll`을 사용한다. 런타임 라이브�
 공통 D3D12 셰이더는 빌드 시 `PhantomCore.lib`에 내장되므로 별도의 engine HLSL
 파일은 필요하지 않다.
 
+## 이름 표기
+
+엔진의 공개 이름은 `PhantomCore` 네임스페이스에 있다. 소비자 헤더는
+`PhantomCore::IGameClient`, `PhantomCore::RenderContext`처럼 명시한다. 구현 파일에서
+짧은 이름을 쓰려면 모든 include 뒤에 `using namespace PhantomCore;`를 둘 수 있다.
+공용 헤더에는 이 using 지시문을 두지 않으며 이전 전역 이름의 별칭은 제공하지 않는다.
+Win32의 `LoadImage` 같은 매크로는 네임스페이스와 별개로 적용된다.
+
 ## 최소 Client 예시
 
 ```cpp
@@ -68,7 +76,7 @@ Release 엔진과 `fmod_vc.lib`/`fmod.dll`을 사용한다. 런타임 라이브�
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 {
     auto game = std::make_unique<MyGameClient>();
-    return Run(std::move(game));
+    return PhantomCore::Run(std::move(game));
 }
 ```
 

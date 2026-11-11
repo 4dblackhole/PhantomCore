@@ -16,7 +16,7 @@
 - 완료된 이미지는 엔진이나 원래 GPU 프레임 자원이 소멸한 뒤에도 future와 함께 유지됩니다.
 
 ```cpp
-std::shared_future<RgbaImage> capture;
+std::shared_future<PhantomCore::RgbaImage> capture;
 
 // Render(context) 안에서 요청합니다.
 capture = context.ReadImage();
@@ -25,7 +25,7 @@ capture = context.ReadImage();
 if (capture.valid() &&
     capture.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
 {
-    const RgbaImage& image = capture.get();
+    const PhantomCore::RgbaImage& image = capture.get();
     // image.pixels[(y * image.width + x) * 4 + channel]
 }
 ```

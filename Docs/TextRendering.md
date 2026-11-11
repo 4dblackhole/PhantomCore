@@ -38,11 +38,11 @@ CPU 제출 목록에 저장하고 내부 `TextRenderingBackend::Flush`가 `DrawI
 ## 글꼴 로드
 
 ```cpp
-FontHandle fileFont =
+PhantomCore::FontHandle fileFont =
     services.textRendering.LoadFontFile(
         L"assets/fonts/MyFont-Regular.ttf");
 
-FontHandle systemFont =
+PhantomCore::FontHandle systemFont =
     services.textRendering.LoadSystemFont(L"Segoe UI");
 ```
 
@@ -55,12 +55,12 @@ Visual2D는 직접 `FontHandle`을 보관하지 않고 backend-neutral `TextCont
 문자열·글꼴 descriptor·크기·정렬을 담아 공유합니다.
 
 ```cpp
-auto& label = CreateLabel(parent, bounds, L"Text", "Label");
-label.GetComponent<TextVisualComponent>()->SetFont(
-    {TextFontSource::System, L"Segoe UI"});
+auto& label = PhantomCore::CreateLabel(parent, bounds, L"Text", "Label");
+label.GetComponent<PhantomCore::TextVisualComponent>()->SetFont(
+    {PhantomCore::TextFontSource::System, L"Segoe UI"});
 
-combo.GetComponent<ComboBoxBehaviorComponent>()->SetFont(
-    {TextFontSource::File,
+combo.GetComponent<PhantomCore::ComboBoxBehaviorComponent>()->SetFont(
+    {PhantomCore::TextFontSource::File,
      L"assets/fonts/MyFont-Regular.ttf"});
 ```
 
@@ -73,13 +73,13 @@ Visual2D renderer는 화면용·texture용 `TextRenderSystem`마다 descriptor�
 ## 문자열 제출
 
 ```cpp
-TextDrawCommand command;
+PhantomCore::TextDrawCommand command;
 command.positionPixels = {24.0F, 24.0F};
 command.layoutSizePixels = {640.0F, 96.0F};
 command.horizontalAlignment =
-    TextHorizontalAlignment::Center;
+    PhantomCore::TextHorizontalAlignment::Center;
 command.verticalAlignment =
-    TextVerticalAlignment::Center;
+    PhantomCore::TextVerticalAlignment::Center;
 command.style.font = fileFont;
 command.style.fontSizePixels = 32.0F;
 command.style.color = {0.9F, 0.2F, 0.4F, 1.0F};

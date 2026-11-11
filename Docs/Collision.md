@@ -51,17 +51,17 @@
 충돌 범위를 의도에 맞게 선택해야 한다.
 
 ```cpp
-Circle2D note{{100.0F, 80.0F}, 16.0F};
+PhantomCore::Circle2D note{{100.0F, 80.0F}, 16.0F};
 
 // 화면 전체를 가로지르는 수학적 직선과 판정한다.
-const bool touchesGuideLine = Intersects(
+const bool touchesGuideLine = PhantomCore::Intersects(
     note,
-    Line2D{{0.0F, 64.0F}, {1.0F, 0.0F}});
+    PhantomCore::Line2D{{0.0F, 64.0F}, {1.0F, 0.0F}});
 
 // 실제 두 끝점 사이만 판정한다.
-const bool touchesLaneSegment = Intersects(
+const bool touchesLaneSegment = PhantomCore::Intersects(
     note,
-    LineSegment2D{{20.0F, 64.0F}, {180.0F, 64.0F}});
+    PhantomCore::LineSegment2D{{20.0F, 64.0F}, {180.0F, 64.0F}});
 ```
 
 방향 벡터의 길이는 1일 필요가 없다. 방향이 0인 `Line2D`, `Line3D`,
@@ -74,10 +74,10 @@ const bool touchesLaneSegment = Intersects(
 있다.
 
 ```cpp
-Plane3D ground{{0.0F, 1.0F, 0.0F}, 0.0F};
-Ray3D mouseRay{{0.0F, 10.0F, 0.0F}, {0.0F, -2.0F, 0.0F}};
+PhantomCore::Plane3D ground{{0.0F, 1.0F, 0.0F}, 0.0F};
+PhantomCore::Ray3D mouseRay{{0.0F, 10.0F, 0.0F}, {0.0F, -2.0F, 0.0F}};
 
-if (const auto hit = Intersect(ground, mouseRay))
+if (const auto hit = PhantomCore::Intersect(ground, mouseRay))
 {
     const DirectX::XMFLOAT3 point = hit->point;
     const DirectX::XMFLOAT3 normalizedNormal = hit->normal;
@@ -94,16 +94,16 @@ if (const auto hit = Intersect(ground, mouseRay))
 ## OBB 판정
 
 ```cpp
-Obb2D first{{0.0F, 0.0F}, {2.0F, 1.0F}, 0.25F};
-Obb2D second{{2.5F, 0.0F}, {1.0F, 1.0F}, -0.4F};
-const bool overlap2D = Intersects(first, second);
+PhantomCore::Obb2D first{{0.0F, 0.0F}, {2.0F, 1.0F}, 0.25F};
+PhantomCore::Obb2D second{{2.5F, 0.0F}, {1.0F, 1.0F}, -0.4F};
+const bool overlap2D = PhantomCore::Intersects(first, second);
 
-Obb3D worldBox{
+PhantomCore::Obb3D worldBox{
     {0.0F, 0.0F, 0.0F},
     {1.0F, 2.0F, 1.0F},
     {0.0F, 0.0F, 0.0F, 1.0F}};
-Sphere3D player{{1.5F, 0.0F, 0.0F}, 0.75F};
-const bool overlap3D = Intersects(player, worldBox);
+PhantomCore::Sphere3D player{{1.5F, 0.0F, 0.0F}, 0.75F};
+const bool overlap3D = PhantomCore::Intersects(player, worldBox);
 ```
 
 2D OBB 대 OBB는 네 로컬 축을 검사하는 SAT를 사용한다. 3D OBB 판정은
@@ -117,11 +117,11 @@ Windows SDK의 DirectXCollision 구현을 사용하되 공개 API에는 해당 �
 `VolumeIntersection::Outside`, `Intersecting`, `Inside`를 반환한다.
 
 ```cpp
-const ViewFrustum& frustum = camera.Frustum();
-const Sphere3D worldBounds = TransformSphere(
+const PhantomCore::ViewFrustum& frustum = camera.Frustum();
+const PhantomCore::Sphere3D worldBounds = PhantomCore::TransformSphere(
     localBounds,
     transform.WorldMatrix());
-const VolumeIntersection visibility = Classify(frustum, worldBounds);
+const PhantomCore::VolumeIntersection visibility = PhantomCore::Classify(frustum, worldBounds);
 ```
 
 `TransformSphere`는 로컬 중심을 월드 행렬로 변환하고 반지름에는 월드 축 중 가장

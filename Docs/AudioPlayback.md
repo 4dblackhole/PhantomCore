@@ -35,14 +35,14 @@ software mixer sample rate, QPC tick과 QPC frequency를 반환한다. Client는
 기준으로 사용하지 않는다.
 
 ```cpp
-const AudioClockSnapshot clock =
+const PhantomCore::AudioClockSnapshot clock =
     audio.CaptureClockSnapshot();
 
-AudioPlaybackSettings playback;
+PhantomCore::AudioPlaybackSettings playback;
 playback.startDspClock = scheduledDspClock;
 playback.volume = 0.85F;
 
-std::unique_ptr<AudioVoice> voice =
+std::unique_ptr<PhantomCore::AudioVoice> voice =
     clip->Play(playback, hitSoundBus.get(), error);
 ```
 
@@ -102,8 +102,8 @@ Voice를 먼저 정지해야 하며 API/Update는 같은 Client thread에서 호
 ```cpp
 // A SceneGameClient hook: registration/loading remains Client policy.
 std::string error;
-std::shared_ptr<AudioClip> clip = services.audio.LoadSound(
-    path, AudioLoadMode::Stream, error);
+std::shared_ptr<PhantomCore::AudioClip> clip = services.audio.LoadSound(
+    path, PhantomCore::AudioLoadMode::Stream, error);
 const auto id = AudioPlayback().Play(clip, {}, nullptr, error);
 if (auto* voice = AudioPlayback().FindVoice(id))
 {

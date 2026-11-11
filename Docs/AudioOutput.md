@@ -77,7 +77,7 @@ RAII `AudioClip`??諛섑솚?섎ŉ Client媛 ??`std::unique_ptr`???섎챸??愿�
 
 ```cpp
 std::string error;
-std::unique_ptr<AudioClip> hitSound =
+std::unique_ptr<PhantomCore::AudioClip> hitSound =
     audio.LoadSound(path, error);
 
 if (hitSound != nullptr)

@@ -42,19 +42,19 @@ Mesh/Text의 공개 클래스는 생성·제출 계약을 제공하고 GPU 상�
 
 ```cpp
 scenes.RegisterScene<MyScene>(
-    "Main", SceneRetention::KeepAlive, std::ref(ScreenVisuals()));
+    "Main", PhantomCore::SceneRetention::KeepAlive, std::ref(ScreenVisuals()));
 ```
 
 Scene은 관리자가 소유할 Canvas와 이미지를 등록한다. `BeginScene`과 `EndScene`은
 KeepAlive Canvas의 표시 상태만 전환하며, `Render`에서 제출하지 않는다.
 
 ```cpp
-void MyScene::Initialize(const EngineServices&)
+void MyScene::Initialize(const PhantomCore::EngineServices&)
 {
     canvasHandle_ = visuals_.CreateOwnedCanvas();
     canvas_ = canvasHandle_.Get();
     const auto image = visuals_.RegisterImage("assets/images/player.png");
-    CreateSprite(
+    PhantomCore::CreateSprite(
         canvas_->Root(), {-64.0F, -64.0F, 128.0F, 128.0F}, image);
 }
 
@@ -68,7 +68,7 @@ void MyScene::EndScene() noexcept
     canvasHandle_.SetVisible(false);
 }
 
-void MyScene::Render(const RenderContext&)
+void MyScene::Render(const PhantomCore::RenderContext&)
 {
 }
 ```
@@ -84,7 +84,7 @@ Canvas를 제거한다. handle은 관리자를 빌려 쓰므로 `ScreenVisual2DM
 이미지와 Canvas 렌더 타깃을 만든다.
 
 ```cpp
-void ExampleScene::Initialize(const EngineServices& services)
+void ExampleScene::Initialize(const PhantomCore::EngineServices& services)
 {
     panelImage_ = services.visual2DRendering.LoadImage(imagePath);
     panelTarget_ =
@@ -95,7 +95,7 @@ void ExampleScene::Initialize(const EngineServices& services)
 Render에서는 현재 프레임이 보유한 렌더러 포인터를 사용한다.
 
 ```cpp
-void ExampleScene::Render(const RenderContext& context)
+void ExampleScene::Render(const PhantomCore::RenderContext& context)
 {
     context.visual2DRendering->SubmitScreen(canvas_, context);
     context.visual2DRendering->RenderToTexture(
