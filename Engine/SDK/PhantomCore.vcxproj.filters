@@ -117,6 +117,7 @@
     <ClInclude Include="..\Core\Rendering\ImageReadback.h"><Filter>Core\Rendering</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Mesh\MeshRendering.h"><Filter>Graphics.D3D12\Mesh</Filter></ClInclude>
+    <ClInclude Include="..\Graphics.D3D12\Texture\D3D12TextureRendering.h"><Filter>Graphics.D3D12\Texture</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Texture\TextureManager.h"><Filter>Graphics.D3D12\Texture</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Text\TextRendering.h"><Filter>Graphics.D3D12\Text</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Shader\ShaderCompiler.h"><Filter>Graphics.D3D12\Shader</Filter></ClInclude>

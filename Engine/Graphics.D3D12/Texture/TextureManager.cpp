@@ -1,8 +1,14 @@
 #include "Texture/TextureManager.h"
+#include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
 
 #include <Windows.h>
 #include <wincodec.h>
+#include <wrl/client.h>
+
+#include <deque>
+#include <future>
+#include <map>
 
 #include <algorithm>
 #include <array>
@@ -168,7 +174,93 @@ namespace
 
 }
 
-struct TextureManager::DescriptorBlockPool final
+struct TextureManager::Impl final
+{
+    Impl() = default;
+    ~Impl();
+
+    void Initialize(
+        ID3D12Device& device,
+        ID3D12CommandQueue& commandQueue);
+    void Shutdown() noexcept;
+    bool PrepareImages(std::span<const std::filesystem::path> paths, std::string &error);
+    void CollectCompletedUploads();
+
+    [[nodiscard]] TextureSetHandle LoadTextureSet(
+        std::span<const std::filesystem::path> paths);
+    // Adds one independently sized texture to an existing descriptor
+    // table without allocating another 64-entry block. The returned
+    // handle aliases the same TextureSet and remains valid for materials
+    // that already reference it.
+    [[nodiscard]] TextureSetHandle AppendTexture(
+        const TextureSetHandle& textureSet,
+        const std::filesystem::path& path);
+    [[nodiscard]] RenderTargetTextureHandle CreateRenderTargetTexture(
+        std::uint32_t width,
+        std::uint32_t height);
+
+    [[nodiscard]] ID3D12DescriptorHeap* DescriptorHeap() const noexcept;
+    [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptorStart(
+        const TextureSetHandle& textureSet) const;
+
+    // TextureManager owns render-target resource state and descriptor
+    // details. Render features request a pass without reaching into the
+    // concrete RenderTargetTexture implementation.
+    void BeginRenderTargetPass(
+        ID3D12GraphicsCommandList& commandList,
+        const RenderTargetTextureHandle& target,
+        const DirectX::XMFLOAT4& clearColor);
+    void EndRenderTargetPass(
+        ID3D12GraphicsCommandList& commandList,
+        const RenderTargetTextureHandle& target);
+
+    struct DecodedImage;
+    struct DescriptorBlockPool;
+
+    void ValidateTextureSetRequest(
+        std::span<const std::filesystem::path> paths) const;
+    [[nodiscard]] static DecodedImage DecodeImage(
+        const std::filesystem::path& path);
+    DecodedImage TakePreparedImage(const std::filesystem::path &path);
+    void PollPreparation();
+    void BeginUploadCommands();
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE
+        InitializeDescriptorBlock(TextureSet& textureSet);
+    void RecordTextureUpload(
+        const DecodedImage& image,
+        std::size_t descriptorIndex,
+        D3D12_CPU_DESCRIPTOR_HANDLE descriptorBlockStart,
+        TextureSet& textureSet,
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>&
+            uploadBuffers);
+    void ExecuteUpload(std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> buffers, TextureSetHandle target);
+    struct PendingUpload
+    {
+        std::uint64_t fence{};
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commands;
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> buffers;
+        TextureSetHandle target;
+    };
+    std::deque<PendingUpload> pendingUploads_;
+    std::map<std::filesystem::path, std::shared_ptr<DecodedImage>> preparedImages_;
+    std::future<decltype(preparedImages_)> preparation_;
+    std::string preparationError_;
+
+    ID3D12Device* device_{};
+    ID3D12CommandQueue* commandQueue_{};
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap_;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> uploadAllocator_;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> uploadCommandList_;
+    Microsoft::WRL::ComPtr<ID3D12Fence> uploadFence_;
+    HANDLE uploadFenceEvent_{};
+    std::uint64_t nextUploadFenceValue_{1};
+    std::uint32_t descriptorSize_{};
+    std::shared_ptr<DescriptorBlockPool> descriptorBlocks_;
+    bool initialized_{};
+};
+
+struct TextureManager::Impl::DescriptorBlockPool final
 {
     struct Lease final
     {
@@ -201,7 +293,7 @@ struct TextureManager::DescriptorBlockPool final
     std::array<bool, DescriptorHeapCapacity / MaxTexturesPerSet> used{};
 };
 
-struct TextureManager::DecodedImage final
+struct TextureManager::Impl::DecodedImage final
 {
     std::uint32_t width{};
     std::uint32_t height{};
@@ -264,7 +356,7 @@ UvTransform TextureSet::MakeCoverUvTransform(
 
 RenderTargetTexture::~RenderTargetTexture() = default;
 
-void TextureManager::PollPreparation()
+void TextureManager::Impl::PollPreparation()
 {
     if (!preparation_.valid() || preparation_.wait_for(std::chrono::seconds{0}) != std::future_status::ready)
         return;
@@ -278,7 +370,7 @@ void TextureManager::PollPreparation()
     }
 }
 
-bool TextureManager::PrepareImages(std::span<const std::filesystem::path> paths, std::string &error)
+bool TextureManager::Impl::PrepareImages(std::span<const std::filesystem::path> paths, std::string &error)
 {
     if (!initialized_)
         throw std::logic_error("Image preparation requires an initialized texture manager.");
@@ -314,7 +406,7 @@ bool TextureManager::PrepareImages(std::span<const std::filesystem::path> paths,
     return false;
 }
 
-TextureManager::DecodedImage TextureManager::TakePreparedImage(const std::filesystem::path &path)
+TextureManager::Impl::DecodedImage TextureManager::Impl::TakePreparedImage(const std::filesystem::path &path)
 {
     PollPreparation();
     if (auto cached = preparedImages_.find(path.lexically_normal()); cached != preparedImages_.end())
@@ -326,12 +418,12 @@ TextureManager::DecodedImage TextureManager::TakePreparedImage(const std::filesy
     return DecodeImage(path);
 }
 
-TextureManager::~TextureManager()
+TextureManager::Impl::~Impl()
 {
     Shutdown();
 }
 
-void TextureManager::Initialize(
+void TextureManager::Impl::Initialize(
     ID3D12Device& device,
     ID3D12CommandQueue& commandQueue)
 {
@@ -404,7 +496,7 @@ void TextureManager::Initialize(
     }
 }
 
-void TextureManager::Shutdown() noexcept
+void TextureManager::Impl::Shutdown() noexcept
 {
     // The worker owns only copied paths. Join at teardown, never in a frame,
     // so a subsequent Initialize cannot consume an earlier preparation job.
@@ -453,7 +545,7 @@ void TextureManager::Shutdown() noexcept
     initialized_ = false;
 }
 
-TextureSetHandle TextureManager::LoadTextureSet(
+TextureSetHandle TextureManager::Impl::LoadTextureSet(
     const std::span<const std::filesystem::path> paths)
 {
     ValidateTextureSetRequest(paths);
@@ -504,7 +596,7 @@ TextureSetHandle TextureManager::LoadTextureSet(
     return textureSet;
 }
 
-TextureSetHandle TextureManager::AppendTexture(
+TextureSetHandle TextureManager::Impl::AppendTexture(
     const TextureSetHandle& textureSet,
     const std::filesystem::path& path)
 {
@@ -555,7 +647,7 @@ TextureSetHandle TextureManager::AppendTexture(
     return textureSet;
 }
 
-RenderTargetTextureHandle TextureManager::CreateRenderTargetTexture(
+RenderTargetTextureHandle TextureManager::Impl::CreateRenderTargetTexture(
     const std::uint32_t width,
     const std::uint32_t height)
 {
@@ -620,7 +712,7 @@ RenderTargetTextureHandle TextureManager::CreateRenderTargetTexture(
     return target;
 }
 
-void TextureManager::ValidateTextureSetRequest(
+void TextureManager::Impl::ValidateTextureSetRequest(
     const std::span<const std::filesystem::path> paths) const
 {
     if (!initialized_ || device_ == nullptr || commandQueue_ == nullptr)
@@ -635,7 +727,7 @@ void TextureManager::ValidateTextureSetRequest(
     }
 }
 
-TextureManager::DecodedImage TextureManager::DecodeImage(
+TextureManager::Impl::DecodedImage TextureManager::Impl::DecodeImage(
     const std::filesystem::path& path)
 {
     ComPtr<IWICImagingFactory> factory;
@@ -711,7 +803,7 @@ TextureManager::DecodedImage TextureManager::DecodeImage(
     return image;
 }
 
-void TextureManager::BeginUploadCommands()
+void TextureManager::Impl::BeginUploadCommands()
 {
     CollectCompletedUploads();
     if (!uploadAllocator_)
@@ -730,7 +822,7 @@ void TextureManager::BeginUploadCommands()
     }
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE TextureManager::InitializeDescriptorBlock(
+D3D12_CPU_DESCRIPTOR_HANDLE TextureManager::Impl::InitializeDescriptorBlock(
     TextureSet& textureSet)
 {
     CollectCompletedUploads();
@@ -766,7 +858,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE TextureManager::InitializeDescriptorBlock(
     return cpuBlockStart;
 }
 
-void TextureManager::RecordTextureUpload(
+void TextureManager::Impl::RecordTextureUpload(
     const DecodedImage& image,
     const std::size_t descriptorIndex,
     const D3D12_CPU_DESCRIPTOR_HANDLE descriptorBlockStart,
@@ -894,7 +986,7 @@ void TextureManager::RecordTextureUpload(
     uploadBuffers.push_back(std::move(uploadBuffer));
 }
 
-void TextureManager::CollectCompletedUploads()
+void TextureManager::Impl::CollectCompletedUploads()
 {
     if (!uploadFence_)
         return;
@@ -903,7 +995,7 @@ void TextureManager::CollectCompletedUploads()
         pendingUploads_.pop_front();
 }
 
-void TextureManager::ExecuteUpload(std::vector<ComPtr<ID3D12Resource>> buffers, TextureSetHandle target)
+void TextureManager::Impl::ExecuteUpload(std::vector<ComPtr<ID3D12Resource>> buffers, TextureSetHandle target)
 {
     const auto fenceValue = nextUploadFenceValue_++;
     pendingUploads_.push_back(
@@ -920,12 +1012,12 @@ void TextureManager::ExecuteUpload(std::vector<ComPtr<ID3D12Resource>> buffers, 
     D3D12Detail::ThrowIfFailed(signalResult, "Signal texture upload fence");
 }
 
-ID3D12DescriptorHeap* TextureManager::DescriptorHeap() const noexcept
+ID3D12DescriptorHeap* TextureManager::Impl::DescriptorHeap() const noexcept
 {
     return descriptorHeap_.Get();
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GpuDescriptorStart(
+D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::Impl::GpuDescriptorStart(
     const TextureSetHandle& textureSet) const
 {
     if (!initialized_ || textureSet == nullptr)
@@ -936,7 +1028,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GpuDescriptorStart(
     return RequireTextureSet(textureSet).gpuDescriptorStart;
 }
 
-void TextureManager::BeginRenderTargetPass(
+void TextureManager::Impl::BeginRenderTargetPass(
     ID3D12GraphicsCommandList& commandList,
     const RenderTargetTextureHandle& target,
     const DirectX::XMFLOAT4& clearColor)
@@ -991,7 +1083,7 @@ void TextureManager::BeginRenderTargetPass(
         concreteTarget.rtv, color, 0, nullptr);
 }
 
-void TextureManager::EndRenderTargetPass(
+void TextureManager::Impl::EndRenderTargetPass(
     ID3D12GraphicsCommandList& commandList,
     const RenderTargetTextureHandle& target)
 {
@@ -1019,4 +1111,75 @@ void TextureManager::EndRenderTargetPass(
     commandList.ResourceBarrier(1, &barrier);
     concreteTarget.state =
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+}
+
+TextureManager::TextureManager()
+    : implementation_(std::make_unique<Impl>())
+{
+}
+TextureManager::~TextureManager() = default;
+
+bool TextureManager::PrepareImages(
+    const std::span<const std::filesystem::path> paths, std::string& error)
+{
+    return implementation_->PrepareImages(paths, error);
+}
+
+TextureSetHandle TextureManager::LoadTextureSet(
+    const std::span<const std::filesystem::path> paths)
+{
+    return implementation_->LoadTextureSet(paths);
+}
+
+TextureSetHandle TextureManager::AppendTexture(
+    const TextureSetHandle& textureSet, const std::filesystem::path& path)
+{
+    return implementation_->AppendTexture(textureSet, path);
+}
+
+RenderTargetTextureHandle TextureManager::CreateRenderTargetTexture(
+    const std::uint32_t width, const std::uint32_t height)
+{
+    return implementation_->CreateRenderTargetTexture(width, height);
+}
+
+void TextureRenderingBackend::Initialize(TextureManager& textures,
+    ID3D12Device& device, ID3D12CommandQueue& commandQueue)
+{
+    textures.implementation_->Initialize(device, commandQueue);
+}
+
+void TextureRenderingBackend::Shutdown(TextureManager& textures) noexcept
+{
+    textures.implementation_->Shutdown();
+}
+
+void TextureRenderingBackend::CollectCompletedUploads(TextureManager& textures)
+{
+    textures.implementation_->CollectCompletedUploads();
+}
+
+ID3D12DescriptorHeap* TextureRenderingBackend::DescriptorHeap(
+    const TextureManager& textures) noexcept
+{
+    return textures.implementation_->DescriptorHeap();
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE TextureRenderingBackend::GpuDescriptorStart(
+    const TextureManager& textures, const TextureSetHandle& textureSet)
+{
+    return textures.implementation_->GpuDescriptorStart(textureSet);
+}
+
+void TextureRenderingBackend::BeginRenderTargetPass(TextureManager& textures,
+    ID3D12GraphicsCommandList& commands, const RenderTargetTextureHandle& target,
+    const DirectX::XMFLOAT4& clearColor)
+{
+    textures.implementation_->BeginRenderTargetPass(commands, target, clearColor);
+}
+
+void TextureRenderingBackend::EndRenderTargetPass(TextureManager& textures,
+    ID3D12GraphicsCommandList& commands, const RenderTargetTextureHandle& target)
+{
+    textures.implementation_->EndRenderTargetPass(commands, target);
 }

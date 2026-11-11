@@ -2713,14 +2713,9 @@ private:
 // Texture feature: WIC decoding, uploads, and SRV descriptor sets.
 
 #include <DirectXMath.h>
-#include <d3d12.h>
-#include <wrl/client.h>
 
 #include <cstdint>
 #include <filesystem>
-#include <future>
-#include <map>
-#include <deque>
 #include <string>
 #include <memory>
 #include <span>
@@ -2803,92 +2798,25 @@ using RenderTargetTextureHandle =
 class TextureManager final
 {
 public:
-    TextureManager() = default;
+    TextureManager();
     ~TextureManager();
 
     TextureManager(const TextureManager&) = delete;
     TextureManager& operator=(const TextureManager&) = delete;
 
-    void Initialize(
-        ID3D12Device& device,
-        ID3D12CommandQueue& commandQueue);
-    void Shutdown() noexcept;
-    bool PrepareImages(std::span<const std::filesystem::path> paths, std::string &error);
-    void CollectCompletedUploads();
-
+    bool PrepareImages(std::span<const std::filesystem::path> paths, std::string& error);
     [[nodiscard]] TextureSetHandle LoadTextureSet(
         std::span<const std::filesystem::path> paths);
-    // Adds one independently sized texture to an existing descriptor
-    // table without allocating another 64-entry block. The returned
-    // handle aliases the same TextureSet and remains valid for materials
-    // that already reference it.
+    // Append into the same descriptor table while retaining existing slots.
     [[nodiscard]] TextureSetHandle AppendTexture(
-        const TextureSetHandle& textureSet,
-        const std::filesystem::path& path);
+        const TextureSetHandle& textureSet, const std::filesystem::path& path);
     [[nodiscard]] RenderTargetTextureHandle CreateRenderTargetTexture(
-        std::uint32_t width,
-        std::uint32_t height);
-
-    [[nodiscard]] ID3D12DescriptorHeap* DescriptorHeap() const noexcept;
-    [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptorStart(
-        const TextureSetHandle& textureSet) const;
-
-    // TextureManager owns render-target resource state and descriptor
-    // details. Render features request a pass without reaching into the
-    // concrete RenderTargetTexture implementation.
-    void BeginRenderTargetPass(
-        ID3D12GraphicsCommandList& commandList,
-        const RenderTargetTextureHandle& target,
-        const DirectX::XMFLOAT4& clearColor);
-    void EndRenderTargetPass(
-        ID3D12GraphicsCommandList& commandList,
-        const RenderTargetTextureHandle& target);
+        std::uint32_t width, std::uint32_t height);
 
 private:
-    struct DecodedImage;
-    struct DescriptorBlockPool;
-
-    void ValidateTextureSetRequest(
-        std::span<const std::filesystem::path> paths) const;
-    [[nodiscard]] static DecodedImage DecodeImage(
-        const std::filesystem::path& path);
-    DecodedImage TakePreparedImage(const std::filesystem::path &path);
-    void PollPreparation();
-    void BeginUploadCommands();
-    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE
-        InitializeDescriptorBlock(TextureSet& textureSet);
-    void RecordTextureUpload(
-        const DecodedImage& image,
-        std::size_t descriptorIndex,
-        D3D12_CPU_DESCRIPTOR_HANDLE descriptorBlockStart,
-        TextureSet& textureSet,
-        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>&
-            uploadBuffers);
-    void ExecuteUpload(std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> buffers, TextureSetHandle target);
-    struct PendingUpload
-    {
-        std::uint64_t fence{};
-        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commands;
-        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> buffers;
-        TextureSetHandle target;
-    };
-    std::deque<PendingUpload> pendingUploads_;
-    std::map<std::filesystem::path, std::shared_ptr<DecodedImage>> preparedImages_;
-    std::future<decltype(preparedImages_)> preparation_;
-    std::string preparationError_;
-
-    ID3D12Device* device_{};
-    ID3D12CommandQueue* commandQueue_{};
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap_;
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> uploadAllocator_;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> uploadCommandList_;
-    Microsoft::WRL::ComPtr<ID3D12Fence> uploadFence_;
-    HANDLE uploadFenceEvent_{};
-    std::uint64_t nextUploadFenceValue_{1};
-    std::uint32_t descriptorSize_{};
-    std::shared_ptr<DescriptorBlockPool> descriptorBlocks_;
-    bool initialized_{};
+    friend struct TextureRenderingBackend;
+    struct Impl;
+    std::unique_ptr<Impl> implementation_;
 };
 // ===== END Engine\Graphics.D3D12\Texture\TextureManager.h =====
 
@@ -2962,6 +2890,8 @@ inline constexpr MeshVertexLayout
 class GpuMesh final
 {
 public:
+    ~GpuMesh();
+
     GpuMesh(const GpuMesh&) = delete;
     GpuMesh& operator=(const GpuMesh&) = delete;
 
@@ -2973,12 +2903,10 @@ public:
 private:
     friend class MeshRenderSystem;
 
-    GpuMesh() = default;
+    GpuMesh();
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> indexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
-    D3D12_INDEX_BUFFER_VIEW indexBufferView_{};
+    struct Impl;
+    std::unique_ptr<Impl> implementation_;
     MeshVertexLayout vertexLayout_{MeshVertexLayout::Unsupported};
     std::uint32_t indexCount_{};
     Sphere3D localBoundingSphere_{};
@@ -2998,6 +2926,8 @@ enum class BuiltInMaterial : std::uint8_t
 class MaterialTemplate final
 {
 public:
+    ~MaterialTemplate();
+
     MaterialTemplate(const MaterialTemplate&) = delete;
     MaterialTemplate& operator=(const MaterialTemplate&) = delete;
 
@@ -3008,15 +2938,15 @@ private:
     friend class MaterialInstance;
     friend class MeshRenderSystem;
 
-    MaterialTemplate() = default;
+    MaterialTemplate();
 
     BuiltInMaterial type_{BuiltInMaterial::UnlitVertexColor};
     MeshVertexLayout requiredVertexLayout_{
         MeshVertexLayout::PositionColor};
     bool usesTextureSet_{};
     bool alphaBlended_{};
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+    struct Impl;
+    std::unique_ptr<Impl> implementation_;
 };
 
 using MaterialTemplateHandle = std::shared_ptr<const MaterialTemplate>;

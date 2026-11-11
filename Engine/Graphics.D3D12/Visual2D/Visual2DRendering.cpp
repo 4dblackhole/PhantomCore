@@ -1,5 +1,6 @@
 #include "Visual2D/D3D12Visual2DRenderer.h"
 #include "Visual2D/ImageCacheKey.h"
+#include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
 #include "Renderer/D3D12Renderer.h"
 #include "Mesh/MeshRendering.h"
@@ -845,7 +846,7 @@ struct D3D12Visual2DRenderer::Impl
             visuals.size() * sizeof(VisualInstance));
 
         ID3D12DescriptorHeap* descriptorHeaps[]{
-            meshRendering->Textures().DescriptorHeap()};
+            TextureRenderingBackend::DescriptorHeap(meshRendering->Textures())};
         commandList.SetDescriptorHeaps(1, descriptorHeaps);
         commandList.SetGraphicsRootSignature(visualRootSignature.Get());
         commandList.SetPipelineState(
@@ -866,7 +867,7 @@ struct D3D12Visual2DRenderer::Impl
             0);
         commandList.SetGraphicsRootDescriptorTable(
             2,
-            meshRendering->Textures().GpuDescriptorStart(textures));
+            TextureRenderingBackend::GpuDescriptorStart(meshRendering->Textures(), textures));
         commandList.DrawInstanced(
             6,
             static_cast<UINT>(visuals.size()),
@@ -1277,8 +1278,8 @@ void D3D12Visual2DRenderer::RenderToTexture(
 
     ID3D12GraphicsCommandList& commandList = *frame->commandList;
     TextureManager& textureManager = state.meshRendering->Textures();
-    textureManager.BeginRenderTargetPass(
-        commandList,
+    TextureRenderingBackend::BeginRenderTargetPass(
+        textureManager, commandList,
         target,
         {0.0F, 0.0F, 0.0F, 0.0F});
     const std::uint32_t targetWidth = target->Width();
@@ -1291,7 +1292,7 @@ void D3D12Visual2DRenderer::RenderToTexture(
     state.RecordCanvases({commandList, context.frameIndex, targetWidth, targetHeight, context.renderIndex, false},
         std::span{&drawing, 1});
 
-    textureManager.EndRenderTargetPass(commandList, target);
+    TextureRenderingBackend::EndRenderTargetPass(textureManager, commandList, target);
 
     commandList.RSSetViewports(1, &frame->viewport);
     commandList.RSSetScissorRects(1, &frame->scissorRectangle);

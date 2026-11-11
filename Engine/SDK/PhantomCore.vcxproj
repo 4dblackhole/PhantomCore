@@ -94,6 +94,7 @@
     <ClInclude Include="..\Core\Rendering\ImageReadback.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h" />
     <ClInclude Include="..\Graphics.D3D12\Mesh\MeshRendering.h" />
+    <ClInclude Include="..\Graphics.D3D12\Texture\D3D12TextureRendering.h" />
     <ClInclude Include="..\Graphics.D3D12\Texture\TextureManager.h" />
     <ClInclude Include="..\Graphics.D3D12\Text\TextRendering.h" />
     <ClInclude Include="..\Graphics.D3D12\Shader\ShaderCompiler.h" />

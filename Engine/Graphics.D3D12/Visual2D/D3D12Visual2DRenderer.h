@@ -6,6 +6,8 @@
 
 #include "Visual2D/Visual2DRendering.h"
 
+#include <d3d12.h>
+
 #include <memory>
 
 

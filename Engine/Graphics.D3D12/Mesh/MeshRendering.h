@@ -72,6 +72,8 @@ inline constexpr MeshVertexLayout
 class GpuMesh final
 {
 public:
+    ~GpuMesh();
+
     GpuMesh(const GpuMesh&) = delete;
     GpuMesh& operator=(const GpuMesh&) = delete;
 
@@ -83,12 +85,10 @@ public:
 private:
     friend class MeshRenderSystem;
 
-    GpuMesh() = default;
+    GpuMesh();
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> indexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
-    D3D12_INDEX_BUFFER_VIEW indexBufferView_{};
+    struct Impl;
+    std::unique_ptr<Impl> implementation_;
     MeshVertexLayout vertexLayout_{MeshVertexLayout::Unsupported};
     std::uint32_t indexCount_{};
     Sphere3D localBoundingSphere_{};
@@ -108,6 +108,8 @@ enum class BuiltInMaterial : std::uint8_t
 class MaterialTemplate final
 {
 public:
+    ~MaterialTemplate();
+
     MaterialTemplate(const MaterialTemplate&) = delete;
     MaterialTemplate& operator=(const MaterialTemplate&) = delete;
 
@@ -118,15 +120,15 @@ private:
     friend class MaterialInstance;
     friend class MeshRenderSystem;
 
-    MaterialTemplate() = default;
+    MaterialTemplate();
 
     BuiltInMaterial type_{BuiltInMaterial::UnlitVertexColor};
     MeshVertexLayout requiredVertexLayout_{
         MeshVertexLayout::PositionColor};
     bool usesTextureSet_{};
     bool alphaBlended_{};
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+    struct Impl;
+    std::unique_ptr<Impl> implementation_;
 };
 
 using MaterialTemplateHandle = std::shared_ptr<const MaterialTemplate>;

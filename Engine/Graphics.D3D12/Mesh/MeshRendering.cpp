@@ -1,4 +1,5 @@
 #include "Mesh/MeshRendering.h"
+#include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
 
 #include "Shader/ShaderCompiler.h"
@@ -110,6 +111,31 @@ namespace
     }
 }
 
+struct GpuMesh::Impl final
+{
+    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> indexBuffer_;
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
+    D3D12_INDEX_BUFFER_VIEW indexBufferView_{};
+};
+
+struct MaterialTemplate::Impl final
+{
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+};
+
+GpuMesh::GpuMesh()
+    : implementation_(std::make_unique<Impl>())
+{
+}
+GpuMesh::~GpuMesh() = default;
+MaterialTemplate::MaterialTemplate()
+    : implementation_(std::make_unique<Impl>())
+{
+}
+MaterialTemplate::~MaterialTemplate() = default;
+
 MeshVertexLayout GpuMesh::VertexLayout() const noexcept
 {
     return vertexLayout_;
@@ -191,7 +217,7 @@ void MeshRenderSystem::Initialize(
 
     try
     {
-        textureManager_.Initialize(device, commandQueue);
+        TextureRenderingBackend::Initialize(textureManager_, device, commandQueue);
 
         // MaterialTemplate creation compiles the common engine shader and
         // owns its root signature/PSO.  Client scenes never create them.
@@ -235,7 +261,7 @@ void MeshRenderSystem::Shutdown() noexcept
     unlitVertexColorTextureArrayAlphaBlendTemplate_.reset();
     unlitVertexColorTextureArrayTemplate_.reset();
     unlitVertexColorTemplate_.reset();
-    textureManager_.Shutdown();
+    TextureRenderingBackend::Shutdown(textureManager_);
     device_ = nullptr;
     initialized_ = false;
     frameOpen_ = false;
@@ -306,7 +332,7 @@ void MeshRenderSystem::BeginFrame(const std::uint32_t frameIndex)
     }
 
     currentFrameIndex_ = frameIndex;
-    textureManager_.CollectCompletedUploads();
+    TextureRenderingBackend::CollectCompletedUploads(textureManager_);
     // D3D12Renderer waited for this frame index before calling us, so GPU
     // resources retained by its previous submission are now releasable.
     instanceBuffers_[currentFrameIndex_].retainedMaterials.clear();
@@ -412,7 +438,7 @@ void MeshRenderSystem::Flush(ID3D12GraphicsCommandList& commandList)
     // The descriptor heap is shared by every TextureSet.  Materials bind
     // only their own fixed-size block before drawing.
     ID3D12DescriptorHeap* descriptorHeaps[]{
-        textureManager_.DescriptorHeap()};
+        TextureRenderingBackend::DescriptorHeap(textureManager_)};
     commandList.SetDescriptorHeaps(1, descriptorHeaps);
 
     std::size_t batchStart = 0;
@@ -518,15 +544,15 @@ void MeshRenderSystem::DrawBatch(
     const PendingItem& first = pendingItems_[batchStart];
     const MaterialTemplateHandle& materialTemplate =
         first.material->Template();
-    commandList.SetPipelineState(materialTemplate->pipelineState_.Get());
+    commandList.SetPipelineState(materialTemplate->implementation_->pipelineState_.Get());
     commandList.SetGraphicsRootSignature(
-        materialTemplate->rootSignature_.Get());
+        materialTemplate->implementation_->rootSignature_.Get());
     if (materialTemplate->usesTextureSet_)
     {
         commandList.SetGraphicsRootDescriptorTable(
             0,
-            textureManager_.GpuDescriptorStart(
-                first.material->Textures()));
+            TextureRenderingBackend::GpuDescriptorStart(
+                textureManager_, first.material->Textures()));
     }
     commandList.IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -540,13 +566,13 @@ void MeshRenderSystem::DrawBatch(
     instanceView.StrideInBytes = sizeof(InstanceData);
 
     const std::array vertexViews{
-        first.mesh->vertexBufferView_,
+        first.mesh->implementation_->vertexBufferView_,
         instanceView};
     commandList.IASetVertexBuffers(
         0,
         static_cast<UINT>(vertexViews.size()),
         vertexViews.data());
-    commandList.IASetIndexBuffer(&first.mesh->indexBufferView_);
+    commandList.IASetIndexBuffer(&first.mesh->implementation_->indexBufferView_);
     commandList.DrawIndexedInstanced(
         first.mesh->indexCount_,
         static_cast<UINT>(batchCount),
@@ -584,12 +610,12 @@ GpuMeshHandle MeshRenderSystem::CreateMeshData(
         static_cast<std::uint32_t>(indices.size());
     mesh->localBoundingSphere_ = localBoundingSphere;
 
-    mesh->vertexBuffer_ =
+    mesh->implementation_->vertexBuffer_ =
         CreateUploadBuffer(*device_, vertexBytes.size());
     D3D12_RANGE noReadRange{0, 0};
     void* mappedVertices = nullptr;
     D3D12Detail::ThrowIfFailed(
-        mesh->vertexBuffer_->Map(
+        mesh->implementation_->vertexBuffer_->Map(
             0,
             &noReadRange,
             &mappedVertices),
@@ -598,20 +624,20 @@ GpuMeshHandle MeshRenderSystem::CreateMeshData(
         mappedVertices,
         vertexBytes.data(),
         vertexBytes.size());
-    mesh->vertexBuffer_->Unmap(0, nullptr);
+    mesh->implementation_->vertexBuffer_->Unmap(0, nullptr);
 
-    mesh->vertexBufferView_.BufferLocation =
-        mesh->vertexBuffer_->GetGPUVirtualAddress();
-    mesh->vertexBufferView_.SizeInBytes =
+    mesh->implementation_->vertexBufferView_.BufferLocation =
+        mesh->implementation_->vertexBuffer_->GetGPUVirtualAddress();
+    mesh->implementation_->vertexBufferView_.SizeInBytes =
         static_cast<UINT>(vertexBytes.size());
-    mesh->vertexBufferView_.StrideInBytes =
+    mesh->implementation_->vertexBufferView_.StrideInBytes =
         static_cast<UINT>(vertexStrideBytes);
 
-    mesh->indexBuffer_ =
+    mesh->implementation_->indexBuffer_ =
         CreateUploadBuffer(*device_, indices.size_bytes());
     void* mappedIndices = nullptr;
     D3D12Detail::ThrowIfFailed(
-        mesh->indexBuffer_->Map(
+        mesh->implementation_->indexBuffer_->Map(
             0,
             &noReadRange,
             &mappedIndices),
@@ -620,13 +646,13 @@ GpuMeshHandle MeshRenderSystem::CreateMeshData(
         mappedIndices,
         indices.data(),
         indices.size_bytes());
-    mesh->indexBuffer_->Unmap(0, nullptr);
+    mesh->implementation_->indexBuffer_->Unmap(0, nullptr);
 
-    mesh->indexBufferView_.BufferLocation =
-        mesh->indexBuffer_->GetGPUVirtualAddress();
-    mesh->indexBufferView_.SizeInBytes =
+    mesh->implementation_->indexBufferView_.BufferLocation =
+        mesh->implementation_->indexBuffer_->GetGPUVirtualAddress();
+    mesh->implementation_->indexBufferView_.SizeInBytes =
         static_cast<UINT>(indices.size_bytes());
-    mesh->indexBufferView_.Format = DXGI_FORMAT_R32_UINT;
+    mesh->implementation_->indexBufferView_.Format = DXGI_FORMAT_R32_UINT;
     return mesh;
 }
 
@@ -724,7 +750,7 @@ std::shared_ptr<MaterialTemplate>
             serializedRootSignature->GetBufferPointer(),
             serializedRootSignature->GetBufferSize(),
             IID_PPV_ARGS(
-                material->rootSignature_.ReleaseAndGetAddressOf())),
+                material->implementation_->rootSignature_.ReleaseAndGetAddressOf())),
         "Create unlit vertex-color root signature");
 
     // Slot 0 is per-vertex data. Slot 1 carries the WVP matrix and color
@@ -812,7 +838,7 @@ std::shared_ptr<MaterialTemplate>
     // pipeline used by every vertex-color material instance.
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription{};
     pipelineDescription.pRootSignature =
-        material->rootSignature_.Get();
+        material->implementation_->rootSignature_.Get();
     pipelineDescription.VS = {
         vertexShader->GetBufferPointer(),
         vertexShader->GetBufferSize()};
@@ -861,7 +887,7 @@ std::shared_ptr<MaterialTemplate>
         device_->CreateGraphicsPipelineState(
             &pipelineDescription,
             IID_PPV_ARGS(
-                material->pipelineState_.ReleaseAndGetAddressOf())),
+                material->implementation_->pipelineState_.ReleaseAndGetAddressOf())),
         "Create unlit vertex-color pipeline state");
     return material;
 }
@@ -964,7 +990,7 @@ std::shared_ptr<MaterialTemplate>
             serializedRootSignature->GetBufferPointer(),
             serializedRootSignature->GetBufferSize(),
             IID_PPV_ARGS(
-                material->rootSignature_.ReleaseAndGetAddressOf())),
+                material->implementation_->rootSignature_.ReleaseAndGetAddressOf())),
         "Create textured vertex-color root signature");
 
     // In addition to WVP/color, each instance selects a descriptor and
@@ -1048,7 +1074,7 @@ std::shared_ptr<MaterialTemplate>
     // preserve the existing depth and blend over the opaque pass.
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription{};
     pipelineDescription.pRootSignature =
-        material->rootSignature_.Get();
+        material->implementation_->rootSignature_.Get();
     pipelineDescription.VS = {
         vertexShader->GetBufferPointer(),
         vertexShader->GetBufferSize()};
@@ -1102,7 +1128,7 @@ std::shared_ptr<MaterialTemplate>
         device_->CreateGraphicsPipelineState(
             &pipelineDescription,
             IID_PPV_ARGS(
-                material->pipelineState_.ReleaseAndGetAddressOf())),
+                material->implementation_->pipelineState_.ReleaseAndGetAddressOf())),
         "Create textured vertex-color pipeline state");
     return material;
 }

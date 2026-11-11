@@ -1,6 +1,9 @@
 #include "TextureLifetimeTests.h"
 #include "PhantomCore.h"
+#include <array>
 #include <chrono>
+#include <future>
+#include <vector>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -16,6 +19,7 @@ namespace
     {
         unsigned frames{};
         bool shutdown{};
+        std::vector<std::shared_future<RgbaImage>> captures;
     };
     class TextureLifetimeClient final : public IGameClient
     {
@@ -27,6 +31,8 @@ namespace
         {
             EngineConfig config;
             config.showWindow = false;
+            config.windowWidth = 128;
+            config.windowHeight = 64;
             config.audio.preferredBackend = AudioOutputBackend::NoSound;
             return config;
         }
@@ -34,6 +40,12 @@ namespace
         {
             textures_ = &services.meshRendering.Textures();
             rendering_ = &services.visual2DRendering;
+            mesh_ = services.meshRendering.CreateMesh<VertexPositionUvColor>(RectangleShape{});
+            camera_.SetOrthographic(4, 2, .1F, 10);
+            CreateSprite(redCanvas_.Root(), {-8, -8, 16, 16})
+                .GetComponent<SpriteVisualComponent>()->SetTint({1, 0, 0, 1});
+            CreateSprite(blueCanvas_.Root(), {-8, -8, 16, 16})
+                .GetComponent<SpriteVisualComponent>()->SetTint({0, 0, 1, 1});
             for (int i = 0; i < 200; ++i)
                 static_cast<void>(textures_->CreateRenderTargetTexture(1, 1));
             std::vector<RenderTargetTextureHandle> live;
@@ -79,15 +91,17 @@ namespace
                 throw std::runtime_error("Unexpected frame-ring size.");
             const auto previous = targets_[context.frameIndex];
             auto target = textures_->CreateRenderTargetTexture(16, 16);
-            rendering_->RenderToTexture(canvas_, target, context);
+            rendering_->RenderToTexture(redCanvas_, target, context);
             Require(previous.expired(), "A reused frame slot must release its completed target.");
             targets_[context.frameIndex] = target;
-            const auto address = textures_->GpuDescriptorStart(target->Textures()).ptr;
+            SubmitTarget(context, target->Textures(), -1);
             target.reset();
             Require(!targets_[context.frameIndex].expired(), "Recorded GPU work must retain its target.");
-            auto another = textures_->CreateRenderTargetTexture(1, 1);
-            Require(textures_->GpuDescriptorStart(another->Textures()).ptr != address,
-                    "An in-flight target descriptor cannot be reassigned.");
+            auto another = textures_->CreateRenderTargetTexture(16, 16);
+            rendering_->RenderToTexture(blueCanvas_, another, context);
+            SubmitTarget(context, another->Textures(), 1);
+            another.reset();
+            report_.captures.push_back(context.ReadImage());
             ++report_.frames;
             if (report_.frames >= 4)
                 Require(firstUpload_.expired(), "Completed upload leases must become reusable.");
@@ -105,22 +119,52 @@ namespace
         }
 
       private:
+        void SubmitTarget(const RenderContext& context, const TextureSetHandle& textures,
+                          const float x)
+        {
+            auto material = context.meshRendering->CreateMaterial(
+                BuiltInMaterial::UnlitVertexColorTextureArrayAlphaBlend);
+            material->SetTextureSet(textures);
+            DirectX::XMFLOAT4X4 world, viewProjection;
+            DirectX::XMStoreFloat4x4(&world, DirectX::XMMatrixTranslation(x, 0, 1));
+            DirectX::XMStoreFloat4x4(&viewProjection, camera_.ViewProjectionMatrix());
+            context.meshRendering->Submit(mesh_, material, world, viewProjection,
+                                          {1, 1, 1, 1}, {1, 1}, {}, 0);
+        }
+
         Report &report_;
         TextureManager *textures_{};
         Visual2DRenderSystem *rendering_{};
-        Visual2DCanvas canvas_;
+        Visual2DCanvas redCanvas_{{16, 16}, CanvasScaleMode::Fixed};
+        Visual2DCanvas blueCanvas_{{16, 16}, CanvasScaleMode::Fixed};
+        GpuMeshHandle mesh_;
+        Camera camera_;
         std::filesystem::path imagePath_;
         std::weak_ptr<const TextureSet> firstUpload_;
         std::array<std::weak_ptr<RenderTargetTexture>, 16> targets_;
     };
+    std::array<std::uint8_t, 3> Sample(const RgbaImage& image, const std::uint32_t x)
+    {
+        const auto offset = (static_cast<std::size_t>(image.height / 2) * image.width + x) * 4;
+        return {image.pixels.at(offset), image.pixels.at(offset + 1), image.pixels.at(offset + 2)};
+    }
 } // namespace
 int TestTextureLifetime()
 {
     Report report;
     const auto exitCode = Run(std::make_unique<TextureLifetimeClient>(report));
-    if (exitCode || report.frames != 64 || !report.shutdown)
+    if (exitCode || report.frames != 64 || !report.shutdown || report.captures.size() != 64)
         return 1;
+    for (const auto& capture : report.captures)
+    {
+        const auto& image = capture.get();
+        const auto left = Sample(image, image.width / 4);
+        const auto right = Sample(image, image.width * 3 / 4);
+        Require(left == std::array<std::uint8_t, 3>{255, 0, 0} &&
+                    right == std::array<std::uint8_t, 3>{0, 0, 255},
+                "Red and blue targets must retain independent contents through presentation.");
+    }
     std::cout << "Descriptor reuse: 200 released targets, live-capacity limit "
-                 "and 64 GPU frames passed.\n";
+                 "and 64 GPU frames with independent target colors passed.\n";
     return 0;
 }
