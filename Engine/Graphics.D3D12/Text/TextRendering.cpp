@@ -485,6 +485,117 @@ namespace
 struct TextRenderSystem::Impl final
 {
     using CanvasDraw = TextRenderingBackend::CanvasDraw;
+    class LayoutCache final
+    {
+    public:
+        void Initialize();
+        void ClearCaches() noexcept;
+        void ReleaseFactory() noexcept;
+        [[nodiscard]] IDWriteFactory5* Factory() const noexcept;
+        [[nodiscard]] FontHandle LoadSystemFont(std::wstring_view familyName);
+        [[nodiscard]] FontHandle LoadFontFile(const std::filesystem::path& fontFile);
+        [[nodiscard]] TextLayoutHandle FindOrCreateLayout(std::wstring_view text,
+            const TextDrawCommand& command, TextRenderStatistics& statistics);
+
+    private:
+        struct LayoutKey final
+        {
+            FontHandle font;
+            std::wstring text;
+            std::uint32_t fontSizeBits{};
+            std::uint32_t widthBits{};
+            std::uint32_t heightBits{};
+            TextHorizontalAlignment horizontalAlignment{};
+            TextVerticalAlignment verticalAlignment{};
+            std::uint16_t fontWeight{400};
+
+            [[nodiscard]] bool operator==(
+                const LayoutKey& other) const noexcept
+            {
+                return font.get() == other.font.get() && text == other.text && fontSizeBits == other.fontSizeBits &&
+                       widthBits == other.widthBits && heightBits == other.heightBits &&
+                       horizontalAlignment == other.horizontalAlignment &&
+                       verticalAlignment == other.verticalAlignment && fontWeight == other.fontWeight;
+            }
+        };
+
+        struct LayoutKeyView
+        {
+            const Font *font{};
+            std::wstring_view text;
+            std::uint32_t fontSizeBits{}, widthBits{}, heightBits{};
+            TextHorizontalAlignment horizontalAlignment{};
+            TextVerticalAlignment verticalAlignment{};
+            std::uint16_t fontWeight{400};
+            bool operator==(const LayoutKeyView &) const noexcept = default;
+        };
+        static LayoutKeyView KeyView(const LayoutKey &key) noexcept
+        {
+            return {key.font.get(),        key.text,       key.fontSizeBits,
+                    key.widthBits,         key.heightBits, key.horizontalAlignment,
+                    key.verticalAlignment, key.fontWeight};
+        }
+        struct LayoutKeyHash final
+        {
+            using is_transparent = void;
+            std::size_t operator()(const LayoutKey &key) const noexcept
+            {
+                return (*this)(KeyView(key));
+            }
+            std::size_t operator()(const LayoutKeyView &key) const noexcept
+            {
+                std::size_t result = 0;
+                HashCombine(result, reinterpret_cast<std::uintptr_t>(key.font));
+                HashCombine(result, key.text);
+                HashCombine(result, key.fontSizeBits);
+                HashCombine(result, key.widthBits);
+                HashCombine(result, key.heightBits);
+                HashCombine(result, static_cast<std::uint32_t>(key.horizontalAlignment));
+                HashCombine(result, static_cast<std::uint32_t>(key.verticalAlignment));
+                HashCombine(result, key.fontWeight);
+                return result;
+            }
+        };
+        struct LayoutKeyEqual final
+        {
+            using is_transparent = void;
+            bool operator()(const LayoutKey &a, const LayoutKey &b) const noexcept
+            {
+                return a == b;
+            }
+            bool operator()(const LayoutKey &a, const LayoutKeyView &b) const noexcept
+            {
+                return KeyView(a) == b;
+            }
+            bool operator()(const LayoutKeyView &a, const LayoutKey &b) const noexcept
+            {
+                return a == KeyView(b);
+            }
+        };
+
+        class GlyphRunCollector;
+        static constexpr std::size_t CachedLayoutLimit = 2048;
+        ComPtr<IDWriteTextFormat> FindOrCreateFormat(const TextDrawCommand& command);
+        TextLayoutHandle CompileLayout(std::wstring_view text, const TextDrawCommand& command,
+            const ComPtr<IDWriteTextFormat>& format);
+        ComPtr<IDWriteFactory5> directWriteFactory;
+        struct LayoutEntry
+        {
+            TextLayoutHandle layout;
+            std::list<const LayoutKey *>::iterator recency;
+        };
+        // Map nodes own each key once; rehash preserves their addresses.
+        std::list<const LayoutKey *> layoutRecency;
+        std::unordered_map<LayoutKey, LayoutEntry, LayoutKeyHash, LayoutKeyEqual> layoutCache;
+        struct FormatEntry
+        {
+            ComPtr<IDWriteTextFormat> format;
+            std::list<LayoutKey>::iterator recency;
+        };
+        std::list<LayoutKey> formatRecency;
+        std::unordered_map<LayoutKey, FormatEntry, LayoutKeyHash> formatCache;
+    };
+
     struct GlyphInstance final
     {
         DirectX::XMFLOAT4X4 transform{};
@@ -585,231 +696,7 @@ struct TextRenderSystem::Impl final
         bool drawable{};
     };
 
-    struct LayoutKey final
-    {
-        FontHandle font;
-        std::wstring text;
-        std::uint32_t fontSizeBits{};
-        std::uint32_t widthBits{};
-        std::uint32_t heightBits{};
-        TextHorizontalAlignment horizontalAlignment{};
-        TextVerticalAlignment verticalAlignment{};
-        std::uint16_t fontWeight{400};
 
-        [[nodiscard]] bool operator==(
-            const LayoutKey& other) const noexcept
-        {
-            return font.get() == other.font.get() && text == other.text && fontSizeBits == other.fontSizeBits &&
-                   widthBits == other.widthBits && heightBits == other.heightBits &&
-                   horizontalAlignment == other.horizontalAlignment &&
-                   verticalAlignment == other.verticalAlignment && fontWeight == other.fontWeight;
-        }
-    };
-
-    struct LayoutKeyView
-    {
-        const Font *font{};
-        std::wstring_view text;
-        std::uint32_t fontSizeBits{}, widthBits{}, heightBits{};
-        TextHorizontalAlignment horizontalAlignment{};
-        TextVerticalAlignment verticalAlignment{};
-        std::uint16_t fontWeight{400};
-        bool operator==(const LayoutKeyView &) const noexcept = default;
-    };
-    static LayoutKeyView KeyView(const LayoutKey &key) noexcept
-    {
-        return {key.font.get(),        key.text,       key.fontSizeBits,
-                key.widthBits,         key.heightBits, key.horizontalAlignment,
-                key.verticalAlignment, key.fontWeight};
-    }
-    struct LayoutKeyHash final
-    {
-        using is_transparent = void;
-        std::size_t operator()(const LayoutKey &key) const noexcept
-        {
-            return (*this)(KeyView(key));
-        }
-        std::size_t operator()(const LayoutKeyView &key) const noexcept
-        {
-            std::size_t result = 0;
-            HashCombine(result, reinterpret_cast<std::uintptr_t>(key.font));
-            HashCombine(result, key.text);
-            HashCombine(result, key.fontSizeBits);
-            HashCombine(result, key.widthBits);
-            HashCombine(result, key.heightBits);
-            HashCombine(result, static_cast<std::uint32_t>(key.horizontalAlignment));
-            HashCombine(result, static_cast<std::uint32_t>(key.verticalAlignment));
-            HashCombine(result, key.fontWeight);
-            return result;
-        }
-    };
-    struct LayoutKeyEqual final
-    {
-        using is_transparent = void;
-        bool operator()(const LayoutKey &a, const LayoutKey &b) const noexcept
-        {
-            return a == b;
-        }
-        bool operator()(const LayoutKey &a, const LayoutKeyView &b) const noexcept
-        {
-            return KeyView(a) == b;
-        }
-        bool operator()(const LayoutKeyView &a, const LayoutKey &b) const noexcept
-        {
-            return a == KeyView(b);
-        }
-    };
-    class GlyphRunCollector final : public IDWriteTextRenderer
-    {
-    public:
-      explicit GlyphRunCollector(TextLayout::Impl &owner) noexcept : owner_(owner)
-      {
-      }
-        HRESULT STDMETHODCALLTYPE QueryInterface(
-            REFIID interfaceId,
-            void** object) override
-        {
-            if (object == nullptr)
-            {
-                return E_POINTER;
-            }
-            *object = nullptr;
-            if (interfaceId == __uuidof(IUnknown) ||
-                interfaceId == __uuidof(IDWritePixelSnapping) ||
-                interfaceId == __uuidof(IDWriteTextRenderer))
-            {
-                *object = static_cast<IDWriteTextRenderer*>(this);
-                AddRef();
-                return S_OK;
-            }
-            return E_NOINTERFACE;
-        }
-
-        ULONG STDMETHODCALLTYPE AddRef() override
-        {
-            return ++referenceCount_;
-        }
-
-        ULONG STDMETHODCALLTYPE Release() override
-        {
-            const ULONG remaining = --referenceCount_;
-            if (remaining == 0)
-            {
-                delete this;
-            }
-            return remaining;
-        }
-
-        HRESULT STDMETHODCALLTYPE IsPixelSnappingDisabled(
-            void*,
-            BOOL* disabled) override
-        {
-            if (disabled == nullptr)
-            {
-                return E_POINTER;
-            }
-            *disabled = FALSE;
-            return S_OK;
-        }
-
-        HRESULT STDMETHODCALLTYPE GetCurrentTransform(
-            void*,
-            DWRITE_MATRIX* transform) override
-        {
-            if (transform == nullptr)
-            {
-                return E_POINTER;
-            }
-            *transform = DWRITE_MATRIX{
-                1.0F,
-                0.0F,
-                0.0F,
-                1.0F,
-                0.0F,
-                0.0F};
-            return S_OK;
-        }
-
-        HRESULT STDMETHODCALLTYPE GetPixelsPerDip(
-            void*,
-            FLOAT* pixelsPerDip) override
-        {
-            if (pixelsPerDip == nullptr)
-            {
-                return E_POINTER;
-            }
-            *pixelsPerDip = 1.0F;
-            return S_OK;
-        }
-
-        HRESULT STDMETHODCALLTYPE DrawGlyphRun(
-            void*,
-            const FLOAT baselineOriginX,
-            const FLOAT baselineOriginY,
-            const DWRITE_MEASURING_MODE measuringMode,
-            const DWRITE_GLYPH_RUN* glyphRun,
-            const DWRITE_GLYPH_RUN_DESCRIPTION*,
-            IUnknown*) override
-        {
-            if (glyphRun == nullptr)
-            {
-                return E_INVALIDARG;
-            }
-
-            try
-            {
-                owner_.AppendRun(baselineOriginX, baselineOriginY, measuringMode, *glyphRun);
-                return S_OK;
-            }
-            catch (...)
-            {
-                error_ = std::current_exception();
-                return E_FAIL;
-            }
-        }
-
-        HRESULT STDMETHODCALLTYPE DrawUnderline(
-            void*,
-            FLOAT,
-            FLOAT,
-            const DWRITE_UNDERLINE*,
-            IUnknown*) override
-        {
-            return S_OK;
-        }
-
-        HRESULT STDMETHODCALLTYPE DrawStrikethrough(
-            void*,
-            FLOAT,
-            FLOAT,
-            const DWRITE_STRIKETHROUGH*,
-            IUnknown*) override
-        {
-            return S_OK;
-        }
-
-        HRESULT STDMETHODCALLTYPE DrawInlineObject(
-            void*,
-            FLOAT,
-            FLOAT,
-            IDWriteInlineObject*,
-            BOOL,
-            BOOL,
-            IUnknown*) override
-        {
-            return E_NOTIMPL;
-        }
-
-        [[nodiscard]] const std::exception_ptr& Error() const noexcept
-        {
-            return error_;
-        }
-
-    private:
-        std::atomic<ULONG> referenceCount_{1};
-        TextLayout::Impl &owner_;
-        std::exception_ptr error_;
-    };
 
     void Initialize(
         ID3D12Device& newDevice,
@@ -823,13 +710,7 @@ struct TextRenderSystem::Impl final
         }
 
         device = &newDevice;
-        ThrowIfFailed(
-            DWriteCreateFactory(
-                DWRITE_FACTORY_TYPE_SHARED,
-                __uuidof(IDWriteFactory5),
-                reinterpret_cast<IUnknown**>(
-                    directWriteFactory.ReleaseAndGetAddressOf())),
-            "DWriteCreateFactory");
+        layouts.Initialize();
 
         CreateDescriptorHeap();
         pipeline.Initialize(newDevice, renderTargetFormat, newDepthStencilFormat);
@@ -857,14 +738,11 @@ struct TextRenderSystem::Impl final
         pendingInstances.clear();
         pendingUploads.clear();
         glyphCache.clear();
-        layoutCache.clear();
-        layoutRecency.clear();
-        formatCache.clear();
-        formatRecency.clear();
+        layouts.ClearCaches();
         atlasPages.clear();
         pipeline.Reset();
         atlasDescriptorHeap.Reset();
-        directWriteFactory.Reset();
+        layouts.ReleaseFactory();
         device = nullptr;
         currentFrameIndex = 0;
         currentRenderIndex = 0;
@@ -878,106 +756,14 @@ struct TextRenderSystem::Impl final
         const std::wstring_view familyName)
     {
         RequireInitialized();
-        if (familyName.empty())
-        {
-            throw std::invalid_argument(
-                "A system font family name cannot be empty.");
-        }
-
-        const std::wstring family(familyName);
-        ComPtr<IDWriteFontCollection> collection;
-        ThrowIfFailed(
-            directWriteFactory->GetSystemFontCollection(
-                collection.ReleaseAndGetAddressOf()),
-            "IDWriteFactory::GetSystemFontCollection");
-        UINT32 familyIndex = 0;
-        BOOL exists = FALSE;
-        ThrowIfFailed(
-            collection->FindFamilyName(
-                family.c_str(),
-                &familyIndex,
-                &exists),
-            "IDWriteFontCollection::FindFamilyName");
-        if (!exists)
-        {
-            throw std::runtime_error(
-                "The requested system font family is unavailable.");
-        }
-
-        auto fontImplementation = std::make_shared<Font::Impl>();
-        fontImplementation->familyName = family;
-        return FontHandle(
-            new Font(std::move(fontImplementation)));
+        return layouts.LoadSystemFont(familyName);
     }
 
     [[nodiscard]] FontHandle LoadFontFile(
         const std::filesystem::path& fontFile)
     {
         RequireInitialized();
-        const std::filesystem::path absolutePath =
-            std::filesystem::absolute(fontFile);
-        if (!std::filesystem::is_regular_file(absolutePath))
-        {
-            throw std::runtime_error(
-                "Font file was not found: " +
-                absolutePath.string());
-        }
-
-        ComPtr<IDWriteFontFile> directWriteFontFile;
-        ThrowIfFailed(
-            directWriteFactory->CreateFontFileReference(
-                absolutePath.c_str(),
-                nullptr,
-                directWriteFontFile.ReleaseAndGetAddressOf()),
-            "IDWriteFactory::CreateFontFileReference");
-
-        ComPtr<IDWriteFontSetBuilder1> fontSetBuilder;
-        ThrowIfFailed(
-            directWriteFactory->CreateFontSetBuilder(
-                fontSetBuilder.ReleaseAndGetAddressOf()),
-            "IDWriteFactory5::CreateFontSetBuilder");
-        ThrowIfFailed(
-            fontSetBuilder->AddFontFile(directWriteFontFile.Get()),
-            "IDWriteFontSetBuilder1::AddFontFile");
-
-        ComPtr<IDWriteFontSet> fontSet;
-        ThrowIfFailed(
-            fontSetBuilder->CreateFontSet(
-                fontSet.ReleaseAndGetAddressOf()),
-            "IDWriteFontSetBuilder::CreateFontSet");
-
-        ComPtr<IDWriteFontCollection1> fontCollection;
-        ThrowIfFailed(
-            directWriteFactory->CreateFontCollectionFromFontSet(
-                fontSet.Get(),
-                fontCollection.ReleaseAndGetAddressOf()),
-            "IDWriteFactory3::CreateFontCollectionFromFontSet");
-        if (fontCollection->GetFontFamilyCount() == 0)
-        {
-            throw std::runtime_error(
-                "The font file contains no font families.");
-        }
-
-        ComPtr<IDWriteFontFamily> family;
-        ThrowIfFailed(
-            fontCollection->GetFontFamily(
-                0,
-                family.ReleaseAndGetAddressOf()),
-            "IDWriteFontCollection::GetFontFamily");
-        ComPtr<IDWriteLocalizedStrings> familyNames;
-        ThrowIfFailed(
-            family->GetFamilyNames(
-                familyNames.ReleaseAndGetAddressOf()),
-            "IDWriteFontFamily::GetFamilyNames");
-
-        auto fontImplementation = std::make_shared<Font::Impl>();
-        fontImplementation->familyName =
-            LocalizedString(*familyNames.Get());
-        ThrowIfFailed(
-            fontCollection.As(&fontImplementation->collection),
-            "IDWriteFontCollection1::QueryInterface");
-        return FontHandle(
-            new Font(std::move(fontImplementation)));
+        return layouts.LoadFontFile(fontFile);
     }
 
     void BeginFrame(
@@ -1046,7 +832,7 @@ struct TextRenderSystem::Impl final
         ValidateLayoutCommand(command);
         if (text.size() > std::numeric_limits<UINT32>::max())
             throw std::length_error("Text exceeds DirectWrite's string length limit.");
-        return FindOrCreateLayout(text, command);
+        return layouts.FindOrCreateLayout(text, command, statistics);
     }
 
     void Submit(std::wstring_view text, const TextDrawCommand &command)
@@ -1247,121 +1033,12 @@ struct TextRenderSystem::Impl final
         }
     }
 
-    static constexpr std::size_t CachedLayoutLimit = 2048;
 
-    ComPtr<IDWriteTextFormat> FindOrCreateFormat(const TextDrawCommand &command)
-    {
-        const Font::Impl &font = *command.style.font->implementation_;
-        LayoutKey formatKey{command.style.font,
-                            {},
-                            std::bit_cast<std::uint32_t>(command.style.fontSizePixels),
-                            0,
-                            0,
-                            command.horizontalAlignment,
-                            command.verticalAlignment,
-                            command.style.fontWeight};
-        ComPtr<IDWriteTextFormat> format;
-        const auto cachedFormat = formatCache.find(formatKey);
-        if (cachedFormat != formatCache.end())
-        {
-            format = cachedFormat->second.format;
-            formatRecency.splice(formatRecency.begin(), formatRecency, cachedFormat->second.recency);
-            return format;
-        }
 
-        ThrowIfFailed(directWriteFactory->CreateTextFormat(
-                          font.familyName.c_str(), font.collection.Get(),
-                          static_cast<DWRITE_FONT_WEIGHT>(command.style.fontWeight), DWRITE_FONT_STYLE_NORMAL,
-                          DWRITE_FONT_STRETCH_NORMAL, command.style.fontSizePixels, L"ko-kr",
-                          format.ReleaseAndGetAddressOf()),
-                      "IDWriteFactory::CreateTextFormat");
-        ThrowIfFailed(format->SetTextAlignment(ToDirectWrite(command.horizontalAlignment)),
-                      "IDWriteTextFormat::SetTextAlignment");
-        ThrowIfFailed(format->SetParagraphAlignment(ToDirectWrite(command.verticalAlignment)),
-                      "IDWriteTextFormat::SetParagraphAlignment");
-        ThrowIfFailed(format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextFormat::SetWordWrapping");
 
-        if (formatCache.size() >= CachedLayoutLimit)
-        {
-            formatCache.erase(formatRecency.back());
-            formatRecency.pop_back();
-        }
-        formatRecency.push_front(formatKey);
-        try
-        {
-            formatCache.emplace(std::move(formatKey), FormatEntry{format, formatRecency.begin()});
-        }
-        catch (...)
-        {
-            formatRecency.pop_front();
-            throw;
-        }
 
-        return format;
-    }
 
-    TextLayoutHandle CompileLayout(std::wstring_view text, const TextDrawCommand &command,
-                                   const ComPtr<IDWriteTextFormat> &format)
-    {
-        ComPtr<IDWriteTextLayout> layout;
-        ThrowIfFailed(directWriteFactory->CreateTextLayout(
-                          text.empty() ? L"" : text.data(), static_cast<UINT32>(text.size()), format.Get(),
-                          command.layoutSizePixels.x, command.layoutSizePixels.y, layout.ReleaseAndGetAddressOf()),
-                      "IDWriteFactory::CreateTextLayout");
-        auto prepared = std::make_shared<TextLayout::Impl>();
-        prepared->font = command.style.font;
-        ComPtr<GlyphRunCollector> collector;
-        collector.Attach(new GlyphRunCollector(*prepared));
-        const HRESULT result = layout->Draw(nullptr, collector.Get(), 0, 0);
-        if (collector->Error())
-            std::rethrow_exception(collector->Error());
-        ThrowIfFailed(result, "IDWriteTextLayout::Draw");
-        DWRITE_TEXT_METRICS metrics{};
-        ThrowIfFailed(layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics");
-        prepared->size = {metrics.widthIncludingTrailingWhitespace, metrics.height};
-        return TextLayoutHandle(new TextLayout(std::move(prepared)));
-    }
 
-    [[nodiscard]] TextLayoutHandle FindOrCreateLayout(const std::wstring_view text, const TextDrawCommand &command)
-    {
-        const LayoutKeyView lookup{command.style.font.get(),
-                                   text,
-                                   std::bit_cast<std::uint32_t>(command.style.fontSizePixels),
-                                   std::bit_cast<std::uint32_t>(command.layoutSizePixels.x),
-                                   std::bit_cast<std::uint32_t>(command.layoutSizePixels.y),
-                                   command.horizontalAlignment,
-                                   command.verticalAlignment,
-                                   command.style.fontWeight};
-        if (const auto found = layoutCache.find(lookup); found != layoutCache.end())
-        {
-            layoutRecency.splice(layoutRecency.begin(), layoutRecency, found->second.recency);
-            return found->second.layout;
-        }
-        LayoutKey key{command.style.font, std::wstring(text),         lookup.fontSizeBits,      lookup.widthBits,
-                      lookup.heightBits,  lookup.horizontalAlignment, lookup.verticalAlignment, lookup.fontWeight};
-        // Keep the working set across frames. Evict one least-recently
-        // used layout; clearing everything made 129 static labels thrash.
-        if (layoutCache.size() >= CachedLayoutLimit)
-        {
-            layoutCache.erase(*layoutRecency.back());
-            layoutRecency.pop_back();
-        }
-
-        auto handle = CompileLayout(text, command, FindOrCreateFormat(command));
-        ++statistics.layoutCreations;
-        const auto inserted = layoutCache.emplace(std::move(key), LayoutEntry{handle, {}}).first;
-        try
-        {
-            layoutRecency.push_front(&inserted->first);
-            inserted->second.recency = layoutRecency.begin();
-        }
-        catch (...)
-        {
-            layoutCache.erase(inserted);
-            throw;
-        }
-        return handle;
-    }
 
     [[nodiscard]] const GlyphEntry &FindOrCreateGlyph(IDWriteFontFace &fontFace, IUnknown *identity,
                                                       const std::uint16_t glyphIndex, const float fontEmSize,
@@ -1391,7 +1068,7 @@ struct TextRenderSystem::Impl final
 
         ComPtr<IDWriteGlyphRunAnalysis> analysis;
         // Grayscale directly produces the single alpha channel used by R8.
-        ThrowIfFailed(directWriteFactory->CreateGlyphRunAnalysis(
+        ThrowIfFailed(layouts.Factory()->CreateGlyphRunAnalysis(
                           &singleGlyphRun, nullptr, DWRITE_RENDERING_MODE1_NATURAL_SYMMETRIC, measuringMode,
                           DWRITE_GRID_FIT_MODE_ENABLED, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE, 0.0F, 0.0F,
                           analysis.ReleaseAndGetAddressOf()),
@@ -1829,27 +1506,12 @@ struct TextRenderSystem::Impl final
     }
 
     ID3D12Device* device{};
-    ComPtr<IDWriteFactory5> directWriteFactory;
+    LayoutCache layouts;
     ComPtr<ID3D12DescriptorHeap> atlasDescriptorHeap;
     TextPipeline pipeline;
     std::uint32_t atlasDescriptorSize{};
     std::vector<AtlasPage> atlasPages;
     std::unordered_map<GlyphKey, GlyphEntry, GlyphKeyHash> glyphCache;
-    struct LayoutEntry
-    {
-        TextLayoutHandle layout;
-        std::list<const LayoutKey *>::iterator recency;
-    };
-    // Map nodes own each key once; rehash preserves their addresses.
-    std::list<const LayoutKey *> layoutRecency;
-    std::unordered_map<LayoutKey, LayoutEntry, LayoutKeyHash, LayoutKeyEqual> layoutCache;
-    struct FormatEntry
-    {
-        ComPtr<IDWriteTextFormat> format;
-        std::list<LayoutKey>::iterator recency;
-    };
-    std::list<LayoutKey> formatRecency;
-    std::unordered_map<LayoutKey, FormatEntry, LayoutKeyHash> formatCache;
     std::vector<PendingGlyphUpload> pendingUploads;
     std::vector<GlyphInstance> pendingInstances;
     std::array<FrameInstanceBuffer, D3D12Detail::FrameCount> frameBuffers{};
@@ -1860,6 +1522,405 @@ struct TextRenderSystem::Impl final
     bool initialized{};
     bool frameOpen{};
 };
+
+class TextRenderSystem::Impl::LayoutCache::GlyphRunCollector final : public IDWriteTextRenderer
+{
+public:
+  explicit GlyphRunCollector(TextLayout::Impl &owner) noexcept : owner_(owner)
+  {
+  }
+    HRESULT STDMETHODCALLTYPE QueryInterface(
+        REFIID interfaceId,
+        void** object) override
+    {
+        if (object == nullptr)
+        {
+            return E_POINTER;
+        }
+        *object = nullptr;
+        if (interfaceId == __uuidof(IUnknown) ||
+            interfaceId == __uuidof(IDWritePixelSnapping) ||
+            interfaceId == __uuidof(IDWriteTextRenderer))
+        {
+            *object = static_cast<IDWriteTextRenderer*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() override
+    {
+        return ++referenceCount_;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() override
+    {
+        const ULONG remaining = --referenceCount_;
+        if (remaining == 0)
+        {
+            delete this;
+        }
+        return remaining;
+    }
+
+    HRESULT STDMETHODCALLTYPE IsPixelSnappingDisabled(
+        void*,
+        BOOL* disabled) override
+    {
+        if (disabled == nullptr)
+        {
+            return E_POINTER;
+        }
+        *disabled = FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetCurrentTransform(
+        void*,
+        DWRITE_MATRIX* transform) override
+    {
+        if (transform == nullptr)
+        {
+            return E_POINTER;
+        }
+        *transform = DWRITE_MATRIX{
+            1.0F,
+            0.0F,
+            0.0F,
+            1.0F,
+            0.0F,
+            0.0F};
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetPixelsPerDip(
+        void*,
+        FLOAT* pixelsPerDip) override
+    {
+        if (pixelsPerDip == nullptr)
+        {
+            return E_POINTER;
+        }
+        *pixelsPerDip = 1.0F;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawGlyphRun(
+        void*,
+        const FLOAT baselineOriginX,
+        const FLOAT baselineOriginY,
+        const DWRITE_MEASURING_MODE measuringMode,
+        const DWRITE_GLYPH_RUN* glyphRun,
+        const DWRITE_GLYPH_RUN_DESCRIPTION*,
+        IUnknown*) override
+    {
+        if (glyphRun == nullptr)
+        {
+            return E_INVALIDARG;
+        }
+
+        try
+        {
+            owner_.AppendRun(baselineOriginX, baselineOriginY, measuringMode, *glyphRun);
+            return S_OK;
+        }
+        catch (...)
+        {
+            error_ = std::current_exception();
+            return E_FAIL;
+        }
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawUnderline(
+        void*,
+        FLOAT,
+        FLOAT,
+        const DWRITE_UNDERLINE*,
+        IUnknown*) override
+    {
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawStrikethrough(
+        void*,
+        FLOAT,
+        FLOAT,
+        const DWRITE_STRIKETHROUGH*,
+        IUnknown*) override
+    {
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawInlineObject(
+        void*,
+        FLOAT,
+        FLOAT,
+        IDWriteInlineObject*,
+        BOOL,
+        BOOL,
+        IUnknown*) override
+    {
+        return E_NOTIMPL;
+    }
+
+    [[nodiscard]] const std::exception_ptr& Error() const noexcept
+    {
+        return error_;
+    }
+
+private:
+    std::atomic<ULONG> referenceCount_{1};
+    TextLayout::Impl &owner_;
+    std::exception_ptr error_;
+};
+
+void TextRenderSystem::Impl::LayoutCache::Initialize()
+{
+    ThrowIfFailed(
+        DWriteCreateFactory(
+            DWRITE_FACTORY_TYPE_SHARED,
+            __uuidof(IDWriteFactory5),
+            reinterpret_cast<IUnknown**>(
+                directWriteFactory.ReleaseAndGetAddressOf())),
+        "DWriteCreateFactory");
+}
+
+void TextRenderSystem::Impl::LayoutCache::ClearCaches() noexcept
+{
+    layoutCache.clear();
+    layoutRecency.clear();
+    formatCache.clear();
+    formatRecency.clear();
+}
+
+void TextRenderSystem::Impl::LayoutCache::ReleaseFactory() noexcept
+{
+    directWriteFactory.Reset();
+}
+
+IDWriteFactory5* TextRenderSystem::Impl::LayoutCache::Factory() const noexcept
+{
+    return directWriteFactory.Get();
+}
+
+[[nodiscard]] FontHandle TextRenderSystem::Impl::LayoutCache::LoadSystemFont(
+    const std::wstring_view familyName)
+{
+    if (familyName.empty())
+    {
+        throw std::invalid_argument(
+            "A system font family name cannot be empty.");
+    }
+
+    const std::wstring family(familyName);
+    ComPtr<IDWriteFontCollection> collection;
+    ThrowIfFailed(
+        directWriteFactory->GetSystemFontCollection(
+            collection.ReleaseAndGetAddressOf()),
+        "IDWriteFactory::GetSystemFontCollection");
+    UINT32 familyIndex = 0;
+    BOOL exists = FALSE;
+    ThrowIfFailed(
+        collection->FindFamilyName(
+            family.c_str(),
+            &familyIndex,
+            &exists),
+        "IDWriteFontCollection::FindFamilyName");
+    if (!exists)
+    {
+        throw std::runtime_error(
+            "The requested system font family is unavailable.");
+    }
+
+    auto fontImplementation = std::make_shared<Font::Impl>();
+    fontImplementation->familyName = family;
+    return FontHandle(
+        new Font(std::move(fontImplementation)));
+}
+
+[[nodiscard]] FontHandle TextRenderSystem::Impl::LayoutCache::LoadFontFile(
+    const std::filesystem::path& fontFile)
+{
+    const std::filesystem::path absolutePath =
+        std::filesystem::absolute(fontFile);
+    if (!std::filesystem::is_regular_file(absolutePath))
+    {
+        throw std::runtime_error(
+            "Font file was not found: " +
+            absolutePath.string());
+    }
+
+    ComPtr<IDWriteFontFile> directWriteFontFile;
+    ThrowIfFailed(
+        directWriteFactory->CreateFontFileReference(
+            absolutePath.c_str(),
+            nullptr,
+            directWriteFontFile.ReleaseAndGetAddressOf()),
+        "IDWriteFactory::CreateFontFileReference");
+
+    ComPtr<IDWriteFontSetBuilder1> fontSetBuilder;
+    ThrowIfFailed(
+        directWriteFactory->CreateFontSetBuilder(
+            fontSetBuilder.ReleaseAndGetAddressOf()),
+        "IDWriteFactory5::CreateFontSetBuilder");
+    ThrowIfFailed(
+        fontSetBuilder->AddFontFile(directWriteFontFile.Get()),
+        "IDWriteFontSetBuilder1::AddFontFile");
+
+    ComPtr<IDWriteFontSet> fontSet;
+    ThrowIfFailed(
+        fontSetBuilder->CreateFontSet(
+            fontSet.ReleaseAndGetAddressOf()),
+        "IDWriteFontSetBuilder::CreateFontSet");
+
+    ComPtr<IDWriteFontCollection1> fontCollection;
+    ThrowIfFailed(
+        directWriteFactory->CreateFontCollectionFromFontSet(
+            fontSet.Get(),
+            fontCollection.ReleaseAndGetAddressOf()),
+        "IDWriteFactory3::CreateFontCollectionFromFontSet");
+    if (fontCollection->GetFontFamilyCount() == 0)
+    {
+        throw std::runtime_error(
+            "The font file contains no font families.");
+    }
+
+    ComPtr<IDWriteFontFamily> family;
+    ThrowIfFailed(
+        fontCollection->GetFontFamily(
+            0,
+            family.ReleaseAndGetAddressOf()),
+        "IDWriteFontCollection::GetFontFamily");
+    ComPtr<IDWriteLocalizedStrings> familyNames;
+    ThrowIfFailed(
+        family->GetFamilyNames(
+            familyNames.ReleaseAndGetAddressOf()),
+        "IDWriteFontFamily::GetFamilyNames");
+
+    auto fontImplementation = std::make_shared<Font::Impl>();
+    fontImplementation->familyName =
+        LocalizedString(*familyNames.Get());
+    ThrowIfFailed(
+        fontCollection.As(&fontImplementation->collection),
+        "IDWriteFontCollection1::QueryInterface");
+    return FontHandle(
+        new Font(std::move(fontImplementation)));
+}
+
+ComPtr<IDWriteTextFormat> TextRenderSystem::Impl::LayoutCache::FindOrCreateFormat(const TextDrawCommand &command)
+{
+    const Font::Impl &font = *command.style.font->implementation_;
+    LayoutKey formatKey{command.style.font,
+                        {},
+                        std::bit_cast<std::uint32_t>(command.style.fontSizePixels),
+                        0,
+                        0,
+                        command.horizontalAlignment,
+                        command.verticalAlignment,
+                        command.style.fontWeight};
+    ComPtr<IDWriteTextFormat> format;
+    const auto cachedFormat = formatCache.find(formatKey);
+    if (cachedFormat != formatCache.end())
+    {
+        format = cachedFormat->second.format;
+        formatRecency.splice(formatRecency.begin(), formatRecency, cachedFormat->second.recency);
+        return format;
+    }
+
+    ThrowIfFailed(directWriteFactory->CreateTextFormat(
+                      font.familyName.c_str(), font.collection.Get(),
+                      static_cast<DWRITE_FONT_WEIGHT>(command.style.fontWeight), DWRITE_FONT_STYLE_NORMAL,
+                      DWRITE_FONT_STRETCH_NORMAL, command.style.fontSizePixels, L"ko-kr",
+                      format.ReleaseAndGetAddressOf()),
+                  "IDWriteFactory::CreateTextFormat");
+    ThrowIfFailed(format->SetTextAlignment(ToDirectWrite(command.horizontalAlignment)),
+                  "IDWriteTextFormat::SetTextAlignment");
+    ThrowIfFailed(format->SetParagraphAlignment(ToDirectWrite(command.verticalAlignment)),
+                  "IDWriteTextFormat::SetParagraphAlignment");
+    ThrowIfFailed(format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextFormat::SetWordWrapping");
+
+    if (formatCache.size() >= CachedLayoutLimit)
+    {
+        formatCache.erase(formatRecency.back());
+        formatRecency.pop_back();
+    }
+    formatRecency.push_front(formatKey);
+    try
+    {
+        formatCache.emplace(std::move(formatKey), FormatEntry{format, formatRecency.begin()});
+    }
+    catch (...)
+    {
+        formatRecency.pop_front();
+        throw;
+    }
+
+    return format;
+}
+
+TextLayoutHandle TextRenderSystem::Impl::LayoutCache::CompileLayout(std::wstring_view text, const TextDrawCommand &command,
+                               const ComPtr<IDWriteTextFormat> &format)
+{
+    ComPtr<IDWriteTextLayout> layout;
+    ThrowIfFailed(directWriteFactory->CreateTextLayout(
+                      text.empty() ? L"" : text.data(), static_cast<UINT32>(text.size()), format.Get(),
+                      command.layoutSizePixels.x, command.layoutSizePixels.y, layout.ReleaseAndGetAddressOf()),
+                  "IDWriteFactory::CreateTextLayout");
+    auto prepared = std::make_shared<TextLayout::Impl>();
+    prepared->font = command.style.font;
+    ComPtr<GlyphRunCollector> collector;
+    collector.Attach(new GlyphRunCollector(*prepared));
+    const HRESULT result = layout->Draw(nullptr, collector.Get(), 0, 0);
+    if (collector->Error())
+        std::rethrow_exception(collector->Error());
+    ThrowIfFailed(result, "IDWriteTextLayout::Draw");
+    DWRITE_TEXT_METRICS metrics{};
+    ThrowIfFailed(layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics");
+    prepared->size = {metrics.widthIncludingTrailingWhitespace, metrics.height};
+    return TextLayoutHandle(new TextLayout(std::move(prepared)));
+}
+
+[[nodiscard]] TextLayoutHandle TextRenderSystem::Impl::LayoutCache::FindOrCreateLayout(const std::wstring_view text, const TextDrawCommand &command, TextRenderStatistics& statistics)
+{
+    const LayoutKeyView lookup{command.style.font.get(),
+                               text,
+                               std::bit_cast<std::uint32_t>(command.style.fontSizePixels),
+                               std::bit_cast<std::uint32_t>(command.layoutSizePixels.x),
+                               std::bit_cast<std::uint32_t>(command.layoutSizePixels.y),
+                               command.horizontalAlignment,
+                               command.verticalAlignment,
+                               command.style.fontWeight};
+    if (const auto found = layoutCache.find(lookup); found != layoutCache.end())
+    {
+        layoutRecency.splice(layoutRecency.begin(), layoutRecency, found->second.recency);
+        return found->second.layout;
+    }
+    LayoutKey key{command.style.font, std::wstring(text),         lookup.fontSizeBits,      lookup.widthBits,
+                  lookup.heightBits,  lookup.horizontalAlignment, lookup.verticalAlignment, lookup.fontWeight};
+    // Keep the working set across frames. Evict one least-recently
+    // used layout; clearing everything made 129 static labels thrash.
+    if (layoutCache.size() >= CachedLayoutLimit)
+    {
+        layoutCache.erase(*layoutRecency.back());
+        layoutRecency.pop_back();
+    }
+
+    auto handle = CompileLayout(text, command, FindOrCreateFormat(command));
+    ++statistics.layoutCreations;
+    const auto inserted = layoutCache.emplace(std::move(key), LayoutEntry{handle, {}}).first;
+    try
+    {
+        layoutRecency.push_front(&inserted->first);
+        inserted->second.recency = layoutRecency.begin();
+    }
+    catch (...)
+    {
+        layoutCache.erase(inserted);
+        throw;
+    }
+    return handle;
+}
 
 TextRenderSystem::TextRenderSystem()
     : implementation_(std::make_unique<Impl>())
