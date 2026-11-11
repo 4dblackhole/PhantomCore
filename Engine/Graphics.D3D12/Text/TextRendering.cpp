@@ -279,6 +279,209 @@ struct TextLayout::Impl final
     std::vector<Run> runs;
 };
 
+namespace
+{
+    // Owns the immutable text root signature and graphics pipeline.
+    class TextPipeline final
+    {
+    public:
+        void Initialize(ID3D12Device& device, const DXGI_FORMAT color,
+                        const DXGI_FORMAT depth)
+        {
+            CreateRootSignature(device);
+            CreatePipelineState(device, color, depth);
+        }
+
+        void Reset() noexcept
+        {
+            pipelineState_.Reset();
+            rootSignature_.Reset();
+        }
+
+        void Bind(ID3D12GraphicsCommandList& commands) const
+        {
+            commands.SetGraphicsRootSignature(rootSignature_.Get());
+            commands.SetPipelineState(pipelineState_.Get());
+        }
+
+    private:
+        void CreateRootSignature(ID3D12Device& device)
+        {
+            // Root parameters expose the current atlas page, the structured
+            // glyph-instance range, and the viewport size to the shaders.
+            D3D12_DESCRIPTOR_RANGE atlasRange{};
+            atlasRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+            atlasRange.NumDescriptors = 1;
+            atlasRange.BaseShaderRegister = 0;
+            atlasRange.RegisterSpace = 0;
+            atlasRange.OffsetInDescriptorsFromTableStart = 0;
+
+            std::array<D3D12_ROOT_PARAMETER, 3> parameters{};
+            parameters[0].ParameterType =
+                D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            parameters[0].DescriptorTable.NumDescriptorRanges = 1;
+            parameters[0].DescriptorTable.pDescriptorRanges =
+                &atlasRange;
+            parameters[0].ShaderVisibility =
+                D3D12_SHADER_VISIBILITY_PIXEL;
+
+            parameters[1].ParameterType =
+                D3D12_ROOT_PARAMETER_TYPE_SRV;
+            parameters[1].Descriptor.ShaderRegister = 1;
+            parameters[1].Descriptor.RegisterSpace = 0;
+            parameters[1].ShaderVisibility =
+                D3D12_SHADER_VISIBILITY_VERTEX;
+
+            parameters[2].ParameterType =
+                D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+            parameters[2].Constants.ShaderRegister = 0;
+            parameters[2].Constants.RegisterSpace = 0;
+            parameters[2].Constants.Num32BitValues = 2;
+            parameters[2].ShaderVisibility =
+                D3D12_SHADER_VISIBILITY_VERTEX;
+
+            D3D12_STATIC_SAMPLER_DESC sampler{};
+            sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+            sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            sampler.MipLODBias = 0.0F;
+            sampler.MaxAnisotropy = 1;
+            sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+            sampler.BorderColor =
+                D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+            sampler.MinLOD = 0.0F;
+            sampler.MaxLOD = FLT_MAX;
+            sampler.ShaderRegister = 0;
+            sampler.RegisterSpace = 0;
+            sampler.ShaderVisibility =
+                D3D12_SHADER_VISIBILITY_PIXEL;
+
+            D3D12_ROOT_SIGNATURE_DESC rootDescription{};
+            rootDescription.NumParameters =
+                static_cast<UINT>(parameters.size());
+            rootDescription.pParameters = parameters.data();
+            rootDescription.NumStaticSamplers = 1;
+            rootDescription.pStaticSamplers = &sampler;
+            rootDescription.Flags =
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+            ComPtr<ID3DBlob> serialized;
+            ComPtr<ID3DBlob> errors;
+            const HRESULT serializationResult =
+                D3D12SerializeRootSignature(
+                    &rootDescription,
+                    D3D_ROOT_SIGNATURE_VERSION_1,
+                    serialized.ReleaseAndGetAddressOf(),
+                    errors.ReleaseAndGetAddressOf());
+            if (FAILED(serializationResult))
+            {
+                const std::string details = errors != nullptr
+                    ? std::string(
+                        static_cast<const char*>(
+                            errors->GetBufferPointer()),
+                        errors->GetBufferSize())
+                    : "No root-signature diagnostics were returned.";
+                throw std::runtime_error(
+                    "Text root-signature serialization failed: " +
+                    details);
+            }
+            ThrowIfFailed(
+                device.CreateRootSignature(
+                    0,
+                    serialized->GetBufferPointer(),
+                    serialized->GetBufferSize(),
+                    IID_PPV_ARGS(
+                        rootSignature_.ReleaseAndGetAddressOf())),
+                "ID3D12Device::CreateRootSignature(text)");
+        }
+
+        void CreatePipelineState(ID3D12Device& device,
+            const DXGI_FORMAT renderTargetFormat, const DXGI_FORMAT depthStencilFormat)
+        {
+            const ComPtr<ID3DBlob> vertexShader =
+                CompileShader(
+                    BuiltInShader::Text,
+                    "VSMain",
+                    "vs_5_1");
+            const ComPtr<ID3DBlob> pixelShader =
+                CompileShader(
+                    BuiltInShader::Text,
+                    "PSMain",
+                    "ps_5_1");
+
+            D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
+            pipeline.pRootSignature = rootSignature_.Get();
+            pipeline.VS = {
+                vertexShader->GetBufferPointer(),
+                vertexShader->GetBufferSize()};
+            pipeline.PS = {
+                pixelShader->GetBufferPointer(),
+                pixelShader->GetBufferSize()};
+            pipeline.BlendState.AlphaToCoverageEnable = FALSE;
+            pipeline.BlendState.IndependentBlendEnable = FALSE;
+            D3D12_RENDER_TARGET_BLEND_DESC& blend =
+                pipeline.BlendState.RenderTarget[0];
+            blend.BlendEnable = TRUE;
+            blend.LogicOpEnable = FALSE;
+            blend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+            blend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+            blend.BlendOp = D3D12_BLEND_OP_ADD;
+            blend.SrcBlendAlpha = D3D12_BLEND_ONE;
+            blend.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+            blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+            blend.LogicOp = D3D12_LOGIC_OP_NOOP;
+            blend.RenderTargetWriteMask =
+                D3D12_COLOR_WRITE_ENABLE_ALL;
+
+            pipeline.SampleMask = UINT_MAX;
+            pipeline.RasterizerState.FillMode =
+                D3D12_FILL_MODE_SOLID;
+            pipeline.RasterizerState.CullMode =
+                D3D12_CULL_MODE_NONE;
+            pipeline.RasterizerState.FrontCounterClockwise = FALSE;
+            pipeline.RasterizerState.DepthBias =
+                D3D12_DEFAULT_DEPTH_BIAS;
+            pipeline.RasterizerState.DepthBiasClamp =
+                D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+            pipeline.RasterizerState.SlopeScaledDepthBias =
+                D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+            pipeline.RasterizerState.DepthClipEnable = TRUE;
+            pipeline.RasterizerState.MultisampleEnable = FALSE;
+            pipeline.RasterizerState.AntialiasedLineEnable = FALSE;
+            pipeline.RasterizerState.ForcedSampleCount = 0;
+            pipeline.RasterizerState.ConservativeRaster =
+                D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+            pipeline.DepthStencilState.DepthEnable =
+                depthStencilFormat != DXGI_FORMAT_UNKNOWN;
+            pipeline.DepthStencilState.DepthWriteMask =
+                D3D12_DEPTH_WRITE_MASK_ZERO;
+            pipeline.DepthStencilState.DepthFunc =
+                D3D12_COMPARISON_FUNC_LESS_EQUAL;
+            pipeline.DepthStencilState.StencilEnable = FALSE;
+            pipeline.InputLayout = {nullptr, 0};
+            pipeline.PrimitiveTopologyType =
+                D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+            pipeline.NumRenderTargets = 1;
+            pipeline.RTVFormats[0] = renderTargetFormat;
+            pipeline.DSVFormat = depthStencilFormat;
+            pipeline.SampleDesc.Count = 1;
+
+            ThrowIfFailed(
+                device.CreateGraphicsPipelineState(
+                    &pipeline,
+                    IID_PPV_ARGS(
+                        pipelineState_.ReleaseAndGetAddressOf())),
+                "ID3D12Device::CreateGraphicsPipelineState(text)");
+        }
+
+        ComPtr<ID3D12RootSignature> rootSignature_;
+        ComPtr<ID3D12PipelineState> pipelineState_;
+    };
+}
+
 struct TextRenderSystem::Impl final
 {
     using CanvasDraw = TextRenderingBackend::CanvasDraw;
@@ -620,7 +823,6 @@ struct TextRenderSystem::Impl final
         }
 
         device = &newDevice;
-        depthStencilFormat = newDepthStencilFormat;
         ThrowIfFailed(
             DWriteCreateFactory(
                 DWRITE_FACTORY_TYPE_SHARED,
@@ -630,7 +832,7 @@ struct TextRenderSystem::Impl final
             "DWriteCreateFactory");
 
         CreateDescriptorHeap();
-        CreatePipeline(renderTargetFormat);
+        pipeline.Initialize(newDevice, renderTargetFormat, newDepthStencilFormat);
         initialized = true;
     }
 
@@ -660,12 +862,10 @@ struct TextRenderSystem::Impl final
         formatCache.clear();
         formatRecency.clear();
         atlasPages.clear();
-        pipelineState.Reset();
-        rootSignature.Reset();
+        pipeline.Reset();
         atlasDescriptorHeap.Reset();
         directWriteFactory.Reset();
         device = nullptr;
-        depthStencilFormat = DXGI_FORMAT_UNKNOWN;
         currentFrameIndex = 0;
         currentRenderIndex = 0;
         atlasDescriptorCapacity = 0;
@@ -993,8 +1193,7 @@ struct TextRenderSystem::Impl final
             if (frame.descriptorHeaps.empty() || frame.descriptorHeaps.back() != atlasDescriptorHeap)
                 frame.descriptorHeaps.push_back(atlasDescriptorHeap);
             commandList.SetDescriptorHeaps(1, heaps);
-            commandList.SetGraphicsRootSignature(rootSignature.Get());
-            commandList.SetPipelineState(pipelineState.Get());
+            pipeline.Bind(commandList);
             commandList.IASetPrimitiveTopology(
                 D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -1610,174 +1809,6 @@ struct TextRenderSystem::Impl final
         atlasDescriptorCapacity = capacity;
     }
 
-    void CreatePipeline(const DXGI_FORMAT renderTargetFormat)
-    {
-        // Root parameters expose the current atlas page, the structured
-        // glyph-instance range, and the viewport size to the shaders.
-        D3D12_DESCRIPTOR_RANGE atlasRange{};
-        atlasRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        atlasRange.NumDescriptors = 1;
-        atlasRange.BaseShaderRegister = 0;
-        atlasRange.RegisterSpace = 0;
-        atlasRange.OffsetInDescriptorsFromTableStart = 0;
-
-        std::array<D3D12_ROOT_PARAMETER, 3> parameters{};
-        parameters[0].ParameterType =
-            D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        parameters[0].DescriptorTable.NumDescriptorRanges = 1;
-        parameters[0].DescriptorTable.pDescriptorRanges =
-            &atlasRange;
-        parameters[0].ShaderVisibility =
-            D3D12_SHADER_VISIBILITY_PIXEL;
-
-        parameters[1].ParameterType =
-            D3D12_ROOT_PARAMETER_TYPE_SRV;
-        parameters[1].Descriptor.ShaderRegister = 1;
-        parameters[1].Descriptor.RegisterSpace = 0;
-        parameters[1].ShaderVisibility =
-            D3D12_SHADER_VISIBILITY_VERTEX;
-
-        parameters[2].ParameterType =
-            D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        parameters[2].Constants.ShaderRegister = 0;
-        parameters[2].Constants.RegisterSpace = 0;
-        parameters[2].Constants.Num32BitValues = 2;
-        parameters[2].ShaderVisibility =
-            D3D12_SHADER_VISIBILITY_VERTEX;
-
-        D3D12_STATIC_SAMPLER_DESC sampler{};
-        sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-        sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        sampler.MipLODBias = 0.0F;
-        sampler.MaxAnisotropy = 1;
-        sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-        sampler.BorderColor =
-            D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-        sampler.MinLOD = 0.0F;
-        sampler.MaxLOD = FLT_MAX;
-        sampler.ShaderRegister = 0;
-        sampler.RegisterSpace = 0;
-        sampler.ShaderVisibility =
-            D3D12_SHADER_VISIBILITY_PIXEL;
-
-        D3D12_ROOT_SIGNATURE_DESC rootDescription{};
-        rootDescription.NumParameters =
-            static_cast<UINT>(parameters.size());
-        rootDescription.pParameters = parameters.data();
-        rootDescription.NumStaticSamplers = 1;
-        rootDescription.pStaticSamplers = &sampler;
-        rootDescription.Flags =
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-        ComPtr<ID3DBlob> serialized;
-        ComPtr<ID3DBlob> errors;
-        const HRESULT serializationResult =
-            D3D12SerializeRootSignature(
-                &rootDescription,
-                D3D_ROOT_SIGNATURE_VERSION_1,
-                serialized.ReleaseAndGetAddressOf(),
-                errors.ReleaseAndGetAddressOf());
-        if (FAILED(serializationResult))
-        {
-            const std::string details = errors != nullptr
-                ? std::string(
-                    static_cast<const char*>(
-                        errors->GetBufferPointer()),
-                    errors->GetBufferSize())
-                : "No root-signature diagnostics were returned.";
-            throw std::runtime_error(
-                "Text root-signature serialization failed: " +
-                details);
-        }
-        ThrowIfFailed(
-            device->CreateRootSignature(
-                0,
-                serialized->GetBufferPointer(),
-                serialized->GetBufferSize(),
-                IID_PPV_ARGS(
-                    rootSignature.ReleaseAndGetAddressOf())),
-            "ID3D12Device::CreateRootSignature(text)");
-
-        const ComPtr<ID3DBlob> vertexShader =
-            CompileShader(
-                BuiltInShader::Text,
-                "VSMain",
-                "vs_5_1");
-        const ComPtr<ID3DBlob> pixelShader =
-            CompileShader(
-                BuiltInShader::Text,
-                "PSMain",
-                "ps_5_1");
-
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
-        pipeline.pRootSignature = rootSignature.Get();
-        pipeline.VS = {
-            vertexShader->GetBufferPointer(),
-            vertexShader->GetBufferSize()};
-        pipeline.PS = {
-            pixelShader->GetBufferPointer(),
-            pixelShader->GetBufferSize()};
-        pipeline.BlendState.AlphaToCoverageEnable = FALSE;
-        pipeline.BlendState.IndependentBlendEnable = FALSE;
-        D3D12_RENDER_TARGET_BLEND_DESC& blend =
-            pipeline.BlendState.RenderTarget[0];
-        blend.BlendEnable = TRUE;
-        blend.LogicOpEnable = FALSE;
-        blend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-        blend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-        blend.BlendOp = D3D12_BLEND_OP_ADD;
-        blend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        blend.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-        blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        blend.LogicOp = D3D12_LOGIC_OP_NOOP;
-        blend.RenderTargetWriteMask =
-            D3D12_COLOR_WRITE_ENABLE_ALL;
-
-        pipeline.SampleMask = UINT_MAX;
-        pipeline.RasterizerState.FillMode =
-            D3D12_FILL_MODE_SOLID;
-        pipeline.RasterizerState.CullMode =
-            D3D12_CULL_MODE_NONE;
-        pipeline.RasterizerState.FrontCounterClockwise = FALSE;
-        pipeline.RasterizerState.DepthBias =
-            D3D12_DEFAULT_DEPTH_BIAS;
-        pipeline.RasterizerState.DepthBiasClamp =
-            D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-        pipeline.RasterizerState.SlopeScaledDepthBias =
-            D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-        pipeline.RasterizerState.DepthClipEnable = TRUE;
-        pipeline.RasterizerState.MultisampleEnable = FALSE;
-        pipeline.RasterizerState.AntialiasedLineEnable = FALSE;
-        pipeline.RasterizerState.ForcedSampleCount = 0;
-        pipeline.RasterizerState.ConservativeRaster =
-            D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-        pipeline.DepthStencilState.DepthEnable =
-            depthStencilFormat != DXGI_FORMAT_UNKNOWN;
-        pipeline.DepthStencilState.DepthWriteMask =
-            D3D12_DEPTH_WRITE_MASK_ZERO;
-        pipeline.DepthStencilState.DepthFunc =
-            D3D12_COMPARISON_FUNC_LESS_EQUAL;
-        pipeline.DepthStencilState.StencilEnable = FALSE;
-        pipeline.InputLayout = {nullptr, 0};
-        pipeline.PrimitiveTopologyType =
-            D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pipeline.NumRenderTargets = 1;
-        pipeline.RTVFormats[0] = renderTargetFormat;
-        pipeline.DSVFormat = depthStencilFormat;
-        pipeline.SampleDesc.Count = 1;
-
-        ThrowIfFailed(
-            device->CreateGraphicsPipelineState(
-                &pipeline,
-                IID_PPV_ARGS(
-                    pipelineState.ReleaseAndGetAddressOf())),
-            "ID3D12Device::CreateGraphicsPipelineState(text)");
-    }
-
     void RequireInitialized() const
     {
         if (!initialized)
@@ -1798,11 +1829,9 @@ struct TextRenderSystem::Impl final
     }
 
     ID3D12Device* device{};
-    DXGI_FORMAT depthStencilFormat{DXGI_FORMAT_UNKNOWN};
     ComPtr<IDWriteFactory5> directWriteFactory;
     ComPtr<ID3D12DescriptorHeap> atlasDescriptorHeap;
-    ComPtr<ID3D12RootSignature> rootSignature;
-    ComPtr<ID3D12PipelineState> pipelineState;
+    TextPipeline pipeline;
     std::uint32_t atlasDescriptorSize{};
     std::vector<AtlasPage> atlasPages;
     std::unordered_map<GlyphKey, GlyphEntry, GlyphKeyHash> glyphCache;
