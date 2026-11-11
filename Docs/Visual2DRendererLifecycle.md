@@ -31,6 +31,11 @@ Scene
 따라서 Visual2D가 공유 Mesh, Material, Texture, Font 핸들을 정리하는 동안
 하위 렌더 시스템과 D3D12 장치는 항상 유효하다.
 
+Mesh/Text의 공개 클래스는 생성·제출 계약을 제공하고 GPU 상태는 비공개 구현이
+소유한다. 내부 MeshRenderingBackend와 TextRenderingBackend가 장치 초기화와 기록을
+연결한다. Renderer, Mesh, Text, Visual2D는 Renderer/FrameResources.h의 같은 프레임
+개수를 사용하며 프레임 선택 전 GPU fence 대기 순서는 유지한다.
+
 ## SceneGameClient 화면 사용법
 
 `SceneGameClient` 파생 클래스는 Scene factory에 관리자를 주입한다.

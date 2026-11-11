@@ -6,6 +6,10 @@
 글리프 아틀라스 파이프라인이 담당한다. Direct2D 및 D3D11-on-12는 사용하지
 않는다.
 
+공개 TextRenderSystem은 글꼴·레이아웃 생성, Submit과 통계를 제공한다. 장치·포맷을
+받는 초기화와 프레임 준비·Flush·Canvas 배치 기록은 엔진 내부 TextRenderingBackend에
+있다. Text의 프레임 버퍼와 atlas 회수는 내부 공통 FrameCount를 사용한다.
+
 ## 수명과 호출 시점
 
 1. `D3D12Renderer::Initialize`가 `TextRenderSystem`을 초기화한다.
@@ -27,7 +31,7 @@
 배치는 업로드·instance 범위를 이어서 할당한다.
 
 `Submit`은 command list를 즉시 실행하지 않는다. 화면 clip과 겹치는 글리프를
-CPU 제출 목록에 저장하고 `Flush`가 `DrawInstanced`를 기록한다.
+CPU 제출 목록에 저장하고 내부 `TextRenderingBackend::Flush`가 `DrawInstanced`를 기록한다.
 제출 순서를 유지하면서 연속된 같은 아틀라스 페이지만 묶는다. 페이지별 정렬로
 반투명 텍스트의 앞뒤 합성 순서를 바꾸지 않는다.
 

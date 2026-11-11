@@ -196,6 +196,15 @@ signature·PSO는 각각의 비공개 구현이 소유한다. `TextureManager`�
 descriptor·queue 상태도 비공개 구현이 소유하며, 엔진 내부 TextureRenderingBackend가
 초기화·프레임 정리·타깃 기록을 연결한다.
 
+MeshRenderSystem의 장치·파이프라인·프레임 버퍼도 비공개 구현에 있다. 소비자는
+메시·재질 생성과 제출을 사용하며, 내부 MeshRenderingBackend와 TextRenderingBackend가
+초기화·프레임 준비·GPU 기록을 연결한다. swap chain과 Mesh/Text/Visual2D의 프레임
+개수는 내부 Renderer/FrameResources.h의 D3D12Detail::FrameCount 하나로 정의한다.
+
+공개 Visual2D 계약은 기존 Win32 `LoadImage` 매크로 동작을 유지하도록 Windows.h를
+명시적으로 포함한다. D3D12 타입은 공개하지 않지만 DirectXMath, Win32 매크로와
+Windows 라이브러리 링크 의존은 남는다. 네임스페이스로 이 매크로 충돌을 해결하지 않는다.
+
 `GpuMesh` 생성 시 Shape의 canonical position 정점으로 로컬 Bounding Sphere를 한
 번 계산한다. `MeshInstance::Submit`은 부모를 포함한 월드 행렬로 Sphere 중심과
 반지름을 변환하고 `Camera::Frustum()`에 완전히 벗어난 인스턴스는
