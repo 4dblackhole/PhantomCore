@@ -18,6 +18,11 @@ TextRenderSystem의 Impl은 이 객체를 조립하며 글리프 cache나 프레
 2,048항목 LRU를 소유한다. Impl은 입력 검증과 제출을 조립하고 통계를 전달한다.
 아틀라스는 이 factory를 빌려 사용하며 cache 정리와 factory 해제의 기존 순서를 유지한다.
 
+비공개 `GlyphAtlas`는 글리프 cache·아틀라스 texture/descriptor·업로드와
+프레임 arena를 소유한다. Impl은 준비된 배치를 CPU에서 제출하고 GPU 기록을 위임한다.
+아틀라스는 구체 TextPipeline과 통계만 전달받으며 Impl 전체를 역참조하지 않는다.
+frame arena·cache·페이지·pipeline·descriptor·factory의 기존 정리 순서를 유지한다.
+
 ## 수명과 호출 시점
 
 1. `D3D12Renderer::Initialize`가 `TextRenderSystem`을 초기화한다.
