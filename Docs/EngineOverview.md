@@ -206,6 +206,9 @@ MeshRenderSystem의 장치·파이프라인·프레임 버퍼도 비공개 구�
 명시적으로 포함한다. D3D12 타입은 공개하지 않지만 DirectXMath, Win32 매크로와
 Windows 라이브러리 링크 의존은 남는다. 네임스페이스로 이 매크로 충돌을 해결하지 않는다.
 
+메시 재질 두 종류의 PSO 기술자는 내부 공통 빌더로 만든다. 정점 레이아웃과
+셰이더·root signature는 각 템플릿이 전달하고 불투명/알파의 기존 blend·depth 설정을 보존한다.
+
 `GpuMesh` 생성 시 Shape의 canonical position 정점으로 로컬 Bounding Sphere를 한
 번 계산한다. `MeshInstance::Submit`은 부모를 포함한 월드 행렬로 Sphere 중심과
 반지름을 변환하고 `Camera::Frustum()`에 완전히 벗어난 인스턴스는
