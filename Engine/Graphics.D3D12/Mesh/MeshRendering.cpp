@@ -99,6 +99,66 @@ namespace
         return description;
     }
 
+    [[nodiscard]] D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeMeshPipelineDescription(
+        ID3D12RootSignature* rootSignature, ID3DBlob& vertexShader,
+        ID3DBlob& pixelShader, std::span<const D3D12_INPUT_ELEMENT_DESC> inputLayout,
+        const DXGI_FORMAT renderTargetFormat, const DXGI_FORMAT depthStencilFormat,
+        const bool alphaBlended)
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription{};
+        pipelineDescription.pRootSignature =
+            rootSignature;
+        pipelineDescription.VS = {
+            vertexShader.GetBufferPointer(),
+            vertexShader.GetBufferSize()};
+        pipelineDescription.PS = {
+            pixelShader.GetBufferPointer(),
+            pixelShader.GetBufferSize()};
+        pipelineDescription.BlendState.AlphaToCoverageEnable = FALSE;
+        pipelineDescription.BlendState.IndependentBlendEnable = FALSE;
+        for (auto& target :
+            pipelineDescription.BlendState.RenderTarget)
+        {
+            target = alphaBlended
+                ? AlphaBlendDescription()
+                : OpaqueBlendDescription();
+        }
+        pipelineDescription.SampleMask =
+            std::numeric_limits<UINT>::max();
+        pipelineDescription.RasterizerState.FillMode =
+            D3D12_FILL_MODE_SOLID;
+        pipelineDescription.RasterizerState.CullMode =
+            D3D12_CULL_MODE_NONE;
+        pipelineDescription.RasterizerState.FrontCounterClockwise = FALSE;
+        pipelineDescription.RasterizerState.DepthBias =
+            D3D12_DEFAULT_DEPTH_BIAS;
+        pipelineDescription.RasterizerState.DepthBiasClamp =
+            D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+        pipelineDescription.RasterizerState.SlopeScaledDepthBias =
+            D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+        pipelineDescription.RasterizerState.DepthClipEnable = TRUE;
+        pipelineDescription.DepthStencilState.DepthEnable = TRUE;
+        pipelineDescription.DepthStencilState.DepthWriteMask =
+            alphaBlended
+                ? D3D12_DEPTH_WRITE_MASK_ZERO
+                : D3D12_DEPTH_WRITE_MASK_ALL;
+        pipelineDescription.DepthStencilState.DepthFunc =
+            alphaBlended
+                ? D3D12_COMPARISON_FUNC_LESS_EQUAL
+                : D3D12_COMPARISON_FUNC_LESS;
+        pipelineDescription.DepthStencilState.StencilEnable = FALSE;
+        pipelineDescription.InputLayout = {
+            inputLayout.data(),
+            static_cast<UINT>(inputLayout.size())};
+        pipelineDescription.PrimitiveTopologyType =
+            D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        pipelineDescription.NumRenderTargets = 1;
+        pipelineDescription.RTVFormats[0] = renderTargetFormat;
+        pipelineDescription.DSVFormat = depthStencilFormat;
+        pipelineDescription.SampleDesc.Count = 1;
+        return pipelineDescription;
+    }
+
     [[nodiscard]] std::size_t NextCapacity(
         const std::size_t requiredCount)
     {
@@ -952,52 +1012,10 @@ std::shared_ptr<MaterialTemplate>
 
     // The remaining state is the shared opaque, depth-tested triangle
     // pipeline used by every vertex-color material instance.
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription{};
-    pipelineDescription.pRootSignature =
-        material->implementation_->rootSignature_.Get();
-    pipelineDescription.VS = {
-        vertexShader->GetBufferPointer(),
-        vertexShader->GetBufferSize()};
-    pipelineDescription.PS = {
-        pixelShader->GetBufferPointer(),
-        pixelShader->GetBufferSize()};
-    pipelineDescription.BlendState.AlphaToCoverageEnable = FALSE;
-    pipelineDescription.BlendState.IndependentBlendEnable = FALSE;
-    for (auto& target :
-        pipelineDescription.BlendState.RenderTarget)
-    {
-        target = OpaqueBlendDescription();
-    }
-    pipelineDescription.SampleMask =
-        std::numeric_limits<UINT>::max();
-    pipelineDescription.RasterizerState.FillMode =
-        D3D12_FILL_MODE_SOLID;
-    pipelineDescription.RasterizerState.CullMode =
-        D3D12_CULL_MODE_NONE;
-    pipelineDescription.RasterizerState.FrontCounterClockwise =
-        FALSE;
-    pipelineDescription.RasterizerState.DepthBias =
-        D3D12_DEFAULT_DEPTH_BIAS;
-    pipelineDescription.RasterizerState.DepthBiasClamp =
-        D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-    pipelineDescription.RasterizerState.SlopeScaledDepthBias =
-        D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-    pipelineDescription.RasterizerState.DepthClipEnable = TRUE;
-    pipelineDescription.DepthStencilState.DepthEnable = TRUE;
-    pipelineDescription.DepthStencilState.DepthWriteMask =
-        D3D12_DEPTH_WRITE_MASK_ALL;
-    pipelineDescription.DepthStencilState.DepthFunc =
-        D3D12_COMPARISON_FUNC_LESS;
-    pipelineDescription.DepthStencilState.StencilEnable = FALSE;
-    pipelineDescription.InputLayout = {
-        inputLayout.data(),
-        static_cast<UINT>(inputLayout.size())};
-    pipelineDescription.PrimitiveTopologyType =
-        D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipelineDescription.NumRenderTargets = 1;
-    pipelineDescription.RTVFormats[0] = renderTargetFormat_;
-    pipelineDescription.DSVFormat = depthStencilFormat_;
-    pipelineDescription.SampleDesc.Count = 1;
+    const D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription =
+        MakeMeshPipelineDescription(material->implementation_->rootSignature_.Get(),
+            *vertexShader.Get(), *pixelShader.Get(), inputLayout, renderTargetFormat_,
+            depthStencilFormat_, false);
 
     D3D12Detail::ThrowIfFailed(
         device_->CreateGraphicsPipelineState(
@@ -1188,57 +1206,10 @@ std::shared_ptr<MaterialTemplate>
     // Build the depth-tested PSO after both the root signature and
     // complete vertex/instance layout are fixed. Transparent materials
     // preserve the existing depth and blend over the opaque pass.
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription{};
-    pipelineDescription.pRootSignature =
-        material->implementation_->rootSignature_.Get();
-    pipelineDescription.VS = {
-        vertexShader->GetBufferPointer(),
-        vertexShader->GetBufferSize()};
-    pipelineDescription.PS = {
-        pixelShader->GetBufferPointer(),
-        pixelShader->GetBufferSize()};
-    pipelineDescription.BlendState.AlphaToCoverageEnable = FALSE;
-    pipelineDescription.BlendState.IndependentBlendEnable = FALSE;
-    for (auto& target :
-        pipelineDescription.BlendState.RenderTarget)
-    {
-        target = alphaBlended
-            ? AlphaBlendDescription()
-            : OpaqueBlendDescription();
-    }
-    pipelineDescription.SampleMask =
-        std::numeric_limits<UINT>::max();
-    pipelineDescription.RasterizerState.FillMode =
-        D3D12_FILL_MODE_SOLID;
-    pipelineDescription.RasterizerState.CullMode =
-        D3D12_CULL_MODE_NONE;
-    pipelineDescription.RasterizerState.FrontCounterClockwise = FALSE;
-    pipelineDescription.RasterizerState.DepthBias =
-        D3D12_DEFAULT_DEPTH_BIAS;
-    pipelineDescription.RasterizerState.DepthBiasClamp =
-        D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-    pipelineDescription.RasterizerState.SlopeScaledDepthBias =
-        D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-    pipelineDescription.RasterizerState.DepthClipEnable = TRUE;
-    pipelineDescription.DepthStencilState.DepthEnable = TRUE;
-    pipelineDescription.DepthStencilState.DepthWriteMask =
-        alphaBlended
-            ? D3D12_DEPTH_WRITE_MASK_ZERO
-            : D3D12_DEPTH_WRITE_MASK_ALL;
-    pipelineDescription.DepthStencilState.DepthFunc =
-        alphaBlended
-            ? D3D12_COMPARISON_FUNC_LESS_EQUAL
-            : D3D12_COMPARISON_FUNC_LESS;
-    pipelineDescription.DepthStencilState.StencilEnable = FALSE;
-    pipelineDescription.InputLayout = {
-        inputLayout.data(),
-        static_cast<UINT>(inputLayout.size())};
-    pipelineDescription.PrimitiveTopologyType =
-        D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipelineDescription.NumRenderTargets = 1;
-    pipelineDescription.RTVFormats[0] = renderTargetFormat_;
-    pipelineDescription.DSVFormat = depthStencilFormat_;
-    pipelineDescription.SampleDesc.Count = 1;
+    const D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription =
+        MakeMeshPipelineDescription(material->implementation_->rootSignature_.Get(),
+            *vertexShader.Get(), *pixelShader.Get(), inputLayout, renderTargetFormat_,
+            depthStencilFormat_, alphaBlended);
 
     D3D12Detail::ThrowIfFailed(
         device_->CreateGraphicsPipelineState(
