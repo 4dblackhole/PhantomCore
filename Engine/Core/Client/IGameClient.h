@@ -20,6 +20,11 @@ struct PerformanceStatistics final
 {
     std::uint64_t framesPerSecond{};
     std::uint64_t updatesPerSecond{};
+    // GPU draw calls recorded per rendered frame in the interval: rounded
+    // average and largest single frame. Batching merges consecutive
+    // primitives that share a pipeline and texture page into one draw.
+    std::uint64_t drawCallsPerFrame{};
+    std::uint64_t peakDrawCallsPerFrame{};
     std::uint64_t measurementIndex{};
     bool hasMeasurement{};
 };

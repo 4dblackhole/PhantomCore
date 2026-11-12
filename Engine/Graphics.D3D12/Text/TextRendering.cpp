@@ -809,6 +809,7 @@ namespace
                     static_cast<UINT>(endInstance - firstInstance),
                     0,
                     0);
+                ++D3D12Detail::RecordedDrawCalls();
                 firstInstance = endInstance;
             }
         }

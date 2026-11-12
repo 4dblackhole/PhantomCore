@@ -49,6 +49,8 @@ public:
     // current frame resource with the fence value that protects it.
     void EndFrame();
     void WaitForGpu();
+    // Draw calls recorded by the most recently completed BeginFrame/EndFrame.
+    [[nodiscard]] std::uint32_t LastFrameDrawCalls() const noexcept { return lastFrameDrawCalls_; }
 
     [[nodiscard]] ID3D12Device* Device() const noexcept;
     [[nodiscard]] MeshRenderSystem& MeshRendering() const noexcept;
@@ -76,6 +78,7 @@ private:
     std::uint32_t rtvDescriptorSize_{};
     bool tearingSupported_{};
     bool frameOpen_{};
+    std::uint32_t lastFrameDrawCalls_{};
 
     DXGI_FORMAT renderTargetFormat_{DXGI_FORMAT_R8G8B8A8_UNORM};
     DXGI_FORMAT depthStencilFormat_{DXGI_FORMAT_D32_FLOAT};

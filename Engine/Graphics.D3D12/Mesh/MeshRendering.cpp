@@ -764,6 +764,7 @@ void MeshRenderSystem::Impl::DrawBatch(
         0,
         0,
         0);
+    ++D3D12Detail::RecordedDrawCalls();
 }
 
 GpuMeshHandle MeshRenderSystem::Impl::CreateMeshData(

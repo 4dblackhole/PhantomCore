@@ -802,6 +802,7 @@ struct D3D12Visual2DRenderer::Impl
             static_cast<UINT>(rectangles.size()),
             0,
             0);
+        ++D3D12Detail::RecordedDrawCalls();
     }
 
     void DrawVisuals(
@@ -855,6 +856,7 @@ struct D3D12Visual2DRenderer::Impl
             static_cast<UINT>(visuals.size()),
             0,
             0);
+        ++D3D12Detail::RecordedDrawCalls();
     }
 
     void RecordCanvases(

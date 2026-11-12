@@ -255,6 +255,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
         nullptr);
 
     const std::uint64_t renderIndex = nextRenderIndex_++;
+    D3D12Detail::RecordedDrawCalls() = 0;
     MeshRenderingBackend::BeginFrame(*meshRenderSystem_, frameIndex_);
     TextRenderingBackend::BeginFrame(*textRenderSystem_, frameIndex_, renderIndex);
     static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).BeginScreenFrame(renderIndex, frameIndex_);
@@ -298,6 +299,7 @@ void D3D12Renderer::EndFrame()
         width_,
         height_);
     imageReadbacks_->RecordCopy(*commandList_.Get());
+    lastFrameDrawCalls_ = D3D12Detail::RecordedDrawCalls();
 
     D3D12_RESOURCE_BARRIER toPresent{};
     toPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;

@@ -25,6 +25,8 @@ int main(int argc, char** argv)
         return TestAudioPcm(argc == 3 ? argv[2] : nullptr);
     if (argc == 2 && std::string_view(argv[1]) == "--window-control")
         return TestWindowControl();
+    if (argc == 2 && std::string_view(argv[1]) == "--draw-statistics")
+        return TestDrawStatistics();
     if (argc == 2 && std::string_view(argv[1]) == "--headless-error")
         return TestHeadlessRunError();
     if (argc == 2 && std::string_view(argv[1]) == "--text-rendering")

@@ -108,6 +108,8 @@ namespace
         std::uint64_t renderedFrames{};
         std::uint64_t updatesSinceStatisticsReport{};
         std::uint64_t rendersSinceStatisticsReport{};
+        std::uint64_t drawCallsSinceStatisticsReport{};
+        std::uint64_t peakDrawCallsSinceStatisticsReport{};
         double statisticsReportStartSeconds{};
         PerformanceStatistics performance{};
         double renderInterval{};
@@ -204,6 +206,10 @@ namespace
 
         ++state.renderedFrames;
         ++state.rendersSinceStatisticsReport;
+        const std::uint64_t drawCalls = renderer.LastFrameDrawCalls();
+        state.drawCallsSinceStatisticsReport += drawCalls;
+        state.peakDrawCallsSinceStatisticsReport =
+            std::max(state.peakDrawCallsSinceStatisticsReport, drawCalls);
         AdvanceDeadline(
             state.nextRenderTime,
             state.renderInterval,
@@ -232,10 +238,18 @@ namespace
                 static_cast<double>(state.updatesSinceStatisticsReport) /
                     elapsedSeconds +
                 0.5);
+        state.performance.drawCallsPerFrame =
+            state.rendersSinceStatisticsReport == 0
+                ? 0
+                : (state.drawCallsSinceStatisticsReport + state.rendersSinceStatisticsReport / 2) /
+                      state.rendersSinceStatisticsReport;
+        state.performance.peakDrawCallsPerFrame = state.peakDrawCallsSinceStatisticsReport;
         ++state.performance.measurementIndex;
         state.performance.hasMeasurement = true;
         state.updatesSinceStatisticsReport = 0;
         state.rendersSinceStatisticsReport = 0;
+        state.drawCallsSinceStatisticsReport = 0;
+        state.peakDrawCallsSinceStatisticsReport = 0;
         state.statisticsReportStartSeconds = state.totalSeconds;
     }
 
