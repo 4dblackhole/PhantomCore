@@ -20,7 +20,7 @@ CurvedRectangleShape::CurvedRectangleShape(
         throw std::invalid_argument(
             "CurvedRectangleShape width and height must be positive.");
     }
-    if (curvatureRadians <= 0.0F || curvatureRadians >= DirectX::XM_PI)
+    if (curvatureRadians <= 0.0F || curvatureRadians >= Pi)
     {
         throw std::invalid_argument(
             "CurvedRectangleShape curvature must be between zero and pi.");
@@ -48,7 +48,7 @@ CurvedRectangleShape::CurvedRectangleShape(
         const float cosine = std::cos(angle);
         const float x = radius * sine;
         const float z = radius * (1.0F - cosine);
-        const DirectX::XMFLOAT3 normal{sine, 0.0F, -cosine};
+        const Float3 normal{sine, 0.0F, -cosine};
 
         vertices.push_back({
             {x, -halfHeight, z},

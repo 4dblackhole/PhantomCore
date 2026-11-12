@@ -2,7 +2,7 @@
 
 // Shape feature: backend-neutral canonical and selectable vertex layouts.
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <concepts>
 #include <type_traits>
@@ -13,15 +13,15 @@ namespace PhantomCore
 {
 struct VertexAttributes final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT2 uv{};
-    DirectX::XMFLOAT3 normal{};
-    DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
+    Float3 position{};
+    Float2 uv{};
+    Float3 normal{};
+    Float4 color{1.0F, 1.0F, 1.0F, 1.0F};
 };
 
 struct VertexPosition final
 {
-    DirectX::XMFLOAT3 position{};
+    Float3 position{};
 
     [[nodiscard]] static VertexPosition FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -32,8 +32,8 @@ struct VertexPosition final
 
 struct VertexPositionUv final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT2 uv{};
+    Float3 position{};
+    Float2 uv{};
 
     [[nodiscard]] static VertexPositionUv FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -44,8 +44,8 @@ struct VertexPositionUv final
 
 struct VertexPositionColor final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT4 color{};
+    Float3 position{};
+    Float4 color{};
 
     [[nodiscard]] static VertexPositionColor FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -56,9 +56,9 @@ struct VertexPositionColor final
 
 struct VertexPositionUvColor final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT2 uv{};
-    DirectX::XMFLOAT4 color{};
+    Float3 position{};
+    Float2 uv{};
+    Float4 color{};
 
     [[nodiscard]] static VertexPositionUvColor FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -72,8 +72,8 @@ struct VertexPositionUvColor final
 
 struct VertexPositionNormal final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT3 normal{};
+    Float3 position{};
+    Float3 normal{};
 
     [[nodiscard]] static VertexPositionNormal FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -84,9 +84,9 @@ struct VertexPositionNormal final
 
 struct VertexPositionNormalUv final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT3 normal{};
-    DirectX::XMFLOAT2 uv{};
+    Float3 position{};
+    Float3 normal{};
+    Float2 uv{};
 
     [[nodiscard]] static VertexPositionNormalUv FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -100,10 +100,10 @@ struct VertexPositionNormalUv final
 
 struct VertexPositionNormalUvColor final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT3 normal{};
-    DirectX::XMFLOAT2 uv{};
-    DirectX::XMFLOAT4 color{};
+    Float3 position{};
+    Float3 normal{};
+    Float2 uv{};
+    Float4 color{};
 
     [[nodiscard]] static VertexPositionNormalUvColor FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -128,6 +128,16 @@ concept ShapeVertex =
             VertexType::FromAttributes(attributes)
         } noexcept -> std::same_as<VertexType>;
     };
+
+// Keep shader input strides and offsets unchanged across the storage migration.
+static_assert(sizeof(VertexAttributes) == 48 && offsetof(VertexAttributes, color) == 32);
+static_assert(sizeof(VertexPosition) == 12);
+static_assert(sizeof(VertexPositionUv) == 20 && offsetof(VertexPositionUv, uv) == 12);
+static_assert(sizeof(VertexPositionColor) == 28 && offsetof(VertexPositionColor, color) == 12);
+static_assert(sizeof(VertexPositionUvColor) == 36 && offsetof(VertexPositionUvColor, color) == 20);
+static_assert(sizeof(VertexPositionNormal) == 24 && offsetof(VertexPositionNormal, normal) == 12);
+static_assert(sizeof(VertexPositionNormalUv) == 32 && offsetof(VertexPositionNormalUv, uv) == 24);
+static_assert(sizeof(VertexPositionNormalUvColor) == 48 && offsetof(VertexPositionNormalUvColor, color) == 32);
 
 static_assert(ShapeVertex<VertexPosition>);
 static_assert(ShapeVertex<VertexPositionUv>);

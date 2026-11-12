@@ -15,7 +15,7 @@ RectangleShape::RectangleShape(const float width, const float height)
 
     const float halfWidth = width * 0.5F;
     const float halfHeight = height * 0.5F;
-    constexpr DirectX::XMFLOAT3 normal{0.0F, 0.0F, -1.0F};
+    constexpr Float3 normal{0.0F, 0.0F, -1.0F};
 
     std::vector<VertexAttributes> vertices{
         {{-halfWidth, -halfHeight, 0.0F}, {0.0F, 1.0F}, normal},

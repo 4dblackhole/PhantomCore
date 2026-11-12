@@ -3,7 +3,6 @@
 #include "../App/InputStateTests.h"
 #include "PhantomCore.h"
 
-#include <DirectXMath.h>
 
 #include <algorithm>
 #include <cmath>
@@ -38,7 +37,7 @@ namespace
         public Visual2DRenderSystem
     {
     public:
-        [[nodiscard]] ImageHandle LoadImage(
+        [[nodiscard]] ImageHandle LoadImageFile(
             const std::filesystem::path&) override
         {
             ++imageLoads;
@@ -67,9 +66,9 @@ namespace
         void SubmitPlane(
             const Visual2DCanvas&,
             const RenderContext&,
-            const DirectX::XMFLOAT4X4&,
+            const Float4x4&,
             Size,
-            const DirectX::XMFLOAT4X4&) override
+            const Float4x4&) override
         {
         }
 
@@ -165,35 +164,55 @@ namespace
     }
 
     [[nodiscard]] bool MatricesNearlyEqual(
-        const DirectX::XMMATRIX first,
-        const DirectX::XMMATRIX second,
+        const Float4x4& first,
+        const Float4x4& second,
         const float epsilon = 1.0e-4F) noexcept
     {
-        const DirectX::XMVECTOR tolerance =
-            DirectX::XMVectorReplicate(epsilon);
-        return DirectX::XMVector4NearEqual(first.r[0], second.r[0], tolerance) &&
-            DirectX::XMVector4NearEqual(first.r[1], second.r[1], tolerance) &&
-            DirectX::XMVector4NearEqual(first.r[2], second.r[2], tolerance) &&
-            DirectX::XMVector4NearEqual(first.r[3], second.r[3], tolerance);
+        for (std::size_t row = 0; row < 4; ++row)
+            for (std::size_t column = 0; column < 4; ++column)
+                if (!(std::abs(first.m[row][column] - second.m[row][column]) <= epsilon))
+                    return false;
+        return true;
+    }
+
+    void TestPublicMathTransforms()
+    {
+        const auto near = [](const Float3& a, const Float3& b)
+        {
+            return std::abs(a.x - b.x) < 1.0e-4F && std::abs(a.y - b.y) < 1.0e-4F &&
+                   std::abs(a.z - b.z) < 1.0e-4F;
+        };
+        const Float3 point{1, 2, 3};
+        Check(near(TransformPoint(point, IdentityMatrix()), point), "Identity preserves point coordinates");
+        const auto transform = Multiply(ScalingMatrix(2, 3, 4), TranslationMatrix(5, -2, 7));
+        const auto transformed = TransformPoint(point, transform);
+        Check(near(transformed, {7, 4, 19}), "Row-vector composition applies scale before translation");
+        Check(near(TransformDirection(point, transform), {2, 6, 12}), "Direction excludes translation");
+        Check(near(TransformPoint(transformed, Inverse(transform)), point), "Inverse restores the original point");
+        Check(near(TransformPoint({1, 0, 0}, RotationYMatrix(HalfPi)), {0, 0, -1}),
+              "Positive Y rotation preserves the established handedness");
+        const auto projection = OrthographicLHMatrix(4, 8, 2, 6);
+        Check(near(TransformPoint({2, 4, 2}, projection), {1, 1, 0}) &&
+              near(TransformPoint({-2, -4, 6}, projection), {-1, -1, 1}),
+              "LH orthographic projection preserves clip-space bounds and depth");
     }
 
     void TestCameraMatrices()
     {
-        using namespace DirectX;
 
         Camera camera;
         const Camera& readOnlyCamera = camera;
-        const XMMATRIX initialView = readOnlyCamera.ViewMatrix();
-        const XMMATRIX initialProjection = readOnlyCamera.ProjectionMatrix();
+        const Float4x4 initialView = readOnlyCamera.ViewMatrix();
+        const Float4x4 initialProjection = readOnlyCamera.ProjectionMatrix();
         Check(
             MatricesNearlyEqual(
                 readOnlyCamera.ViewProjectionMatrix(),
-                initialView * initialProjection),
+                Multiply(initialView, initialProjection)),
             "a const Camera returns its cached view-projection matrix");
 
         camera.SetPosition(2.0F, 3.0F, -4.0F);
-        camera.SetYawPitchRadians(XM_PIDIV4, -0.2F);
-        const XMMATRIX movedView = readOnlyCamera.ViewMatrix();
+        camera.SetYawPitchRadians(QuarterPi, -0.2F);
+        const Float4x4 movedView = readOnlyCamera.ViewMatrix();
         Check(
             !MatricesNearlyEqual(movedView, initialView),
             "camera movement invalidates the cached view matrix");
@@ -205,11 +224,11 @@ namespace
         Check(
             MatricesNearlyEqual(
                 readOnlyCamera.ViewProjectionMatrix(),
-                movedView * initialProjection),
+                Multiply(movedView, initialProjection)),
             "camera movement refreshes the cached view-projection matrix");
 
-        camera.SetPerspective(XM_PIDIV2, 16.0F / 9.0F, 0.5F, 500.0F);
-        const XMMATRIX perspectiveProjection = readOnlyCamera.ProjectionMatrix();
+        camera.SetPerspective(HalfPi, 16.0F / 9.0F, 0.5F, 500.0F);
+        const Float4x4 perspectiveProjection = readOnlyCamera.ProjectionMatrix();
         Check(
             MatricesNearlyEqual(readOnlyCamera.ViewMatrix(), movedView),
             "projection changes preserve the cached view matrix");
@@ -219,12 +238,12 @@ namespace
         Check(
             MatricesNearlyEqual(
                 readOnlyCamera.ViewProjectionMatrix(),
-                movedView * perspectiveProjection),
+                Multiply(movedView, perspectiveProjection)),
             "perspective changes refresh the cached view-projection matrix");
 
         camera.SetOrthographic(1920.0F, 1080.0F, 0.0F, 10.0F);
-        const XMMATRIX orthographicProjection =
-            XMMatrixOrthographicLH(1920.0F, 1080.0F, 0.0F, 10.0F);
+        const Float4x4 orthographicProjection =
+            OrthographicLHMatrix(1920.0F, 1080.0F, 0.0F, 10.0F);
         Check(
             MatricesNearlyEqual(
                 readOnlyCamera.ProjectionMatrix(),
@@ -233,7 +252,7 @@ namespace
         Check(
             MatricesNearlyEqual(
                 readOnlyCamera.ViewProjectionMatrix(),
-                movedView * orthographicProjection),
+                Multiply(movedView, orthographicProjection)),
             "orthographic mode refreshes the cached view-projection matrix");
     }
 
@@ -242,7 +261,7 @@ namespace
 
 
         Camera camera;
-        camera.SetPerspective(DirectX::XM_PIDIV2, 1.0F, 1.0F, 10.0F);
+        camera.SetPerspective(HalfPi, 1.0F, 1.0F, 10.0F);
         const ViewFrustum& frustum = camera.Frustum();
 
         Check(
@@ -356,7 +375,7 @@ namespace
         instanceTransform.SetPosition(1.0F, 0.0F, 0.0F);
         instanceTransform.SetRotationRollPitchYaw(
             0.0F,
-            DirectX::XM_PIDIV4,
+            QuarterPi,
             0.0F);
 
         const Sphere3D initialWorldSphere = TransformSphere(
@@ -393,11 +412,9 @@ namespace
                 VolumeIntersection::Outside,
             "camera movement refreshes the frustum around moved bounds");
 
-        DirectX::XMFLOAT4X4 rotatedNonuniformWorld{};
-        DirectX::XMStoreFloat4x4(
-            &rotatedNonuniformWorld,
-            DirectX::XMMatrixScaling(-2.0F, 3.0F, 4.0F) *
-                DirectX::XMMatrixRotationY(DirectX::XM_PIDIV4));
+        Float4x4 rotatedNonuniformWorld{};
+        rotatedNonuniformWorld = Multiply(
+            ScalingMatrix(-2.0F, 3.0F, 4.0F), RotationYMatrix(QuarterPi));
         const Sphere3D rotatedWorldSphere = TransformSphere(
             Sphere3D{{1.0F, 0.0F, 0.0F}, 2.0F},
             rotatedNonuniformWorld);
@@ -479,7 +496,7 @@ namespace
         const Obb2D rotatedBox{
             {0.0F, 0.0F},
             {2.0F, 0.5F},
-            DirectX::XM_PIDIV4};
+            QuarterPi};
         Check(
             Intersects(Circle2D{{1.2F, 1.2F}, 0.25F}, rotatedBox),
             "circle intersects rotated OBB");
@@ -490,15 +507,15 @@ namespace
         const Obb2D overlapping{
             {1.0F, 0.0F},
             {1.0F, 1.0F},
-            -DirectX::XM_PIDIV4};
+            -QuarterPi};
         const Obb2D separate{
             {6.0F, 0.0F},
             {1.0F, 1.0F},
-            DirectX::XM_PIDIV4};
+            QuarterPi};
         Check(Intersects(rotatedBox, overlapping), "two OBBs overlap");
         Check(!Intersects(rotatedBox, separate), "two OBBs are separate");
 
-        const DirectX::XMFLOAT2 closest = ClosestPoint(
+        const Float2 closest = ClosestPoint(
             Obb2D{{0.0F, 0.0F}, {1.0F, 2.0F}, 0.0F},
             {4.0F, 3.0F});
         Check(
@@ -525,7 +542,7 @@ namespace
             {0.0F, 0.0F, 0.0F},
             {1.0F, 1.0F, 1.0F},
             {0.0F, 0.0F, 0.0F, 1.0F}};
-        const float halfAngle = DirectX::XM_PIDIV4 * 0.5F;
+        const float halfAngle = QuarterPi * 0.5F;
         const Obb3D rotated{
             {1.4F, 0.0F, 0.0F},
             {1.0F, 0.5F, 1.0F},
@@ -579,8 +596,8 @@ namespace
             Check(NearlyEqual(triangleHit->parameter, 2.0F), "triangle ray parameter");
         }
 
-        DirectX::XMFLOAT4X4 identity{};
-        DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
+        Float4x4 identity{};
+        identity = IdentityMatrix();
         const PlaneVisual2DSurface plane(
             2.0F, 2.0F, identity);
         const auto planeHit = plane.Raycast(centerRay);
@@ -619,7 +636,7 @@ namespace
         const CurvedRectangleShape curvedRectangle(
             3.2F,
             2.1F,
-            DirectX::XM_PIDIV4,
+            QuarterPi,
             32);
         Check(
             curvedRectangle.VertexCount() == 66 &&
@@ -669,8 +686,8 @@ namespace
             }
         };
 
-        DirectX::XMFLOAT4X4 identity{};
-        DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
+        Float4x4 identity{};
+        identity = IdentityMatrix();
         const LayeredShape shape;
         const MeshUvVisual2DSurface surface(shape, identity, true);
         const auto front = surface.Raycast(
@@ -1176,7 +1193,7 @@ namespace
         centered.Transform().SetRotationRollPitchYaw(
             0.0F,
             0.0F,
-            DirectX::XM_PIDIV4);
+            QuarterPi);
         Visual2DInputRouter router;
         const Point centerPoint{
             0.0F,
@@ -1272,11 +1289,12 @@ int TestCollisionAndVisual2D()
                   expanded[2].text->value == L"after geometry" && expanded[0].cornerRadius == 2 &&
                   expanded[0].clipBounds && retained[0].clipBounds &&
                   expanded[0].clipBounds->x == retained[0].clipBounds->x &&
-                  expanded[0].nodeTransform._41 == retained[0].nodeTransform._41,
+                  expanded[0].nodeTransform.m[3][0] == retained[0].nodeTransform.m[3][0],
               "Immutable rectangle batches retain lifetime, primitive order, transform and clipping.");
     }
     failureCount += TestInputState();
     TestManagedScreenVisual2D();
+    TestPublicMathTransforms();
     TestCameraMatrices();
     TestPerspectiveFrustum();
     TestOrthographicFrustum();

@@ -5,7 +5,7 @@
 #include "Shape/Vertex.h"
 #include "Texture/TextureManager.h"
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -201,15 +201,15 @@ public:
     void Submit(
         GpuMeshHandle mesh,
         MaterialInstanceHandle material,
-        const DirectX::XMFLOAT4X4& world,
-        const DirectX::XMFLOAT4X4& viewProjection,
-        const DirectX::XMFLOAT4& color,
-        const DirectX::XMFLOAT2& uvScale,
-        const DirectX::XMFLOAT2& uvOffset,
+        const Float4x4& world,
+        const Float4x4& viewProjection,
+        const Float4& color,
+        const Float2& uvScale,
+        const Float2& uvOffset,
         std::uint32_t textureIndex,
-        DirectX::XMFLOAT4 clipRectPixels = {
+        Float4 clipRectPixels = {
             -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F},
-        DirectX::XMFLOAT4 roundedRectLocal = {},
+        Float4 roundedRectLocal = {},
         float cornerRadiusLocal = 0.0F);
 
 private:

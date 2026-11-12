@@ -9,6 +9,7 @@
 #include <d3d12.h>
 
 #include <memory>
+#include <vector>
 
 
 namespace PhantomCore
@@ -29,11 +30,11 @@ public:
         TextRenderSystem& textRendering,
         DXGI_FORMAT depthStencilFormat);
     void Shutdown() noexcept;
-    void BeginScreenFrame(std::uint64_t renderIndex);
+    void BeginScreenFrame(std::uint64_t renderIndex, std::uint32_t frameIndex);
     void DrawScreen(ID3D12GraphicsCommandList& commands, std::uint32_t frameIndex,
                     std::uint32_t width, std::uint32_t height);
 
-    [[nodiscard]] ImageHandle LoadImage(
+    [[nodiscard]] ImageHandle LoadImageFile(
         const std::filesystem::path& path) override;
     bool PrepareImages(std::span<const std::filesystem::path> paths, std::string &error) override;
     [[nodiscard]] Size GetImageSize(
@@ -46,9 +47,9 @@ public:
     void SubmitPlane(
         const Visual2DCanvas& canvas,
         const RenderContext& context,
-        const DirectX::XMFLOAT4X4& surfaceWorld,
+        const Float4x4& surfaceWorld,
         Size surfaceWorldSize,
-        const DirectX::XMFLOAT4X4& viewProjection) override;
+        const Float4x4& viewProjection) override;
     [[nodiscard]] RenderTargetTextureHandle CreateCanvasRenderTarget(
         std::uint32_t width,
         std::uint32_t height) override;
@@ -58,6 +59,9 @@ public:
         const RenderContext& context) override;
 
 private:
+    void RecordCanvasTexture(Size logicalSize, std::vector<DrawPacket> commands,
+        const RenderTargetTextureHandle& target, const RenderContext& context,
+        bool flattenDepth);
     [[nodiscard]] bool IsInitialized() const noexcept;
 
     struct Impl;

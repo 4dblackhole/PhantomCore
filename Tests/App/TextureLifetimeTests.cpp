@@ -145,9 +145,9 @@ namespace
             auto material = context.meshRendering->CreateMaterial(
                 BuiltInMaterial::UnlitVertexColorTextureArrayAlphaBlend);
             material->SetTextureSet(textures);
-            DirectX::XMFLOAT4X4 world, viewProjection;
-            DirectX::XMStoreFloat4x4(&world, DirectX::XMMatrixTranslation(x, 0, 1));
-            DirectX::XMStoreFloat4x4(&viewProjection, camera_.ViewProjectionMatrix());
+            Float4x4 world, viewProjection;
+            world = TranslationMatrix(x, 0, 1);
+            viewProjection = camera_.ViewProjectionMatrix();
             context.meshRendering->Submit(mesh_, material, world, viewProjection,
                                           {1, 1, 1, 1}, {1, 1}, {}, 0);
         }

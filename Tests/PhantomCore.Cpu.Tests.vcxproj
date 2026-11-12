@@ -93,4 +93,9 @@
     </ItemGroup>
   </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ItemGroup>
+    <ClInclude Include="..\Engine\Math\Math.h" />
+    <ClInclude Include="..\Engine\Math\DirectXMathBridge.h" />
+    <ClCompile Include="..\Engine\Math\Math.cpp" />
+  </ItemGroup>
 </Project>

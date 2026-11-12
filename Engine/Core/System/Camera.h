@@ -4,7 +4,7 @@
 
 #include "Query/Collision.h"
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstdint>
 
@@ -26,8 +26,8 @@ public:
     Camera() = default;
 
     void SetPosition(float x, float y, float z) noexcept;
-    void SetPosition(const DirectX::XMFLOAT3& position) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT3& Position() const noexcept;
+    void SetPosition(const Float3& position) noexcept;
+    [[nodiscard]] const Float3& Position() const noexcept;
 
     // Angles are radians.  Pitch is clamped short of +/- pi/2 so the
     // forward vector never becomes parallel to the world-up vector.
@@ -38,9 +38,9 @@ public:
     [[nodiscard]] float YawRadians() const noexcept;
     [[nodiscard]] float PitchRadians() const noexcept;
 
-    [[nodiscard]] DirectX::XMFLOAT3 Forward() const noexcept;
-    [[nodiscard]] DirectX::XMFLOAT3 Right() const noexcept;
-    [[nodiscard]] DirectX::XMFLOAT3 Up() const noexcept;
+    [[nodiscard]] Float3 Forward() const noexcept;
+    [[nodiscard]] Float3 Right() const noexcept;
+    [[nodiscard]] Float3 Up() const noexcept;
 
     // Perspective arguments are vertical FOV in radians, aspect ratio,
     // and positive near/far planes.  This also selects Perspective mode.
@@ -71,9 +71,9 @@ public:
     [[nodiscard]] float NearPlane() const noexcept;
     [[nodiscard]] float FarPlane() const noexcept;
 
-    [[nodiscard]] DirectX::XMMATRIX ViewMatrix() const noexcept;
-    [[nodiscard]] DirectX::XMMATRIX ProjectionMatrix() const noexcept;
-    [[nodiscard]] DirectX::XMMATRIX ViewProjectionMatrix() const noexcept;
+    [[nodiscard]] Float4x4 ViewMatrix() const noexcept;
+    [[nodiscard]] Float4x4 ProjectionMatrix() const noexcept;
+    [[nodiscard]] Float4x4 ViewProjectionMatrix() const noexcept;
     [[nodiscard]] const ViewFrustum& Frustum() const noexcept;
 
 private:
@@ -85,19 +85,19 @@ private:
     void UpdateViewProjectionMatrix() const noexcept;
     void UpdateFrustum() const noexcept;
 
-    DirectX::XMFLOAT3 position_{};
+    Float3 position_{};
     float yawRadians_{};
     float pitchRadians_{};
     CameraProjectionType projectionType_{CameraProjectionType::Perspective};
-    float verticalFieldOfViewRadians_{DirectX::XM_PI / 3.0F};
+    float verticalFieldOfViewRadians_{Pi / 3.0F};
     float perspectiveAspectRatio_{1.0F};
     float orthographicWidth_{1.0F};
     float orthographicHeight_{1.0F};
     float nearPlane_{0.1F};
     float farPlane_{1000.0F};
-    mutable DirectX::XMFLOAT4X4 viewMatrix_{};
-    mutable DirectX::XMFLOAT4X4 projectionMatrix_{};
-    mutable DirectX::XMFLOAT4X4 viewProjectionMatrix_{};
+    mutable Float4x4 viewMatrix_{};
+    mutable Float4x4 projectionMatrix_{};
+    mutable Float4x4 viewProjectionMatrix_{};
     mutable ViewFrustum frustum_{};
     mutable bool viewDirty_{true};
     mutable bool projectionDirty_{true};

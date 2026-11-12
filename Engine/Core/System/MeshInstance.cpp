@@ -68,12 +68,12 @@ const TransformNode& MeshInstance::Transform() const noexcept
     return transform_;
 }
 
-void MeshInstance::SetColor(const XMFLOAT4& color) noexcept
+void MeshInstance::SetColor(const Float4& color) noexcept
 {
     color_ = color;
 }
 
-const XMFLOAT4& MeshInstance::Color() const noexcept
+const Float4& MeshInstance::Color() const noexcept
 {
     return color_;
 }
@@ -97,8 +97,8 @@ std::uint32_t MeshInstance::TextureIndex() const noexcept
 }
 
 void MeshInstance::SetUvTransform(
-    const XMFLOAT2& scale,
-    const XMFLOAT2& offset) noexcept
+    const Float2& scale,
+    const Float2& offset) noexcept
 {
     uvScale_ = scale;
     uvOffset_ = offset;
@@ -110,12 +110,12 @@ void MeshInstance::SetUvTransform(
     SetUvTransform(transform.scale, transform.offset);
 }
 
-const XMFLOAT2& MeshInstance::UvScale() const noexcept
+const Float2& MeshInstance::UvScale() const noexcept
 {
     return uvScale_;
 }
 
-const XMFLOAT2& MeshInstance::UvOffset() const noexcept
+const Float2& MeshInstance::UvOffset() const noexcept
 {
     return uvOffset_;
 }
@@ -167,7 +167,7 @@ void MeshInstance::Submit(
             "RenderContext has no mesh rendering service.");
     }
 
-    const XMFLOAT4X4& world = transform_.WorldMatrix();
+    const Float4x4& world = transform_.WorldMatrix();
     if (Classify(
             camera.Frustum(),
             TransformSphere(
@@ -177,10 +177,7 @@ void MeshInstance::Submit(
         return;
     }
 
-    XMFLOAT4X4 viewProjection{};
-    XMStoreFloat4x4(
-        &viewProjection,
-        camera.ViewProjectionMatrix());
+    const Float4x4 viewProjection = camera.ViewProjectionMatrix();
     context.meshRendering->Submit(
         mesh_,
         material_,

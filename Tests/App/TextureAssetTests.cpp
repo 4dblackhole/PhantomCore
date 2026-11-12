@@ -63,11 +63,11 @@ namespace
             canvas_ = std::make_unique<Visual2DCanvas>(size, CanvasScaleMode::Fixed);
             for (std::size_t index = 0; index < paths_.size(); ++index)
             {
-                const auto image = services.visual2DRendering.LoadImage(paths_[index]);
+                const auto image = services.visual2DRendering.LoadImageFile(paths_[index]);
                 const auto extent = services.visual2DRendering.GetImageSize(image);
                 Require(image.value != 0 && extent.width > 0 && extent.height > 0,
                     "Every requested asset must have a valid image handle and decoded extent.");
-                Require(services.visual2DRendering.LoadImage(paths_[index]).value == image.value,
+                Require(services.visual2DRendering.LoadImageFile(paths_[index]).value == image.value,
                     "Repeated image paths must reuse their registered handle.");
                 auto& node = CreateSprite(canvas_->Root(),
                     {-size.width * .5F + static_cast<float>(index % columns) * cell,

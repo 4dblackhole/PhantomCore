@@ -858,12 +858,48 @@ class IWindowControl
 } // namespace PhantomCore
 // ===== END Engine\Platform.Win32\Window\WindowControl.h =====
 
+// ===== BEGIN Engine\Math\Math.h =====
+
+#include <cstddef>
+#include <type_traits>
+
+namespace PhantomCore
+{
+// Plain float storage. Matrices use row vectors and row-major storage.
+struct Float2 { float x{}; float y{}; };
+struct Float3 { float x{}; float y{}; float z{}; };
+struct Float4 { float x{}; float y{}; float z{}; float w{}; };
+struct Float4x4 { float m[4][4]{}; };
+
+static_assert(std::is_standard_layout_v<Float2> && std::is_trivially_copyable_v<Float2>);
+static_assert(std::is_standard_layout_v<Float3> && std::is_trivially_copyable_v<Float3>);
+static_assert(std::is_standard_layout_v<Float4> && std::is_trivially_copyable_v<Float4>);
+static_assert(std::is_standard_layout_v<Float4x4> && std::is_trivially_copyable_v<Float4x4>);
+static_assert(sizeof(Float2) == 8 && sizeof(Float3) == 12 && sizeof(Float4) == 16);
+static_assert(sizeof(Float4x4) == 64 && offsetof(Float3, z) == 8 && offsetof(Float4, w) == 12);
+
+inline constexpr float Pi = 3.14159265358979323846F;
+inline constexpr float HalfPi = Pi / 2.0F;
+inline constexpr float QuarterPi = Pi / 4.0F;
+
+[[nodiscard]] Float4x4 IdentityMatrix() noexcept;
+[[nodiscard]] Float4x4 TranslationMatrix(float x, float y, float z) noexcept;
+[[nodiscard]] Float4x4 ScalingMatrix(float x, float y, float z) noexcept;
+[[nodiscard]] Float4x4 RotationYMatrix(float radians) noexcept;
+[[nodiscard]] Float4x4 OrthographicLHMatrix(float width, float height, float nearPlane, float farPlane) noexcept;
+[[nodiscard]] Float4x4 Multiply(const Float4x4& left, const Float4x4& right) noexcept;
+// Singular matrices follow IEEE floating-point behavior; callers validate invertibility when required.
+[[nodiscard]] Float4x4 Inverse(const Float4x4& matrix) noexcept;
+[[nodiscard]] Float3 TransformPoint(const Float3& point, const Float4x4& matrix) noexcept;
+[[nodiscard]] Float3 TransformDirection(const Float3& direction, const Float4x4& matrix) noexcept;
+} // namespace PhantomCore
+// ===== END Engine\Math\Math.h =====
+
 // ===== BEGIN Engine\Collision\Query\Collision.h =====
 
 // Backend-neutral 2D/3D collision primitives and stateless intersection
 // queries. All positions and sizes use engine world units.
 
-#include <DirectXMath.h>
 
 #include <cstdint>
 #include <optional>
@@ -875,59 +911,59 @@ inline constexpr float DefaultEpsilon = 1.0e-5F;
 
 struct Line2D
 {
-    DirectX::XMFLOAT2 point{};
-    DirectX::XMFLOAT2 direction{1.0F, 0.0F};
+    Float2 point{};
+    Float2 direction{1.0F, 0.0F};
 };
 
 struct LineSegment2D
 {
-    DirectX::XMFLOAT2 start{};
-    DirectX::XMFLOAT2 end{};
+    Float2 start{};
+    Float2 end{};
 };
 
 struct Circle2D
 {
-    DirectX::XMFLOAT2 center{};
+    Float2 center{};
     float radius{};
 };
 
 // rotationRadians rotates the local X axis counter-clockwise.
 struct Obb2D
 {
-    DirectX::XMFLOAT2 center{};
-    DirectX::XMFLOAT2 halfExtents{0.5F, 0.5F};
+    Float2 center{};
+    Float2 halfExtents{0.5F, 0.5F};
     float rotationRadians{};
 };
 
 struct Line3D
 {
-    DirectX::XMFLOAT3 point{};
-    DirectX::XMFLOAT3 direction{1.0F, 0.0F, 0.0F};
+    Float3 point{};
+    Float3 direction{1.0F, 0.0F, 0.0F};
 };
 
 struct Ray3D
 {
-    DirectX::XMFLOAT3 origin{};
-    DirectX::XMFLOAT3 direction{1.0F, 0.0F, 0.0F};
+    Float3 origin{};
+    Float3 direction{1.0F, 0.0F, 0.0F};
 };
 
 struct LineSegment3D
 {
-    DirectX::XMFLOAT3 start{};
-    DirectX::XMFLOAT3 end{};
+    Float3 start{};
+    Float3 end{};
 };
 
 // Plane equation: dot(normal, point) = distanceFromOrigin.
 // The normal does not have to be normalized.
 struct Plane3D
 {
-    DirectX::XMFLOAT3 normal{0.0F, 1.0F, 0.0F};
+    Float3 normal{0.0F, 1.0F, 0.0F};
     float distanceFromOrigin{};
 };
 
 struct Sphere3D
 {
-    DirectX::XMFLOAT3 center{};
+    Float3 center{};
     float radius{};
 };
 
@@ -952,24 +988,24 @@ enum class VolumeIntersection : std::uint8_t
 
 struct Triangle3D
 {
-    DirectX::XMFLOAT3 first{};
-    DirectX::XMFLOAT3 second{};
-    DirectX::XMFLOAT3 third{};
+    Float3 first{};
+    Float3 second{};
+    Float3 third{};
 };
 
 // orientation is a quaternion in (x, y, z, w) order. It is normalized
 // internally before a query.
 struct Obb3D
 {
-    DirectX::XMFLOAT3 center{};
-    DirectX::XMFLOAT3 halfExtents{0.5F, 0.5F, 0.5F};
-    DirectX::XMFLOAT4 orientation{0.0F, 0.0F, 0.0F, 1.0F};
+    Float3 center{};
+    Float3 halfExtents{0.5F, 0.5F, 0.5F};
+    Float4 orientation{0.0F, 0.0F, 0.0F, 1.0F};
 };
 
 struct LineHit3D
 {
-    DirectX::XMFLOAT3 point{};
-    DirectX::XMFLOAT3 normal{};
+    Float3 point{};
+    Float3 normal{};
 
     // point + direction * parameter for Line3D, origin + direction *
     // parameter for Ray3D, and lerp(start, end, parameter) for a segment.
@@ -979,37 +1015,37 @@ struct LineHit3D
 
 struct TriangleHit3D
 {
-    DirectX::XMFLOAT3 point{};
-    DirectX::XMFLOAT3 normal{};
+    Float3 point{};
+    Float3 normal{};
     // Weights for first, second, and third. They sum to one and can be
     // used to interpolate UVs or other per-vertex attributes.
-    DirectX::XMFLOAT3 barycentric{};
+    Float3 barycentric{};
     float parameter{};
 };
 
 // Extracts a left-handed DirectX frustum (x/y in [-w, w], z in [0, w])
 // from a row-vector view-projection matrix. Extracted planes are normalized.
 [[nodiscard]] ViewFrustum MakeViewFrustum(
-    const DirectX::XMFLOAT4X4& viewProjection) noexcept;
+    const Float4x4& viewProjection) noexcept;
 
 // Transforms a sphere by an affine world matrix. The radius uses the
 // largest world-axis scale and falls back to a conservative matrix-norm
 // bound when a transform hierarchy introduces shear.
 [[nodiscard]] Sphere3D TransformSphere(
     const Sphere3D& sphere,
-    const DirectX::XMFLOAT4X4& world) noexcept;
+    const Float4x4& world) noexcept;
 
 [[nodiscard]] VolumeIntersection Classify(
     const ViewFrustum& frustum,
     const Sphere3D& sphere,
     float epsilon = DefaultEpsilon) noexcept;
 
-[[nodiscard]] DirectX::XMFLOAT2 ClosestPoint(
+[[nodiscard]] Float2 ClosestPoint(
     const LineSegment2D& segment,
-    const DirectX::XMFLOAT2& point) noexcept;
-[[nodiscard]] DirectX::XMFLOAT2 ClosestPoint(
+    const Float2& point) noexcept;
+[[nodiscard]] Float2 ClosestPoint(
     const Obb2D& box,
-    const DirectX::XMFLOAT2& point) noexcept;
+    const Float2& point) noexcept;
 
 [[nodiscard]] bool Intersects(
     const Circle2D& circle,
@@ -1125,7 +1161,6 @@ struct TriangleHit3D
 
 // Shape feature: backend-neutral canonical and selectable vertex layouts.
 
-#include <DirectXMath.h>
 
 #include <concepts>
 #include <type_traits>
@@ -1136,15 +1171,15 @@ namespace PhantomCore
 {
 struct VertexAttributes final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT2 uv{};
-    DirectX::XMFLOAT3 normal{};
-    DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
+    Float3 position{};
+    Float2 uv{};
+    Float3 normal{};
+    Float4 color{1.0F, 1.0F, 1.0F, 1.0F};
 };
 
 struct VertexPosition final
 {
-    DirectX::XMFLOAT3 position{};
+    Float3 position{};
 
     [[nodiscard]] static VertexPosition FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -1155,8 +1190,8 @@ struct VertexPosition final
 
 struct VertexPositionUv final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT2 uv{};
+    Float3 position{};
+    Float2 uv{};
 
     [[nodiscard]] static VertexPositionUv FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -1167,8 +1202,8 @@ struct VertexPositionUv final
 
 struct VertexPositionColor final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT4 color{};
+    Float3 position{};
+    Float4 color{};
 
     [[nodiscard]] static VertexPositionColor FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -1179,9 +1214,9 @@ struct VertexPositionColor final
 
 struct VertexPositionUvColor final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT2 uv{};
-    DirectX::XMFLOAT4 color{};
+    Float3 position{};
+    Float2 uv{};
+    Float4 color{};
 
     [[nodiscard]] static VertexPositionUvColor FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -1195,8 +1230,8 @@ struct VertexPositionUvColor final
 
 struct VertexPositionNormal final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT3 normal{};
+    Float3 position{};
+    Float3 normal{};
 
     [[nodiscard]] static VertexPositionNormal FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -1207,9 +1242,9 @@ struct VertexPositionNormal final
 
 struct VertexPositionNormalUv final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT3 normal{};
-    DirectX::XMFLOAT2 uv{};
+    Float3 position{};
+    Float3 normal{};
+    Float2 uv{};
 
     [[nodiscard]] static VertexPositionNormalUv FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -1223,10 +1258,10 @@ struct VertexPositionNormalUv final
 
 struct VertexPositionNormalUvColor final
 {
-    DirectX::XMFLOAT3 position{};
-    DirectX::XMFLOAT3 normal{};
-    DirectX::XMFLOAT2 uv{};
-    DirectX::XMFLOAT4 color{};
+    Float3 position{};
+    Float3 normal{};
+    Float2 uv{};
+    Float4 color{};
 
     [[nodiscard]] static VertexPositionNormalUvColor FromAttributes(
         const VertexAttributes& attributes) noexcept
@@ -1251,6 +1286,16 @@ concept ShapeVertex =
             VertexType::FromAttributes(attributes)
         } noexcept -> std::same_as<VertexType>;
     };
+
+// Keep shader input strides and offsets unchanged across the storage migration.
+static_assert(sizeof(VertexAttributes) == 48 && offsetof(VertexAttributes, color) == 32);
+static_assert(sizeof(VertexPosition) == 12);
+static_assert(sizeof(VertexPositionUv) == 20 && offsetof(VertexPositionUv, uv) == 12);
+static_assert(sizeof(VertexPositionColor) == 28 && offsetof(VertexPositionColor, color) == 12);
+static_assert(sizeof(VertexPositionUvColor) == 36 && offsetof(VertexPositionUvColor, color) == 20);
+static_assert(sizeof(VertexPositionNormal) == 24 && offsetof(VertexPositionNormal, normal) == 12);
+static_assert(sizeof(VertexPositionNormalUv) == 32 && offsetof(VertexPositionNormalUv, uv) == 24);
+static_assert(sizeof(VertexPositionNormalUvColor) == 48 && offsetof(VertexPositionNormalUvColor, color) == 32);
 
 static_assert(ShapeVertex<VertexPosition>);
 static_assert(ShapeVertex<VertexPositionUv>);
@@ -1396,7 +1441,6 @@ public:
 
 // System feature: reusable hierarchical local and world transforms.
 
-#include <DirectXMath.h>
 
 #include <vector>
 
@@ -1429,10 +1473,10 @@ public:
         float z,
         float w) noexcept;
 
-    [[nodiscard]] const DirectX::XMFLOAT3& Position() const noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT3& Scale() const noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT3& Pivot() const noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT4& Rotation() const noexcept;
+    [[nodiscard]] const Float3& Position() const noexcept;
+    [[nodiscard]] const Float3& Scale() const noexcept;
+    [[nodiscard]] const Float3& Pivot() const noexcept;
+    [[nodiscard]] const Float4& Rotation() const noexcept;
 
     // Transform links never own either endpoint. The object/scene tree is
     // the single lifetime owner and must outlive its TransformNode links.
@@ -1441,18 +1485,18 @@ public:
     [[nodiscard]] const std::vector<TransformNode*>&
         Children() const noexcept;
 
-    [[nodiscard]] const DirectX::XMFLOAT4X4& WorldMatrix() const;
+    [[nodiscard]] const Float4x4& WorldMatrix() const;
     void UpdateWorldRecursive();
 
 private:
     void MarkWorldDirty() noexcept;
     void UpdateWorld() const;
 
-    DirectX::XMFLOAT3 position_{0.0F, 0.0F, 0.0F};
-    DirectX::XMFLOAT3 scale_{1.0F, 1.0F, 1.0F};
-    DirectX::XMFLOAT3 pivot_{};
-    DirectX::XMFLOAT4 rotation_{0.0F, 0.0F, 0.0F, 1.0F};
-    mutable DirectX::XMFLOAT4X4 world_{};
+    Float3 position_{0.0F, 0.0F, 0.0F};
+    Float3 scale_{1.0F, 1.0F, 1.0F};
+    Float3 pivot_{};
+    Float4 rotation_{0.0F, 0.0F, 0.0F, 1.0F};
+    mutable Float4x4 world_{};
     TransformNode* parent_{};
     std::vector<TransformNode*> children_;
     mutable bool worldDirty_{true};
@@ -1467,7 +1511,6 @@ private:
 // sprites and widgets are component combinations rather than subclasses.
 
 
-#include <DirectXMath.h>
 
 #include <cstdint>
 #include <memory>
@@ -1605,13 +1648,13 @@ struct DrawPacket
 {
     DrawPacketType type{DrawPacketType::Rectangle};
     Rect bounds{};
-    DirectX::XMFLOAT4X4 nodeTransform{};
+    Float4x4 nodeTransform{};
     Color color{};
     TextContentHandle text;
     Point textOffset{};
     ImageHandle image{};
-    DirectX::XMFLOAT2 uvScale{1.0F, 1.0F};
-    DirectX::XMFLOAT2 uvOffset{};
+    Float2 uvScale{1.0F, 1.0F};
+    Float2 uvOffset{};
     float cornerRadius{};
     // Optional axis-aligned clip rectangle in Canvas coordinates. Core
     // resolves nested node-local clips before packets reach a backend.
@@ -2133,11 +2176,11 @@ public:
     // Radius is measured in the node's local Canvas units. It applies to
     // both solid fills and images without changing layout or batching.
     void SetCornerRadius(float radius);
-    [[nodiscard]] DirectX::XMFLOAT2 UvScale() const noexcept;
-    [[nodiscard]] DirectX::XMFLOAT2 UvOffset() const noexcept;
+    [[nodiscard]] Float2 UvScale() const noexcept;
+    [[nodiscard]] Float2 UvOffset() const noexcept;
     void SetUvTransform(
-        DirectX::XMFLOAT2 scale,
-        DirectX::XMFLOAT2 offset) noexcept;
+        Float2 scale,
+        Float2 offset) noexcept;
 
     void AppendDrawPackets(
         std::vector<DrawPacket>& packets) const override;
@@ -2147,8 +2190,8 @@ private:
     [[nodiscard]] ImageHandle CurrentImage() const noexcept;
 
     VisualStyle style_{};
-    DirectX::XMFLOAT2 uvScale_{1.0F, 1.0F};
-    DirectX::XMFLOAT2 uvOffset_{};
+    Float2 uvScale_{1.0F, 1.0F};
+    Float2 uvOffset_{};
     float cornerRadius_{};
 };
 
@@ -2452,7 +2495,6 @@ private:
 // ===== BEGIN Engine\Core\Visual2D\Visual2DSurface.h =====
 
 
-#include <DirectXMath.h>
 
 #include <cstddef>
 #include <memory>
@@ -2465,9 +2507,9 @@ namespace PhantomCore
 struct SurfaceHit
 {
     float rayParameter{};
-    DirectX::XMFLOAT3 worldPosition{};
-    DirectX::XMFLOAT3 worldNormal{};
-    DirectX::XMFLOAT2 uv{};
+    Float3 worldPosition{};
+    Float3 worldNormal{};
+    Float2 uv{};
 };
 
 class IVisual2DSurface
@@ -2486,12 +2528,12 @@ public:
     PlaneVisual2DSurface(
         float width,
         float height,
-        const DirectX::XMFLOAT4X4& worldTransform,
+        const Float4x4& worldTransform,
         bool twoSided = false);
 
     void SetWorldTransform(
-        const DirectX::XMFLOAT4X4& worldTransform) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT4X4& WorldTransform()
+        const Float4x4& worldTransform) noexcept;
+    [[nodiscard]] const Float4x4& WorldTransform()
         const noexcept;
     [[nodiscard]] Size WorldSize() const noexcept;
     [[nodiscard]] std::optional<SurfaceHit> Raycast(
@@ -2500,7 +2542,7 @@ public:
 private:
     float width_{};
     float height_{};
-    DirectX::XMFLOAT4X4 worldTransform_{};
+    Float4x4 worldTransform_{};
     bool twoSided_{};
 };
 
@@ -2512,12 +2554,12 @@ class MeshUvVisual2DSurface final : public IVisual2DSurface
 public:
     MeshUvVisual2DSurface(
         const Shape& shape,
-        const DirectX::XMFLOAT4X4& worldTransform,
+        const Float4x4& worldTransform,
         bool twoSided = false);
 
     void SetWorldTransform(
-        const DirectX::XMFLOAT4X4& worldTransform) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT4X4& WorldTransform()
+        const Float4x4& worldTransform) noexcept;
+    [[nodiscard]] const Float4x4& WorldTransform()
         const noexcept;
     [[nodiscard]] std::optional<SurfaceHit> Raycast(
         const Ray3D& worldRay) const noexcept override;
@@ -2525,14 +2567,14 @@ public:
 private:
     struct SurfaceVertex
     {
-        DirectX::XMFLOAT3 position{};
-        DirectX::XMFLOAT2 uv{};
+        Float3 position{};
+        Float2 uv{};
     };
 
     struct Bounds
     {
-        DirectX::XMFLOAT3 minimum{};
-        DirectX::XMFLOAT3 maximum{};
+        Float3 minimum{};
+        Float3 maximum{};
     };
 
     // Nodes are stored in preorder. escapeIndex points immediately after
@@ -2555,7 +2597,7 @@ private:
     std::vector<std::uint32_t> indices_;
     std::vector<std::size_t> triangleOrder_;
     std::vector<BvhNode> bvhNodes_;
-    DirectX::XMFLOAT4X4 worldTransform_{};
+    Float4x4 worldTransform_{};
     bool twoSided_{};
 };
 
@@ -2585,7 +2627,7 @@ private:
 [[nodiscard]] std::optional<Ray3D> CreateWorldPointerRay(
     Point screenPosition,
     Size viewportSize,
-    const DirectX::XMFLOAT4X4& viewProjection) noexcept;
+    const Float4x4& viewProjection) noexcept;
 
 } // namespace PhantomCore
 // ===== END Engine\Core\Visual2D\Visual2DSurface.h =====
@@ -2647,7 +2689,6 @@ namespace PhantomCore
 // DirectWrite-backed text layout with a native D3D12 glyph-atlas renderer.
 // Public types intentionally hide DirectWrite objects and atlas resources.
 
-#include <DirectXMath.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -2699,7 +2740,7 @@ class TextLayout final
 {
   public:
     ~TextLayout();
-    [[nodiscard]] DirectX::XMFLOAT2 SizePixels() const noexcept;
+    [[nodiscard]] Float2 SizePixels() const noexcept;
 
   private:
     friend class TextRenderSystem;
@@ -2724,15 +2765,15 @@ struct TextStyle
 {
     FontHandle font;
     float fontSizePixels{20.0F};
-    DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
+    Float4 color{1.0F, 1.0F, 1.0F, 1.0F};
     // OpenType/DirectWrite weight, 1..999; 400 is normal, 700 is bold.
     std::uint16_t fontWeight{400};
 };
 
 struct TextDrawCommand
 {
-    DirectX::XMFLOAT2 positionPixels{};
-    DirectX::XMFLOAT2 layoutSizePixels{512.0F, 128.0F};
+    Float2 positionPixels{};
+    Float2 layoutSizePixels{512.0F, 128.0F};
     // Smaller values are closer to the viewer. Screen UI supplies this
     // from its sorted draw-command order so popup text obeys the same
     // Z-order as its rectangle and image background.
@@ -2740,7 +2781,7 @@ struct TextDrawCommand
     // Maps glyph pixel coordinates to final viewport pixel coordinates.
     // Visual2D supplies its hierarchical XYZ transform; ordinary text
     // submissions use the identity default.
-    DirectX::XMFLOAT4X4 transform{
+    Float4x4 transform{
         1.0F, 0.0F, 0.0F, 0.0F,
         0.0F, 1.0F, 0.0F, 0.0F,
         0.0F, 0.0F, 1.0F, 0.0F,
@@ -2751,7 +2792,7 @@ struct TextDrawCommand
         TextVerticalAlignment::Near};
     // Pixel-space {left, top, right, bottom}. The default leaves text
     // unclipped inside the current render target.
-    DirectX::XMFLOAT4 clipRectPixels{
+    Float4 clipRectPixels{
         -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
     TextStyle style{};
 };
@@ -2796,7 +2837,6 @@ private:
 
 // Texture feature: WIC decoding, uploads, and SRV descriptor sets.
 
-#include <DirectXMath.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -2821,8 +2861,8 @@ struct TextureInfo final
 
 struct UvTransform final
 {
-    DirectX::XMFLOAT2 scale{1.0F, 1.0F};
-    DirectX::XMFLOAT2 offset{0.0F, 0.0F};
+    Float2 scale{1.0F, 1.0F};
+    Float2 offset{0.0F, 0.0F};
 };
 
 // Read-only texture-set contract exposed to materials and Client code.
@@ -2911,7 +2951,6 @@ private:
 // ===== BEGIN Engine\Graphics.D3D12\Mesh\MeshRendering.h =====
 
 
-#include <DirectXMath.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -3107,15 +3146,15 @@ public:
     void Submit(
         GpuMeshHandle mesh,
         MaterialInstanceHandle material,
-        const DirectX::XMFLOAT4X4& world,
-        const DirectX::XMFLOAT4X4& viewProjection,
-        const DirectX::XMFLOAT4& color,
-        const DirectX::XMFLOAT2& uvScale,
-        const DirectX::XMFLOAT2& uvOffset,
+        const Float4x4& world,
+        const Float4x4& viewProjection,
+        const Float4& color,
+        const Float2& uvScale,
+        const Float2& uvOffset,
         std::uint32_t textureIndex,
-        DirectX::XMFLOAT4 clipRectPixels = {
+        Float4 clipRectPixels = {
             -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F},
-        DirectX::XMFLOAT4 roundedRectLocal = {},
+        Float4 roundedRectLocal = {},
         float cornerRadiusLocal = 0.0F);
 
 private:
@@ -3209,8 +3248,6 @@ private:
 // backend and exposes only Canvas/resource operations through this contract.
 
 
-#include <Windows.h>
-#include <DirectXMath.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -3228,7 +3265,7 @@ public:
 
     // Loads a PNG/WIC-supported image once and returns an opaque handle
     // that can be assigned to a SpriteVisualComponent or widget style.
-    [[nodiscard]] virtual ImageHandle LoadImage(
+    [[nodiscard]] virtual ImageHandle LoadImageFile(
         const std::filesystem::path& path) = 0;
     // Start/poll CPU decoding without waiting. On true, inspect error;
     // successful images can then be registered on the render thread.
@@ -3264,9 +3301,9 @@ public:
     virtual void SubmitPlane(
         const Visual2DCanvas& canvas,
         const RenderContext& context,
-        const DirectX::XMFLOAT4X4& surfaceWorld,
+        const Float4x4& surfaceWorld,
         Size surfaceWorldSize,
-        const DirectX::XMFLOAT4X4& viewProjection) = 0;
+        const Float4x4& viewProjection) = 0;
 
     [[nodiscard]] virtual RenderTargetTextureHandle CreateCanvasRenderTarget(
         std::uint32_t width,
@@ -3407,7 +3444,6 @@ private:
 // System feature: backend-neutral view and projection matrices.
 
 
-#include <DirectXMath.h>
 
 #include <cstdint>
 
@@ -3429,8 +3465,8 @@ public:
     Camera() = default;
 
     void SetPosition(float x, float y, float z) noexcept;
-    void SetPosition(const DirectX::XMFLOAT3& position) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT3& Position() const noexcept;
+    void SetPosition(const Float3& position) noexcept;
+    [[nodiscard]] const Float3& Position() const noexcept;
 
     // Angles are radians.  Pitch is clamped short of +/- pi/2 so the
     // forward vector never becomes parallel to the world-up vector.
@@ -3441,9 +3477,9 @@ public:
     [[nodiscard]] float YawRadians() const noexcept;
     [[nodiscard]] float PitchRadians() const noexcept;
 
-    [[nodiscard]] DirectX::XMFLOAT3 Forward() const noexcept;
-    [[nodiscard]] DirectX::XMFLOAT3 Right() const noexcept;
-    [[nodiscard]] DirectX::XMFLOAT3 Up() const noexcept;
+    [[nodiscard]] Float3 Forward() const noexcept;
+    [[nodiscard]] Float3 Right() const noexcept;
+    [[nodiscard]] Float3 Up() const noexcept;
 
     // Perspective arguments are vertical FOV in radians, aspect ratio,
     // and positive near/far planes.  This also selects Perspective mode.
@@ -3474,9 +3510,9 @@ public:
     [[nodiscard]] float NearPlane() const noexcept;
     [[nodiscard]] float FarPlane() const noexcept;
 
-    [[nodiscard]] DirectX::XMMATRIX ViewMatrix() const noexcept;
-    [[nodiscard]] DirectX::XMMATRIX ProjectionMatrix() const noexcept;
-    [[nodiscard]] DirectX::XMMATRIX ViewProjectionMatrix() const noexcept;
+    [[nodiscard]] Float4x4 ViewMatrix() const noexcept;
+    [[nodiscard]] Float4x4 ProjectionMatrix() const noexcept;
+    [[nodiscard]] Float4x4 ViewProjectionMatrix() const noexcept;
     [[nodiscard]] const ViewFrustum& Frustum() const noexcept;
 
 private:
@@ -3488,19 +3524,19 @@ private:
     void UpdateViewProjectionMatrix() const noexcept;
     void UpdateFrustum() const noexcept;
 
-    DirectX::XMFLOAT3 position_{};
+    Float3 position_{};
     float yawRadians_{};
     float pitchRadians_{};
     CameraProjectionType projectionType_{CameraProjectionType::Perspective};
-    float verticalFieldOfViewRadians_{DirectX::XM_PI / 3.0F};
+    float verticalFieldOfViewRadians_{Pi / 3.0F};
     float perspectiveAspectRatio_{1.0F};
     float orthographicWidth_{1.0F};
     float orthographicHeight_{1.0F};
     float nearPlane_{0.1F};
     float farPlane_{1000.0F};
-    mutable DirectX::XMFLOAT4X4 viewMatrix_{};
-    mutable DirectX::XMFLOAT4X4 projectionMatrix_{};
-    mutable DirectX::XMFLOAT4X4 viewProjectionMatrix_{};
+    mutable Float4x4 viewMatrix_{};
+    mutable Float4x4 projectionMatrix_{};
+    mutable Float4x4 viewProjectionMatrix_{};
     mutable ViewFrustum frustum_{};
     mutable bool viewDirty_{true};
     mutable bool projectionDirty_{true};
@@ -3598,7 +3634,6 @@ public:
 // ===== BEGIN Engine\Core\System\MeshInstance.h =====
 
 
-#include <DirectXMath.h>
 
 #include <cstdint>
 
@@ -3625,18 +3660,18 @@ public:
     [[nodiscard]] TransformNode& Transform() noexcept;
     [[nodiscard]] const TransformNode& Transform() const noexcept;
 
-    void SetColor(const DirectX::XMFLOAT4& color) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT4& Color() const noexcept;
+    void SetColor(const Float4& color) noexcept;
+    [[nodiscard]] const Float4& Color() const noexcept;
     void SetTextureIndex(std::uint32_t textureIndex) noexcept;
     void ClearTexture() noexcept;
     [[nodiscard]] std::uint32_t TextureIndex() const noexcept;
     void SetUvTransform(
-        const DirectX::XMFLOAT2& scale,
-        const DirectX::XMFLOAT2& offset) noexcept;
+        const Float2& scale,
+        const Float2& offset) noexcept;
     void SetUvTransform(
         const UvTransform& transform) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT2& UvScale() const noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT2& UvOffset() const noexcept;
+    [[nodiscard]] const Float2& UvScale() const noexcept;
+    [[nodiscard]] const Float2& UvOffset() const noexcept;
     [[nodiscard]] bool IsReady() const noexcept;
     [[nodiscard]] const Sphere3D&
         LocalBoundingSphere() const;
@@ -3654,9 +3689,9 @@ private:
     GpuMeshHandle mesh_;
     MaterialInstanceHandle material_;
     TransformNode transform_;
-    DirectX::XMFLOAT4 color_{1.0F, 1.0F, 1.0F, 1.0F};
-    DirectX::XMFLOAT2 uvScale_{1.0F, 1.0F};
-    DirectX::XMFLOAT2 uvOffset_{0.0F, 0.0F};
+    Float4 color_{1.0F, 1.0F, 1.0F, 1.0F};
+    Float2 uvScale_{1.0F, 1.0F};
+    Float2 uvOffset_{0.0F, 0.0F};
     std::uint32_t textureIndex_{NoTextureIndex};
 };
 

@@ -3,7 +3,7 @@
 // Backend-neutral 2D/3D collision primitives and stateless intersection
 // queries. All positions and sizes use engine world units.
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstdint>
 #include <optional>
@@ -15,59 +15,59 @@ inline constexpr float DefaultEpsilon = 1.0e-5F;
 
 struct Line2D
 {
-    DirectX::XMFLOAT2 point{};
-    DirectX::XMFLOAT2 direction{1.0F, 0.0F};
+    Float2 point{};
+    Float2 direction{1.0F, 0.0F};
 };
 
 struct LineSegment2D
 {
-    DirectX::XMFLOAT2 start{};
-    DirectX::XMFLOAT2 end{};
+    Float2 start{};
+    Float2 end{};
 };
 
 struct Circle2D
 {
-    DirectX::XMFLOAT2 center{};
+    Float2 center{};
     float radius{};
 };
 
 // rotationRadians rotates the local X axis counter-clockwise.
 struct Obb2D
 {
-    DirectX::XMFLOAT2 center{};
-    DirectX::XMFLOAT2 halfExtents{0.5F, 0.5F};
+    Float2 center{};
+    Float2 halfExtents{0.5F, 0.5F};
     float rotationRadians{};
 };
 
 struct Line3D
 {
-    DirectX::XMFLOAT3 point{};
-    DirectX::XMFLOAT3 direction{1.0F, 0.0F, 0.0F};
+    Float3 point{};
+    Float3 direction{1.0F, 0.0F, 0.0F};
 };
 
 struct Ray3D
 {
-    DirectX::XMFLOAT3 origin{};
-    DirectX::XMFLOAT3 direction{1.0F, 0.0F, 0.0F};
+    Float3 origin{};
+    Float3 direction{1.0F, 0.0F, 0.0F};
 };
 
 struct LineSegment3D
 {
-    DirectX::XMFLOAT3 start{};
-    DirectX::XMFLOAT3 end{};
+    Float3 start{};
+    Float3 end{};
 };
 
 // Plane equation: dot(normal, point) = distanceFromOrigin.
 // The normal does not have to be normalized.
 struct Plane3D
 {
-    DirectX::XMFLOAT3 normal{0.0F, 1.0F, 0.0F};
+    Float3 normal{0.0F, 1.0F, 0.0F};
     float distanceFromOrigin{};
 };
 
 struct Sphere3D
 {
-    DirectX::XMFLOAT3 center{};
+    Float3 center{};
     float radius{};
 };
 
@@ -92,24 +92,24 @@ enum class VolumeIntersection : std::uint8_t
 
 struct Triangle3D
 {
-    DirectX::XMFLOAT3 first{};
-    DirectX::XMFLOAT3 second{};
-    DirectX::XMFLOAT3 third{};
+    Float3 first{};
+    Float3 second{};
+    Float3 third{};
 };
 
 // orientation is a quaternion in (x, y, z, w) order. It is normalized
 // internally before a query.
 struct Obb3D
 {
-    DirectX::XMFLOAT3 center{};
-    DirectX::XMFLOAT3 halfExtents{0.5F, 0.5F, 0.5F};
-    DirectX::XMFLOAT4 orientation{0.0F, 0.0F, 0.0F, 1.0F};
+    Float3 center{};
+    Float3 halfExtents{0.5F, 0.5F, 0.5F};
+    Float4 orientation{0.0F, 0.0F, 0.0F, 1.0F};
 };
 
 struct LineHit3D
 {
-    DirectX::XMFLOAT3 point{};
-    DirectX::XMFLOAT3 normal{};
+    Float3 point{};
+    Float3 normal{};
 
     // point + direction * parameter for Line3D, origin + direction *
     // parameter for Ray3D, and lerp(start, end, parameter) for a segment.
@@ -119,37 +119,37 @@ struct LineHit3D
 
 struct TriangleHit3D
 {
-    DirectX::XMFLOAT3 point{};
-    DirectX::XMFLOAT3 normal{};
+    Float3 point{};
+    Float3 normal{};
     // Weights for first, second, and third. They sum to one and can be
     // used to interpolate UVs or other per-vertex attributes.
-    DirectX::XMFLOAT3 barycentric{};
+    Float3 barycentric{};
     float parameter{};
 };
 
 // Extracts a left-handed DirectX frustum (x/y in [-w, w], z in [0, w])
 // from a row-vector view-projection matrix. Extracted planes are normalized.
 [[nodiscard]] ViewFrustum MakeViewFrustum(
-    const DirectX::XMFLOAT4X4& viewProjection) noexcept;
+    const Float4x4& viewProjection) noexcept;
 
 // Transforms a sphere by an affine world matrix. The radius uses the
 // largest world-axis scale and falls back to a conservative matrix-norm
 // bound when a transform hierarchy introduces shear.
 [[nodiscard]] Sphere3D TransformSphere(
     const Sphere3D& sphere,
-    const DirectX::XMFLOAT4X4& world) noexcept;
+    const Float4x4& world) noexcept;
 
 [[nodiscard]] VolumeIntersection Classify(
     const ViewFrustum& frustum,
     const Sphere3D& sphere,
     float epsilon = DefaultEpsilon) noexcept;
 
-[[nodiscard]] DirectX::XMFLOAT2 ClosestPoint(
+[[nodiscard]] Float2 ClosestPoint(
     const LineSegment2D& segment,
-    const DirectX::XMFLOAT2& point) noexcept;
-[[nodiscard]] DirectX::XMFLOAT2 ClosestPoint(
+    const Float2& point) noexcept;
+[[nodiscard]] Float2 ClosestPoint(
     const Obb2D& box,
-    const DirectX::XMFLOAT2& point) noexcept;
+    const Float2& point) noexcept;
 
 [[nodiscard]] bool Intersects(
     const Circle2D& circle,

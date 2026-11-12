@@ -1,4 +1,5 @@
 #include "Text/TextRendering.h"
+#include "../../Math/DirectXMathBridge.h"
 #include "Text/D3D12TextRendering.h"
 #include "Renderer/FrameResources.h"
 
@@ -186,13 +187,13 @@ struct TextLayout::Impl final
     struct Glyph
     {
         std::uint16_t index{};
-        DirectX::XMFLOAT2 origin{};
-        DirectX::XMFLOAT4 bounds{};
+        Float2 origin{};
+        Float4 bounds{};
     };
     struct Block
     {
         std::size_t begin{}, end{};
-        DirectX::XMFLOAT4 bounds{};
+        Float4 bounds{};
     };
     struct Run
     {
@@ -275,7 +276,7 @@ struct TextLayout::Impl final
     }
 
     FontHandle font;
-    DirectX::XMFLOAT2 size{};
+    Float2 size{};
     std::vector<Run> runs;
 };
 
@@ -486,12 +487,12 @@ namespace
 {
     struct GlyphInstance final
     {
-        DirectX::XMFLOAT4X4 transform{};
-        DirectX::XMFLOAT2 positionPixels{};
-        DirectX::XMFLOAT2 sizePixels{};
-        DirectX::XMFLOAT4 uvRectangle{};
-        DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
-        DirectX::XMFLOAT4 clipRectPixels{
+        Float4x4 transform{};
+        Float2 positionPixels{};
+        Float2 sizePixels{};
+        Float4 uvRectangle{};
+        Float4 color{1.0F, 1.0F, 1.0F, 1.0F};
+        Float4 clipRectPixels{
             -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
         float depth{};
         std::uint32_t pageIndex{};
@@ -499,12 +500,12 @@ namespace
 
     struct GpuGlyphInstance final
     {
-        DirectX::XMFLOAT4X4 transform{};
-        DirectX::XMFLOAT2 positionPixels{};
-        DirectX::XMFLOAT2 sizePixels{};
-        DirectX::XMFLOAT4 uvRectangle{};
-        DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
-        DirectX::XMFLOAT4 clipRectPixels{
+        Float4x4 transform{};
+        Float2 positionPixels{};
+        Float2 sizePixels{};
+        Float4 uvRectangle{};
+        Float4 color{1.0F, 1.0F, 1.0F, 1.0F};
+        Float4 clipRectPixels{
             -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
         float depth{};
     };
@@ -578,9 +579,9 @@ namespace
     {
         ComPtr<IUnknown> fontFaceIdentity;
         std::uint32_t pageIndex{};
-        DirectX::XMFLOAT2 sizePixels{};
-        DirectX::XMFLOAT2 bearingPixels{};
-        DirectX::XMFLOAT4 uvRectangle{};
+        Float2 sizePixels{};
+        Float2 bearingPixels{};
+        Float4 uvRectangle{};
         bool drawable{};
     };
 
@@ -1459,9 +1460,9 @@ struct TextRenderSystem::Impl final
             Submit(CreateLayout(text, command), command);
     }
 
-    static bool IntersectsClip(const DirectX::XMFLOAT4 &localBounds, const TextDrawCommand &command)
+    static bool IntersectsClip(const Float4 &localBounds, const TextDrawCommand &command)
     {
-        const auto matrix = DirectX::XMLoadFloat4x4(&command.transform);
+        const auto matrix = NativeMath::LoadFloat4x4(&command.transform);
         float left = std::numeric_limits<float>::infinity(), top = left;
         float right = -left, bottom = -left;
         for (const auto x : {localBounds.x, localBounds.z})
@@ -2028,7 +2029,7 @@ TextLayout::TextLayout(std::shared_ptr<Impl> implementation) : implementation_(s
 {
 }
 TextLayout::~TextLayout() = default;
-DirectX::XMFLOAT2 TextLayout::SizePixels() const noexcept
+Float2 TextLayout::SizePixels() const noexcept
 {
     return implementation_->size;
 }

@@ -3,7 +3,7 @@
 // DirectWrite-backed text layout with a native D3D12 glyph-atlas renderer.
 // Public types intentionally hide DirectWrite objects and atlas resources.
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -55,7 +55,7 @@ class TextLayout final
 {
   public:
     ~TextLayout();
-    [[nodiscard]] DirectX::XMFLOAT2 SizePixels() const noexcept;
+    [[nodiscard]] Float2 SizePixels() const noexcept;
 
   private:
     friend class TextRenderSystem;
@@ -80,15 +80,15 @@ struct TextStyle
 {
     FontHandle font;
     float fontSizePixels{20.0F};
-    DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
+    Float4 color{1.0F, 1.0F, 1.0F, 1.0F};
     // OpenType/DirectWrite weight, 1..999; 400 is normal, 700 is bold.
     std::uint16_t fontWeight{400};
 };
 
 struct TextDrawCommand
 {
-    DirectX::XMFLOAT2 positionPixels{};
-    DirectX::XMFLOAT2 layoutSizePixels{512.0F, 128.0F};
+    Float2 positionPixels{};
+    Float2 layoutSizePixels{512.0F, 128.0F};
     // Smaller values are closer to the viewer. Screen UI supplies this
     // from its sorted draw-command order so popup text obeys the same
     // Z-order as its rectangle and image background.
@@ -96,7 +96,7 @@ struct TextDrawCommand
     // Maps glyph pixel coordinates to final viewport pixel coordinates.
     // Visual2D supplies its hierarchical XYZ transform; ordinary text
     // submissions use the identity default.
-    DirectX::XMFLOAT4X4 transform{
+    Float4x4 transform{
         1.0F, 0.0F, 0.0F, 0.0F,
         0.0F, 1.0F, 0.0F, 0.0F,
         0.0F, 0.0F, 1.0F, 0.0F,
@@ -107,7 +107,7 @@ struct TextDrawCommand
         TextVerticalAlignment::Near};
     // Pixel-space {left, top, right, bottom}. The default leaves text
     // unclipped inside the current render target.
-    DirectX::XMFLOAT4 clipRectPixels{
+    Float4 clipRectPixels{
         -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
     TextStyle style{};
 };

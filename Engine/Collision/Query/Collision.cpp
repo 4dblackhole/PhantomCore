@@ -1,4 +1,5 @@
 #include "Query/Collision.h"
+#include "../../Math/DirectXMathBridge.h"
 
 #include <DirectXCollision.h>
 
@@ -11,9 +12,6 @@ namespace PhantomCore
 {
 namespace
 {
-    using DirectX::XMFLOAT2;
-    using DirectX::XMFLOAT3;
-    using DirectX::XMFLOAT4;
 
     [[nodiscard]] float AbsEpsilon(const float epsilon) noexcept
     {
@@ -23,31 +21,31 @@ namespace
     }
 
     [[nodiscard]] float Dot(
-        const XMFLOAT2& first,
-        const XMFLOAT2& second) noexcept
+        const Float2& first,
+        const Float2& second) noexcept
     {
         return first.x * second.x + first.y * second.y;
     }
 
     [[nodiscard]] float Dot(
-        const XMFLOAT3& first,
-        const XMFLOAT3& second) noexcept
+        const Float3& first,
+        const Float3& second) noexcept
     {
         return first.x * second.x +
             first.y * second.y +
             first.z * second.z;
     }
 
-    [[nodiscard]] XMFLOAT2 Subtract(
-        const XMFLOAT2& first,
-        const XMFLOAT2& second) noexcept
+    [[nodiscard]] Float2 Subtract(
+        const Float2& first,
+        const Float2& second) noexcept
     {
         return {first.x - second.x, first.y - second.y};
     }
 
-    [[nodiscard]] XMFLOAT3 Subtract(
-        const XMFLOAT3& first,
-        const XMFLOAT3& second) noexcept
+    [[nodiscard]] Float3 Subtract(
+        const Float3& first,
+        const Float3& second) noexcept
     {
         return {
             first.x - second.x,
@@ -55,9 +53,9 @@ namespace
             first.z - second.z};
     }
 
-    [[nodiscard]] XMFLOAT3 AddScaled(
-        const XMFLOAT3& point,
-        const XMFLOAT3& direction,
+    [[nodiscard]] Float3 AddScaled(
+        const Float3& point,
+        const Float3& direction,
         const float parameter) noexcept
     {
         return {
@@ -66,9 +64,9 @@ namespace
             point.z + direction.z * parameter};
     }
 
-    [[nodiscard]] XMFLOAT3 Cross(
-        const XMFLOAT3& first,
-        const XMFLOAT3& second) noexcept
+    [[nodiscard]] Float3 Cross(
+        const Float3& first,
+        const Float3& second) noexcept
     {
         return {
             first.y * second.z - first.z * second.y,
@@ -76,12 +74,12 @@ namespace
             first.x * second.y - first.y * second.x};
     }
 
-    [[nodiscard]] float LengthSquared(const XMFLOAT2& value) noexcept
+    [[nodiscard]] float LengthSquared(const Float2& value) noexcept
     {
         return Dot(value, value);
     }
 
-    [[nodiscard]] float LengthSquared(const XMFLOAT3& value) noexcept
+    [[nodiscard]] float LengthSquared(const Float3& value) noexcept
     {
         return Dot(value, value);
     }
@@ -91,7 +89,7 @@ namespace
         return std::isfinite(radius) && radius >= 0.0F;
     }
 
-    [[nodiscard]] bool HasFiniteCoordinates(const XMFLOAT3& value) noexcept
+    [[nodiscard]] bool HasFiniteCoordinates(const Float3& value) noexcept
     {
         return std::isfinite(value.x) &&
             std::isfinite(value.y) &&
@@ -124,12 +122,12 @@ namespace
     }
 
     [[nodiscard]] float MaximumWorldScale(
-        const DirectX::XMFLOAT4X4& world) noexcept
+        const Float4x4& world) noexcept
     {
-        const std::array<XMFLOAT3, 3> axes{
-            XMFLOAT3{world._11, world._12, world._13},
-            XMFLOAT3{world._21, world._22, world._23},
-            XMFLOAT3{world._31, world._32, world._33}};
+        const std::array<Float3, 3> axes{
+            Float3{world.m[0][0], world.m[0][1], world.m[0][2]},
+            Float3{world.m[1][0], world.m[1][1], world.m[1][2]},
+            Float3{world.m[2][0], world.m[2][1], world.m[2][2]}};
         const std::array<float, 3> lengthSquared{
             LengthSquared(axes[0]),
             LengthSquared(axes[1]),
@@ -162,17 +160,17 @@ namespace
         // sqrt(||A||1 * ||A||inf) bounds the largest singular value and is
         // therefore safe for hierarchy-induced shear.
         const float maximumRowSum = std::max({
-            std::abs(world._11) + std::abs(world._12) + std::abs(world._13),
-            std::abs(world._21) + std::abs(world._22) + std::abs(world._23),
-            std::abs(world._31) + std::abs(world._32) + std::abs(world._33)});
+            std::abs(world.m[0][0]) + std::abs(world.m[0][1]) + std::abs(world.m[0][2]),
+            std::abs(world.m[1][0]) + std::abs(world.m[1][1]) + std::abs(world.m[1][2]),
+            std::abs(world.m[2][0]) + std::abs(world.m[2][1]) + std::abs(world.m[2][2])});
         const float maximumColumnSum = std::max({
-            std::abs(world._11) + std::abs(world._21) + std::abs(world._31),
-            std::abs(world._12) + std::abs(world._22) + std::abs(world._32),
-            std::abs(world._13) + std::abs(world._23) + std::abs(world._33)});
+            std::abs(world.m[0][0]) + std::abs(world.m[1][0]) + std::abs(world.m[2][0]),
+            std::abs(world.m[0][1]) + std::abs(world.m[1][1]) + std::abs(world.m[2][1]),
+            std::abs(world.m[0][2]) + std::abs(world.m[1][2]) + std::abs(world.m[2][2])});
         return std::sqrt(maximumRowSum * maximumColumnSum);
     }
 
-    [[nodiscard]] bool HasValidExtents(const XMFLOAT2& extents) noexcept
+    [[nodiscard]] bool HasValidExtents(const Float2& extents) noexcept
     {
         return std::isfinite(extents.x) &&
             std::isfinite(extents.y) &&
@@ -180,7 +178,7 @@ namespace
             extents.y >= 0.0F;
     }
 
-    [[nodiscard]] bool HasValidExtents(const XMFLOAT3& extents) noexcept
+    [[nodiscard]] bool HasValidExtents(const Float3& extents) noexcept
     {
         return std::isfinite(extents.x) &&
             std::isfinite(extents.y) &&
@@ -192,8 +190,8 @@ namespace
 
     struct Axes2D
     {
-        XMFLOAT2 x;
-        XMFLOAT2 y;
+        Float2 x;
+        Float2 y;
     };
 
     [[nodiscard]] Axes2D BoxAxes(const Obb2D& box) noexcept
@@ -206,7 +204,7 @@ namespace
     [[nodiscard]] float ProjectionRadius(
         const Obb2D& box,
         const Axes2D& boxAxes,
-        const XMFLOAT2& axis) noexcept
+        const Float2& axis) noexcept
     {
         return box.halfExtents.x * std::abs(Dot(boxAxes.x, axis)) +
             box.halfExtents.y * std::abs(Dot(boxAxes.y, axis));
@@ -217,10 +215,10 @@ namespace
         const Axes2D& firstAxes,
         const Obb2D& second,
         const Axes2D& secondAxes,
-        const XMFLOAT2& axis,
+        const Float2& axis,
         const float epsilon) noexcept
     {
-        const XMFLOAT2 centerDelta = Subtract(second.center, first.center);
+        const Float2 centerDelta = Subtract(second.center, first.center);
         const float centerDistance = std::abs(Dot(centerDelta, axis));
         const float allowedDistance =
             ProjectionRadius(first, firstAxes, axis) +
@@ -231,8 +229,8 @@ namespace
 
     [[nodiscard]] std::optional<LineHit3D> IntersectPlane(
         const Plane3D& plane,
-        const XMFLOAT3& origin,
-        const XMFLOAT3& direction,
+        const Float3& origin,
+        const Float3& direction,
         const float minimumParameter,
         const float maximumParameter,
         const bool allowDegenerateDirection,
@@ -261,7 +259,7 @@ namespace
             }
             if (std::abs(signedDistance) <= absoluteEpsilon * normalLength)
             {
-                const XMFLOAT3 normal{
+                const Float3 normal{
                     plane.normal.x / normalLength,
                     plane.normal.y / normalLength,
                     plane.normal.z / normalLength};
@@ -277,7 +275,7 @@ namespace
         {
             if (std::abs(signedDistance) <= absoluteEpsilon * normalLength)
             {
-                const XMFLOAT3 normal{
+                const Float3 normal{
                     plane.normal.x / normalLength,
                     plane.normal.y / normalLength,
                     plane.normal.z / normalLength};
@@ -297,7 +295,7 @@ namespace
             minimumParameter,
             maximumParameter);
 
-        const XMFLOAT3 normal{
+        const Float3 normal{
             plane.normal.x / normalLength,
             plane.normal.y / normalLength,
             plane.normal.z / normalLength};
@@ -309,8 +307,8 @@ namespace
 
     [[nodiscard]] bool SphereIntersectsDirection(
         const Sphere3D& sphere,
-        const XMFLOAT3& origin,
-        const XMFLOAT3& direction,
+        const Float3& origin,
+        const Float3& direction,
         const float minimumParameter,
         const float maximumParameter,
         const bool allowDegenerateDirection,
@@ -330,20 +328,20 @@ namespace
             {
                 return false;
             }
-            const XMFLOAT3 centerDelta = Subtract(origin, sphere.center);
+            const Float3 centerDelta = Subtract(origin, sphere.center);
             const float allowedRadius = sphere.radius + absoluteEpsilon;
             return LengthSquared(centerDelta) <=
                 allowedRadius * allowedRadius;
         }
 
-        const XMFLOAT3 toCenter = Subtract(sphere.center, origin);
+        const Float3 toCenter = Subtract(sphere.center, origin);
         float parameter = Dot(toCenter, direction) / directionLengthSquared;
         parameter = std::clamp(
             parameter,
             minimumParameter,
             maximumParameter);
-        const XMFLOAT3 closest = AddScaled(origin, direction, parameter);
-        const XMFLOAT3 delta = Subtract(closest, sphere.center);
+        const Float3 closest = AddScaled(origin, direction, parameter);
+        const Float3 delta = Subtract(closest, sphere.center);
         const float allowedRadius = sphere.radius + absoluteEpsilon;
         return LengthSquared(delta) <= allowedRadius * allowedRadius;
     }
@@ -371,7 +369,7 @@ namespace
         }
 
         const float inverseLength = 1.0F / std::sqrt(quaternionLengthSquared);
-        destination.Center = source.center;
+        destination.Center = NativeMath::ToNative(source.center);
         destination.Extents = {
             source.halfExtents.x + absoluteEpsilon,
             source.halfExtents.y + absoluteEpsilon,
@@ -387,57 +385,57 @@ namespace
 
 
 ViewFrustum MakeViewFrustum(
-    const DirectX::XMFLOAT4X4& viewProjection) noexcept
+    const Float4x4& viewProjection) noexcept
 {
     ViewFrustum frustum{};
     (void)TryMakeFrustumPlane(
-        viewProjection._11 + viewProjection._14,
-        viewProjection._21 + viewProjection._24,
-        viewProjection._31 + viewProjection._34,
-        viewProjection._41 + viewProjection._44,
+        viewProjection.m[0][0] + viewProjection.m[0][3],
+        viewProjection.m[1][0] + viewProjection.m[1][3],
+        viewProjection.m[2][0] + viewProjection.m[2][3],
+        viewProjection.m[3][0] + viewProjection.m[3][3],
         frustum.left);
     (void)TryMakeFrustumPlane(
-        viewProjection._14 - viewProjection._11,
-        viewProjection._24 - viewProjection._21,
-        viewProjection._34 - viewProjection._31,
-        viewProjection._44 - viewProjection._41,
+        viewProjection.m[0][3] - viewProjection.m[0][0],
+        viewProjection.m[1][3] - viewProjection.m[1][0],
+        viewProjection.m[2][3] - viewProjection.m[2][0],
+        viewProjection.m[3][3] - viewProjection.m[3][0],
         frustum.right);
     (void)TryMakeFrustumPlane(
-        viewProjection._12 + viewProjection._14,
-        viewProjection._22 + viewProjection._24,
-        viewProjection._32 + viewProjection._34,
-        viewProjection._42 + viewProjection._44,
+        viewProjection.m[0][1] + viewProjection.m[0][3],
+        viewProjection.m[1][1] + viewProjection.m[1][3],
+        viewProjection.m[2][1] + viewProjection.m[2][3],
+        viewProjection.m[3][1] + viewProjection.m[3][3],
         frustum.bottom);
     (void)TryMakeFrustumPlane(
-        viewProjection._14 - viewProjection._12,
-        viewProjection._24 - viewProjection._22,
-        viewProjection._34 - viewProjection._32,
-        viewProjection._44 - viewProjection._42,
+        viewProjection.m[0][3] - viewProjection.m[0][1],
+        viewProjection.m[1][3] - viewProjection.m[1][1],
+        viewProjection.m[2][3] - viewProjection.m[2][1],
+        viewProjection.m[3][3] - viewProjection.m[3][1],
         frustum.top);
     (void)TryMakeFrustumPlane(
-        viewProjection._13,
-        viewProjection._23,
-        viewProjection._33,
-        viewProjection._43,
+        viewProjection.m[0][2],
+        viewProjection.m[1][2],
+        viewProjection.m[2][2],
+        viewProjection.m[3][2],
         frustum.nearPlane);
     (void)TryMakeFrustumPlane(
-        viewProjection._14 - viewProjection._13,
-        viewProjection._24 - viewProjection._23,
-        viewProjection._34 - viewProjection._33,
-        viewProjection._44 - viewProjection._43,
+        viewProjection.m[0][3] - viewProjection.m[0][2],
+        viewProjection.m[1][3] - viewProjection.m[1][2],
+        viewProjection.m[2][3] - viewProjection.m[2][2],
+        viewProjection.m[3][3] - viewProjection.m[3][2],
         frustum.farPlane);
     return frustum;
 }
 
 Sphere3D TransformSphere(
     const Sphere3D& sphere,
-    const DirectX::XMFLOAT4X4& world) noexcept
+    const Float4x4& world) noexcept
 {
     if (!HasValidRadius(sphere.radius) ||
         !HasFiniteCoordinates(sphere.center) ||
-        !std::isfinite(world._41) ||
-        !std::isfinite(world._42) ||
-        !std::isfinite(world._43))
+        !std::isfinite(world.m[3][0]) ||
+        !std::isfinite(world.m[3][1]) ||
+        !std::isfinite(world.m[3][2]))
     {
         return {{}, -1.0F};
     }
@@ -448,12 +446,12 @@ Sphere3D TransformSphere(
         return {{}, -1.0F};
     }
 
-    XMFLOAT3 center{};
-    XMStoreFloat3(
+    Float3 center{};
+    NativeMath::StoreFloat3(
         &center,
         XMVector3TransformCoord(
-            XMLoadFloat3(&sphere.center),
-            XMLoadFloat4x4(&world)));
+            NativeMath::LoadFloat3(&sphere.center),
+            NativeMath::LoadFloat4x4(&world)));
     if (!HasFiniteCoordinates(center))
     {
         return {{}, -1.0F};
@@ -508,11 +506,11 @@ VolumeIntersection Classify(
     return result;
 }
 
-DirectX::XMFLOAT2 ClosestPoint(
+Float2 ClosestPoint(
     const LineSegment2D& segment,
-    const DirectX::XMFLOAT2& point) noexcept
+    const Float2& point) noexcept
 {
-    const XMFLOAT2 direction = Subtract(segment.end, segment.start);
+    const Float2 direction = Subtract(segment.end, segment.start);
     const float lengthSquared = LengthSquared(direction);
     if (lengthSquared <= std::numeric_limits<float>::epsilon())
     {
@@ -528,9 +526,9 @@ DirectX::XMFLOAT2 ClosestPoint(
         segment.start.y + direction.y * parameter};
 }
 
-DirectX::XMFLOAT2 ClosestPoint(
+Float2 ClosestPoint(
     const Obb2D& box,
-    const DirectX::XMFLOAT2& point) noexcept
+    const Float2& point) noexcept
 {
     if (!HasValidExtents(box.halfExtents))
     {
@@ -538,7 +536,7 @@ DirectX::XMFLOAT2 ClosestPoint(
     }
 
     const Axes2D axes = BoxAxes(box);
-    const XMFLOAT2 relative = Subtract(point, box.center);
+    const Float2 relative = Subtract(point, box.center);
     const float localX = std::clamp(
         Dot(relative, axes.x),
         -box.halfExtents.x,
@@ -570,7 +568,7 @@ bool Intersects(
         return false;
     }
 
-    const XMFLOAT2 relative = Subtract(circle.center, line.point);
+    const Float2 relative = Subtract(circle.center, line.point);
     const float cross =
         relative.x * line.direction.y -
         relative.y * line.direction.x;
@@ -593,8 +591,8 @@ bool Intersects(
         return false;
     }
 
-    const XMFLOAT2 closest = ClosestPoint(segment, circle.center);
-    const XMFLOAT2 delta = Subtract(closest, circle.center);
+    const Float2 closest = ClosestPoint(segment, circle.center);
+    const Float2 delta = Subtract(closest, circle.center);
     const float allowedRadius = circle.radius + AbsEpsilon(epsilon);
     return LengthSquared(delta) <= allowedRadius * allowedRadius;
 }
@@ -610,8 +608,8 @@ bool Intersects(
         return false;
     }
 
-    const XMFLOAT2 closest = ClosestPoint(box, circle.center);
-    const XMFLOAT2 delta = Subtract(closest, circle.center);
+    const Float2 closest = ClosestPoint(box, circle.center);
+    const Float2 delta = Subtract(closest, circle.center);
     const float allowedRadius = circle.radius + AbsEpsilon(epsilon);
     return LengthSquared(delta) <= allowedRadius * allowedRadius;
 }
@@ -630,13 +628,13 @@ bool Intersects(
     const float absoluteEpsilon = AbsEpsilon(epsilon);
     const Axes2D firstAxes = BoxAxes(first);
     const Axes2D secondAxes = BoxAxes(second);
-    const std::array<XMFLOAT2, 4> separatingAxes{
+    const std::array<Float2, 4> separatingAxes{
         firstAxes.x,
         firstAxes.y,
         secondAxes.x,
         secondAxes.y};
 
-    for (const XMFLOAT2& axis : separatingAxes)
+    for (const Float2& axis : separatingAxes)
     {
         if (IsSeparatedOnAxis(
                 first,
@@ -751,9 +749,9 @@ std::optional<TriangleHit3D> Intersect(
     const float epsilon) noexcept
 {
     const float absoluteEpsilon = AbsEpsilon(epsilon);
-    const XMFLOAT3 firstEdge = Subtract(triangle.second, triangle.first);
-    const XMFLOAT3 secondEdge = Subtract(triangle.third, triangle.first);
-    const XMFLOAT3 directionCross = Cross(ray.direction, secondEdge);
+    const Float3 firstEdge = Subtract(triangle.second, triangle.first);
+    const Float3 secondEdge = Subtract(triangle.third, triangle.first);
+    const Float3 directionCross = Cross(ray.direction, secondEdge);
     const float determinant = Dot(firstEdge, directionCross);
     if (!std::isfinite(determinant) ||
         std::abs(determinant) <= absoluteEpsilon)
@@ -762,7 +760,7 @@ std::optional<TriangleHit3D> Intersect(
     }
 
     const float inverseDeterminant = 1.0F / determinant;
-    const XMFLOAT3 originDelta = Subtract(ray.origin, triangle.first);
+    const Float3 originDelta = Subtract(ray.origin, triangle.first);
     const float secondWeight =
         Dot(originDelta, directionCross) * inverseDeterminant;
     if (secondWeight < -absoluteEpsilon ||
@@ -771,7 +769,7 @@ std::optional<TriangleHit3D> Intersect(
         return std::nullopt;
     }
 
-    const XMFLOAT3 deltaCross = Cross(originDelta, firstEdge);
+    const Float3 deltaCross = Cross(originDelta, firstEdge);
     const float thirdWeight =
         Dot(ray.direction, deltaCross) * inverseDeterminant;
     if (thirdWeight < -absoluteEpsilon ||
@@ -787,7 +785,7 @@ std::optional<TriangleHit3D> Intersect(
     }
     parameter = std::max(parameter, 0.0F);
 
-    const XMFLOAT3 unnormalizedNormal = Cross(firstEdge, secondEdge);
+    const Float3 unnormalizedNormal = Cross(firstEdge, secondEdge);
     const float normalLengthSquared = LengthSquared(unnormalizedNormal);
     if (!std::isfinite(normalLengthSquared) ||
         normalLengthSquared <= absoluteEpsilon * absoluteEpsilon)
@@ -875,7 +873,7 @@ bool Intersects(
     }
 
     DirectX::BoundingSphere directXSphere;
-    directXSphere.Center = sphere.center;
+    directXSphere.Center = NativeMath::ToNative(sphere.center);
     directXSphere.Radius = sphere.radius + AbsEpsilon(epsilon);
     return directXSphere.Intersects(directXBox);
 }

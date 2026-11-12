@@ -5,7 +5,7 @@
 
 #include "System/TransformNode.h"
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstdint>
 #include <memory>
@@ -143,13 +143,13 @@ struct DrawPacket
 {
     DrawPacketType type{DrawPacketType::Rectangle};
     Rect bounds{};
-    DirectX::XMFLOAT4X4 nodeTransform{};
+    Float4x4 nodeTransform{};
     Color color{};
     TextContentHandle text;
     Point textOffset{};
     ImageHandle image{};
-    DirectX::XMFLOAT2 uvScale{1.0F, 1.0F};
-    DirectX::XMFLOAT2 uvOffset{};
+    Float2 uvScale{1.0F, 1.0F};
+    Float2 uvOffset{};
     float cornerRadius{};
     // Optional axis-aligned clip rectangle in Canvas coordinates. Core
     // resolves nested node-local clips before packets reach a backend.

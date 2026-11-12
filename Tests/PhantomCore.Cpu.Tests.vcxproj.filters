@@ -42,4 +42,10 @@
     <ClCompile Include="Collision\Visual2DUpdateTests.cpp"><Filter>Collision</Filter></ClCompile>
     <ClInclude Include="Collision\Visual2DUpdateTests.h"><Filter>Collision</Filter></ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Engine\Math" />
+    <ClInclude Include="..\Engine\Math\Math.h"><Filter>Engine\Math</Filter></ClInclude>
+    <ClInclude Include="..\Engine\Math\DirectXMathBridge.h"><Filter>Engine\Math</Filter></ClInclude>
+    <ClCompile Include="..\Engine\Math\Math.cpp"><Filter>Engine\Math</Filter></ClCompile>
+  </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 #include "System/TransformNode.h"
+#include "../../Math/DirectXMathBridge.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -11,7 +12,7 @@ using namespace DirectX;
 namespace
 {
     [[nodiscard]] bool Equal(
-        const XMFLOAT3& value,
+        const Float3& value,
         const float x,
         const float y,
         const float z) noexcept
@@ -20,8 +21,8 @@ namespace
     }
 
     [[nodiscard]] bool Equal(
-        const XMFLOAT4& left,
-        const XMFLOAT4& right) noexcept
+        const Float4& left,
+        const Float4& right) noexcept
     {
         return left.x == right.x && left.y == right.y &&
             left.z == right.z && left.w == right.w;
@@ -30,7 +31,7 @@ namespace
 
 TransformNode::TransformNode()
 {
-    XMStoreFloat4x4(&world_, XMMatrixIdentity());
+    NativeMath::StoreFloat4x4(&world_, XMMatrixIdentity());
 }
 
 TransformNode::~TransformNode()
@@ -87,8 +88,8 @@ void TransformNode::SetRotationRollPitchYaw(
     const float yaw,
     const float roll) noexcept
 {
-    XMFLOAT4 rotation{};
-    XMStoreFloat4(
+    Float4 rotation{};
+    NativeMath::StoreFloat4(
         &rotation,
         XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
     if (Equal(rotation_, rotation))
@@ -105,8 +106,8 @@ void TransformNode::SetRotationQuaternion(
     const float z,
     const float w) noexcept
 {
-    XMFLOAT4 rotation{};
-    XMStoreFloat4(
+    Float4 rotation{};
+    NativeMath::StoreFloat4(
         &rotation,
         XMQuaternionNormalize(XMVectorSet(x, y, z, w)));
     if (Equal(rotation_, rotation))
@@ -117,22 +118,22 @@ void TransformNode::SetRotationQuaternion(
     MarkWorldDirty();
 }
 
-const XMFLOAT3& TransformNode::Position() const noexcept
+const Float3& TransformNode::Position() const noexcept
 {
     return position_;
 }
 
-const XMFLOAT3& TransformNode::Scale() const noexcept
+const Float3& TransformNode::Scale() const noexcept
 {
     return scale_;
 }
 
-const XMFLOAT3& TransformNode::Pivot() const noexcept
+const Float3& TransformNode::Pivot() const noexcept
 {
     return pivot_;
 }
 
-const XMFLOAT4& TransformNode::Rotation() const noexcept
+const Float4& TransformNode::Rotation() const noexcept
 {
     return rotation_;
 }
@@ -178,7 +179,7 @@ TransformNode::Children() const noexcept
     return children_;
 }
 
-const XMFLOAT4X4& TransformNode::WorldMatrix() const
+const Float4x4& TransformNode::WorldMatrix() const
 {
     UpdateWorld();
     return world_;
@@ -218,7 +219,7 @@ void TransformNode::UpdateWorld() const
     const XMMATRIX local =
         XMMatrixTranslation(-pivot_.x, -pivot_.y, -pivot_.z) *
         XMMatrixScaling(scale_.x, scale_.y, scale_.z) *
-        XMMatrixRotationQuaternion(XMLoadFloat4(&rotation_)) *
+        XMMatrixRotationQuaternion(NativeMath::LoadFloat4(&rotation_)) *
         XMMatrixTranslation(
             position_.x + pivot_.x,
             position_.y + pivot_.y,
@@ -227,13 +228,13 @@ void TransformNode::UpdateWorld() const
     if (parent_ != nullptr)
     {
         parent_->UpdateWorld();
-        XMStoreFloat4x4(
+        NativeMath::StoreFloat4x4(
             &world_,
-            local * XMLoadFloat4x4(&parent_->world_));
+            local * NativeMath::LoadFloat4x4(&parent_->world_));
     }
     else
     {
-        XMStoreFloat4x4(&world_, local);
+        NativeMath::StoreFloat4x4(&world_, local);
     }
 
     worldDirty_ = false;

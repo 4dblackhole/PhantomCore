@@ -232,4 +232,9 @@
   <ItemGroup>
     <ClInclude Include="..\Audio\Backend\Fmod\FmodError.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Math\Math.h" />
+    <ClInclude Include="..\Math\DirectXMathBridge.h" />
+    <ClCompile Include="..\Math\Math.cpp" />
+  </ItemGroup>
 </Project>

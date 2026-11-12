@@ -1,4 +1,5 @@
 #include "Visual2D/Visual2DSurface.h"
+#include "../../Math/DirectXMathBridge.h"
 
 #include <algorithm>
 #include <cmath>
@@ -22,9 +23,9 @@ namespace
 
     [[nodiscard]] std::optional<LocalRay> ToLocalRay(
         const Ray3D& worldRay,
-        const XMFLOAT4X4& worldTransform) noexcept
+        const Float4x4& worldTransform) noexcept
     {
-        const XMMATRIX world = XMLoadFloat4x4(&worldTransform);
+        const XMMATRIX world = NativeMath::LoadFloat4x4(&worldTransform);
         XMVECTOR determinant{};
         const XMMATRIX inverse = XMMatrixInverse(&determinant, world);
         if (std::abs(XMVectorGetX(determinant)) <=
@@ -34,9 +35,9 @@ namespace
         }
 
         const XMVECTOR origin = XMVector3TransformCoord(
-            XMLoadFloat3(&worldRay.origin), inverse);
+            NativeMath::LoadFloat3(&worldRay.origin), inverse);
         const XMVECTOR direction = XMVector3TransformNormal(
-            XMLoadFloat3(&worldRay.direction), inverse);
+            NativeMath::LoadFloat3(&worldRay.direction), inverse);
         if (XMVectorGetX(XMVector3LengthSq(direction)) <=
             std::numeric_limits<float>::epsilon())
         {
@@ -44,36 +45,36 @@ namespace
         }
 
         LocalRay result{};
-        XMStoreFloat3(&result.ray.origin, origin);
-        XMStoreFloat3(&result.ray.direction, direction);
+        NativeMath::StoreFloat3(&result.ray.origin, origin);
+        NativeMath::StoreFloat3(&result.ray.direction, direction);
         result.world = world;
         result.inverseWorld = inverse;
         return result;
     }
 
-    [[nodiscard]] XMFLOAT3 TransformNormal(
-        const XMFLOAT3& localNormal,
+    [[nodiscard]] Float3 TransformNormal(
+        const Float3& localNormal,
         const XMMATRIX& inverseWorld) noexcept
     {
         XMVECTOR normal = XMVector3TransformNormal(
-            XMLoadFloat3(&localNormal),
+            NativeMath::LoadFloat3(&localNormal),
             XMMatrixTranspose(inverseWorld));
         normal = XMVector3Normalize(normal);
-        XMFLOAT3 result{};
-        XMStoreFloat3(&result, normal);
+        Float3 result{};
+        NativeMath::StoreFloat3(&result, normal);
         return result;
     }
 
     [[nodiscard]] float Dot(
-        const XMFLOAT3& first,
-        const XMFLOAT3& second) noexcept
+        const Float3& first,
+        const Float3& second) noexcept
     {
         return first.x * second.x + first.y * second.y +
             first.z * second.z;
     }
 
     [[nodiscard]] float AxisValue(
-        const XMFLOAT3& value,
+        const Float3& value,
         const std::size_t axis) noexcept
     {
         if (axis == 0)
@@ -88,9 +89,9 @@ namespace
     }
 
     void ExpandBounds(
-        XMFLOAT3& minimum,
-        XMFLOAT3& maximum,
-        const XMFLOAT3& point) noexcept
+        Float3& minimum,
+        Float3& maximum,
+        const Float3& point) noexcept
     {
         minimum.x = std::min(minimum.x, point.x);
         minimum.y = std::min(minimum.y, point.y);
@@ -101,8 +102,8 @@ namespace
     }
 
     [[nodiscard]] bool IntersectsBounds(
-        const XMFLOAT3& minimum,
-        const XMFLOAT3& maximum,
+        const Float3& minimum,
+        const Float3& maximum,
         const Ray3D& ray,
         const float maximumParameter) noexcept
     {
@@ -147,7 +148,7 @@ IVisual2DSurface::~IVisual2DSurface() = default;
 PlaneVisual2DSurface::PlaneVisual2DSurface(
     const float width,
     const float height,
-    const DirectX::XMFLOAT4X4& worldTransform,
+    const Float4x4& worldTransform,
     const bool twoSided)
     : width_(width), height_(height),
       worldTransform_(worldTransform), twoSided_(twoSided)
@@ -161,12 +162,12 @@ PlaneVisual2DSurface::PlaneVisual2DSurface(
 }
 
 void PlaneVisual2DSurface::SetWorldTransform(
-    const DirectX::XMFLOAT4X4& worldTransform) noexcept
+    const Float4x4& worldTransform) noexcept
 {
     worldTransform_ = worldTransform;
 }
 
-const DirectX::XMFLOAT4X4& PlaneVisual2DSurface::WorldTransform() const noexcept
+const Float4x4& PlaneVisual2DSurface::WorldTransform() const noexcept
 {
     return worldTransform_;
 }
@@ -202,11 +203,11 @@ std::optional<SurfaceHit> PlaneVisual2DSurface::Raycast(
         return std::nullopt;
     }
 
-    DirectX::XMFLOAT3 worldPoint{};
-    DirectX::XMStoreFloat3(
+    Float3 worldPoint{};
+    NativeMath::StoreFloat3(
         &worldPoint,
         DirectX::XMVector3TransformCoord(
-            DirectX::XMLoadFloat3(&hit->point), local->world));
+            NativeMath::LoadFloat3(&hit->point), local->world));
     return SurfaceHit{
         hit->parameter,
         worldPoint,
@@ -217,7 +218,7 @@ std::optional<SurfaceHit> PlaneVisual2DSurface::Raycast(
 
 MeshUvVisual2DSurface::MeshUvVisual2DSurface(
     const Shape& shape,
-    const DirectX::XMFLOAT4X4& worldTransform,
+    const Float4x4& worldTransform,
     const bool twoSided)
     : worldTransform_(worldTransform), twoSided_(twoSided)
 {
@@ -262,24 +263,24 @@ std::size_t MeshUvVisual2DSurface::BuildBvhNode(
     constexpr float infinity = std::numeric_limits<float>::infinity();
     Bounds bounds{{infinity, infinity, infinity},
         {-infinity, -infinity, -infinity}};
-    DirectX::XMFLOAT3 centroidMinimum{infinity, infinity, infinity};
-    DirectX::XMFLOAT3 centroidMaximum{-infinity, -infinity, -infinity};
+    Float3 centroidMinimum{infinity, infinity, infinity};
+    Float3 centroidMaximum{-infinity, -infinity, -infinity};
 
     for (std::size_t offset = 0; offset < triangleCount; ++offset)
     {
         const std::size_t triangle =
             triangleOrder_[firstTriangle + offset];
         const std::size_t index = triangle * 3;
-        const DirectX::XMFLOAT3& first =
+        const Float3& first =
             vertices_[indices_[index]].position;
-        const DirectX::XMFLOAT3& second =
+        const Float3& second =
             vertices_[indices_[index + 1]].position;
-        const DirectX::XMFLOAT3& third =
+        const Float3& third =
             vertices_[indices_[index + 2]].position;
         ExpandBounds(bounds.minimum, bounds.maximum, first);
         ExpandBounds(bounds.minimum, bounds.maximum, second);
         ExpandBounds(bounds.minimum, bounds.maximum, third);
-        const DirectX::XMFLOAT3 centroid{
+        const Float3 centroid{
             (first.x + second.x + third.x) / 3.0F,
             (first.y + second.y + third.y) / 3.0F,
             (first.z + second.z + third.z) / 3.0F};
@@ -288,7 +289,7 @@ std::size_t MeshUvVisual2DSurface::BuildBvhNode(
 
     const std::size_t nodeIndex = bvhNodes_.size();
     bvhNodes_.push_back(BvhNode{bounds});
-    const DirectX::XMFLOAT3 centroidExtent{
+    const Float3 centroidExtent{
         centroidMaximum.x - centroidMinimum.x,
         centroidMaximum.y - centroidMinimum.y,
         centroidMaximum.z - centroidMinimum.z};
@@ -354,12 +355,12 @@ std::size_t MeshUvVisual2DSurface::BuildBvhNode(
 }
 
 void MeshUvVisual2DSurface::SetWorldTransform(
-    const DirectX::XMFLOAT4X4& worldTransform) noexcept
+    const Float4x4& worldTransform) noexcept
 {
     worldTransform_ = worldTransform;
 }
 
-const DirectX::XMFLOAT4X4& MeshUvVisual2DSurface::WorldTransform() const noexcept
+const Float4x4& MeshUvVisual2DSurface::WorldTransform() const noexcept
 {
     return worldTransform_;
 }
@@ -436,19 +437,19 @@ std::optional<SurfaceHit> MeshUvVisual2DSurface::Raycast(
     const SurfaceVertex& first = vertices_[indices_[closestIndex]];
     const SurfaceVertex& second = vertices_[indices_[closestIndex + 1]];
     const SurfaceVertex& third = vertices_[indices_[closestIndex + 2]];
-    const DirectX::XMFLOAT3 weights = closest->barycentric;
-    const DirectX::XMFLOAT2 uv{
+    const Float3 weights = closest->barycentric;
+    const Float2 uv{
         first.uv.x * weights.x +
             second.uv.x * weights.y +
             third.uv.x * weights.z,
         first.uv.y * weights.x +
             second.uv.y * weights.y +
             third.uv.y * weights.z};
-    DirectX::XMFLOAT3 worldPoint{};
-    DirectX::XMStoreFloat3(
+    Float3 worldPoint{};
+    NativeMath::StoreFloat3(
         &worldPoint,
         DirectX::XMVector3TransformCoord(
-            DirectX::XMLoadFloat3(&closest->point), local->world));
+            NativeMath::LoadFloat3(&closest->point), local->world));
     return SurfaceHit{
         closest->parameter,
         worldPoint,
@@ -515,7 +516,7 @@ std::optional<Point> WorldSpaceVisual2DCanvas::MapPointer(
 std::optional<Ray3D> CreateWorldPointerRay(
     const Point screenPosition,
     const Size viewportSize,
-    const DirectX::XMFLOAT4X4& viewProjection) noexcept
+    const Float4x4& viewProjection) noexcept
 {
     if (viewportSize.width <= 0.0F || viewportSize.height <= 0.0F)
     {
@@ -529,7 +530,7 @@ std::optional<Ray3D> CreateWorldPointerRay(
     DirectX::XMVECTOR determinant{};
     const DirectX::XMMATRIX inverse = DirectX::XMMatrixInverse(
         &determinant,
-        DirectX::XMLoadFloat4x4(&viewProjection));
+        NativeMath::LoadFloat4x4(&viewProjection));
     if (std::abs(DirectX::XMVectorGetX(determinant)) <=
         std::numeric_limits<float>::epsilon())
     {
@@ -552,8 +553,8 @@ std::optional<Ray3D> CreateWorldPointerRay(
     direction = DirectX::XMVector3Normalize(direction);
 
     Ray3D result{};
-    DirectX::XMStoreFloat3(&result.origin, nearPoint);
-    DirectX::XMStoreFloat3(&result.direction, direction);
+    NativeMath::StoreFloat3(&result.origin, nearPoint);
+    NativeMath::StoreFloat3(&result.direction, direction);
     return result;
 }
 

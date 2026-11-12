@@ -2,7 +2,7 @@
 
 // Texture feature: WIC decoding, uploads, and SRV descriptor sets.
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -27,8 +27,8 @@ struct TextureInfo final
 
 struct UvTransform final
 {
-    DirectX::XMFLOAT2 scale{1.0F, 1.0F};
-    DirectX::XMFLOAT2 offset{0.0F, 0.0F};
+    Float2 scale{1.0F, 1.0F};
+    Float2 offset{0.0F, 0.0F};
 };
 
 // Read-only texture-set contract exposed to materials and Client code.

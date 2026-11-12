@@ -13,6 +13,7 @@
     <CorePublicHeader Include="Engine\Platform.Win32\Input\Input.h" />
     <CorePublicHeader Include="Engine\Platform.Win32\Input\TextInput.h" />
     <CorePublicHeader Include="Engine\Platform.Win32\Window\WindowControl.h" />
+    <CorePublicHeader Include="Engine\Math\Math.h" />
     <CorePublicHeader Include="Engine\Collision\Query\Collision.h" />
     <CorePublicHeader Include="Engine\Geometry\Shape\Vertex.h" />
     <CorePublicHeader Include="Engine\Geometry\Shape\Shape.h" />

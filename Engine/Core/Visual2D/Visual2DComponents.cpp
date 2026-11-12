@@ -89,19 +89,19 @@ void SpriteVisualComponent::SetCornerRadius(const float radius)
     cornerRadius_ = radius;
 }
 
-DirectX::XMFLOAT2 SpriteVisualComponent::UvScale() const noexcept
+Float2 SpriteVisualComponent::UvScale() const noexcept
 {
     return uvScale_;
 }
 
-DirectX::XMFLOAT2 SpriteVisualComponent::UvOffset() const noexcept
+Float2 SpriteVisualComponent::UvOffset() const noexcept
 {
     return uvOffset_;
 }
 
 void SpriteVisualComponent::SetUvTransform(
-    const DirectX::XMFLOAT2 scale,
-    const DirectX::XMFLOAT2 offset) noexcept
+    const Float2 scale,
+    const Float2 offset) noexcept
 {
     uvScale_ = scale;
     uvOffset_ = offset;

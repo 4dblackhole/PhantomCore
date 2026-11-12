@@ -241,4 +241,10 @@
   <ItemGroup>
     <ClInclude Include="..\Audio\Backend\Fmod\FmodError.h"><Filter>Audio\Backend\Fmod</Filter></ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Math" />
+    <ClInclude Include="..\Math\Math.h"><Filter>Math</Filter></ClInclude>
+    <ClInclude Include="..\Math\DirectXMathBridge.h"><Filter>Math</Filter></ClInclude>
+    <ClCompile Include="..\Math\Math.cpp"><Filter>Math</Filter></ClCompile>
+  </ItemGroup>
 </Project>

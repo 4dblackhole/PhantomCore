@@ -7,8 +7,7 @@
 #include "Texture/TextureManager.h"
 #include "Rendering/RenderContext.h"
 
-#include <Windows.h>
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -26,7 +25,7 @@ public:
 
     // Loads a PNG/WIC-supported image once and returns an opaque handle
     // that can be assigned to a SpriteVisualComponent or widget style.
-    [[nodiscard]] virtual ImageHandle LoadImage(
+    [[nodiscard]] virtual ImageHandle LoadImageFile(
         const std::filesystem::path& path) = 0;
     // Start/poll CPU decoding without waiting. On true, inspect error;
     // successful images can then be registered on the render thread.
@@ -62,9 +61,9 @@ public:
     virtual void SubmitPlane(
         const Visual2DCanvas& canvas,
         const RenderContext& context,
-        const DirectX::XMFLOAT4X4& surfaceWorld,
+        const Float4x4& surfaceWorld,
         Size surfaceWorldSize,
-        const DirectX::XMFLOAT4X4& viewProjection) = 0;
+        const Float4x4& viewProjection) = 0;
 
     [[nodiscard]] virtual RenderTargetTextureHandle CreateCanvasRenderTarget(
         std::uint32_t width,

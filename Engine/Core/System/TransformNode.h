@@ -2,7 +2,7 @@
 
 // System feature: reusable hierarchical local and world transforms.
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <vector>
 
@@ -35,10 +35,10 @@ public:
         float z,
         float w) noexcept;
 
-    [[nodiscard]] const DirectX::XMFLOAT3& Position() const noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT3& Scale() const noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT3& Pivot() const noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT4& Rotation() const noexcept;
+    [[nodiscard]] const Float3& Position() const noexcept;
+    [[nodiscard]] const Float3& Scale() const noexcept;
+    [[nodiscard]] const Float3& Pivot() const noexcept;
+    [[nodiscard]] const Float4& Rotation() const noexcept;
 
     // Transform links never own either endpoint. The object/scene tree is
     // the single lifetime owner and must outlive its TransformNode links.
@@ -47,18 +47,18 @@ public:
     [[nodiscard]] const std::vector<TransformNode*>&
         Children() const noexcept;
 
-    [[nodiscard]] const DirectX::XMFLOAT4X4& WorldMatrix() const;
+    [[nodiscard]] const Float4x4& WorldMatrix() const;
     void UpdateWorldRecursive();
 
 private:
     void MarkWorldDirty() noexcept;
     void UpdateWorld() const;
 
-    DirectX::XMFLOAT3 position_{0.0F, 0.0F, 0.0F};
-    DirectX::XMFLOAT3 scale_{1.0F, 1.0F, 1.0F};
-    DirectX::XMFLOAT3 pivot_{};
-    DirectX::XMFLOAT4 rotation_{0.0F, 0.0F, 0.0F, 1.0F};
-    mutable DirectX::XMFLOAT4X4 world_{};
+    Float3 position_{0.0F, 0.0F, 0.0F};
+    Float3 scale_{1.0F, 1.0F, 1.0F};
+    Float3 pivot_{};
+    Float4 rotation_{0.0F, 0.0F, 0.0F, 1.0F};
+    mutable Float4x4 world_{};
     TransformNode* parent_{};
     std::vector<TransformNode*> children_;
     mutable bool worldDirty_{true};

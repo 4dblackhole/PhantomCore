@@ -21,11 +21,11 @@ public:
     // Radius is measured in the node's local Canvas units. It applies to
     // both solid fills and images without changing layout or batching.
     void SetCornerRadius(float radius);
-    [[nodiscard]] DirectX::XMFLOAT2 UvScale() const noexcept;
-    [[nodiscard]] DirectX::XMFLOAT2 UvOffset() const noexcept;
+    [[nodiscard]] Float2 UvScale() const noexcept;
+    [[nodiscard]] Float2 UvOffset() const noexcept;
     void SetUvTransform(
-        DirectX::XMFLOAT2 scale,
-        DirectX::XMFLOAT2 offset) noexcept;
+        Float2 scale,
+        Float2 offset) noexcept;
 
     void AppendDrawPackets(
         std::vector<DrawPacket>& packets) const override;
@@ -35,8 +35,8 @@ private:
     [[nodiscard]] ImageHandle CurrentImage() const noexcept;
 
     VisualStyle style_{};
-    DirectX::XMFLOAT2 uvScale_{1.0F, 1.0F};
-    DirectX::XMFLOAT2 uvOffset_{};
+    Float2 uvScale_{1.0F, 1.0F};
+    Float2 uvOffset_{};
     float cornerRadius_{};
 };
 

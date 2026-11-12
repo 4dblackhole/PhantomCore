@@ -4,7 +4,7 @@
 #include "Query/Collision.h"
 #include "Shape/Shape.h"
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstddef>
 #include <memory>
@@ -17,9 +17,9 @@ namespace PhantomCore
 struct SurfaceHit
 {
     float rayParameter{};
-    DirectX::XMFLOAT3 worldPosition{};
-    DirectX::XMFLOAT3 worldNormal{};
-    DirectX::XMFLOAT2 uv{};
+    Float3 worldPosition{};
+    Float3 worldNormal{};
+    Float2 uv{};
 };
 
 class IVisual2DSurface
@@ -38,12 +38,12 @@ public:
     PlaneVisual2DSurface(
         float width,
         float height,
-        const DirectX::XMFLOAT4X4& worldTransform,
+        const Float4x4& worldTransform,
         bool twoSided = false);
 
     void SetWorldTransform(
-        const DirectX::XMFLOAT4X4& worldTransform) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT4X4& WorldTransform()
+        const Float4x4& worldTransform) noexcept;
+    [[nodiscard]] const Float4x4& WorldTransform()
         const noexcept;
     [[nodiscard]] Size WorldSize() const noexcept;
     [[nodiscard]] std::optional<SurfaceHit> Raycast(
@@ -52,7 +52,7 @@ public:
 private:
     float width_{};
     float height_{};
-    DirectX::XMFLOAT4X4 worldTransform_{};
+    Float4x4 worldTransform_{};
     bool twoSided_{};
 };
 
@@ -64,12 +64,12 @@ class MeshUvVisual2DSurface final : public IVisual2DSurface
 public:
     MeshUvVisual2DSurface(
         const Shape& shape,
-        const DirectX::XMFLOAT4X4& worldTransform,
+        const Float4x4& worldTransform,
         bool twoSided = false);
 
     void SetWorldTransform(
-        const DirectX::XMFLOAT4X4& worldTransform) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT4X4& WorldTransform()
+        const Float4x4& worldTransform) noexcept;
+    [[nodiscard]] const Float4x4& WorldTransform()
         const noexcept;
     [[nodiscard]] std::optional<SurfaceHit> Raycast(
         const Ray3D& worldRay) const noexcept override;
@@ -77,14 +77,14 @@ public:
 private:
     struct SurfaceVertex
     {
-        DirectX::XMFLOAT3 position{};
-        DirectX::XMFLOAT2 uv{};
+        Float3 position{};
+        Float2 uv{};
     };
 
     struct Bounds
     {
-        DirectX::XMFLOAT3 minimum{};
-        DirectX::XMFLOAT3 maximum{};
+        Float3 minimum{};
+        Float3 maximum{};
     };
 
     // Nodes are stored in preorder. escapeIndex points immediately after
@@ -107,7 +107,7 @@ private:
     std::vector<std::uint32_t> indices_;
     std::vector<std::size_t> triangleOrder_;
     std::vector<BvhNode> bvhNodes_;
-    DirectX::XMFLOAT4X4 worldTransform_{};
+    Float4x4 worldTransform_{};
     bool twoSided_{};
 };
 
@@ -137,6 +137,6 @@ private:
 [[nodiscard]] std::optional<Ray3D> CreateWorldPointerRay(
     Point screenPosition,
     Size viewportSize,
-    const DirectX::XMFLOAT4X4& viewProjection) noexcept;
+    const Float4x4& viewProjection) noexcept;
 
 } // namespace PhantomCore

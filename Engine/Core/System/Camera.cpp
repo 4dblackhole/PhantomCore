@@ -1,4 +1,5 @@
 #include "System/Camera.h"
+#include "../../Math/DirectXMathBridge.h"
 
 #include <algorithm>
 #include <cmath>
@@ -19,7 +20,7 @@ namespace
     }
 
     [[nodiscard]] bool Equal(
-        const XMFLOAT3& value,
+        const Float3& value,
         const float x,
         const float y,
         const float z) noexcept
@@ -31,7 +32,7 @@ namespace
     {
         if (!std::isfinite(fieldOfViewRadians) ||
             fieldOfViewRadians <= 0.0F ||
-            fieldOfViewRadians >= XM_PI)
+            fieldOfViewRadians >= Pi)
         {
             throw std::invalid_argument(
                 "The camera vertical field of view is invalid.");
@@ -46,7 +47,7 @@ namespace
     {
         if (!std::isfinite(verticalFieldOfViewRadians) ||
             verticalFieldOfViewRadians <= 0.0F ||
-            verticalFieldOfViewRadians >= XM_PI ||
+            verticalFieldOfViewRadians >= Pi ||
             !IsFinitePositive(aspectRatio) ||
             !IsFinitePositive(nearPlane) ||
             !std::isfinite(farPlane) ||
@@ -107,12 +108,12 @@ void Camera::SetPosition(
     MarkViewDirty();
 }
 
-void Camera::SetPosition(const XMFLOAT3& position) noexcept
+void Camera::SetPosition(const Float3& position) noexcept
 {
     SetPosition(position.x, position.y, position.z);
 }
 
-const XMFLOAT3& Camera::Position() const noexcept
+const Float3& Camera::Position() const noexcept
 {
     return position_;
 }
@@ -150,26 +151,26 @@ float Camera::PitchRadians() const noexcept
     return pitchRadians_;
 }
 
-XMFLOAT3 Camera::Forward() const noexcept
+Float3 Camera::Forward() const noexcept
 {
-    XMFLOAT3 result{};
-    XMStoreFloat3(&result, ForwardVector(yawRadians_, pitchRadians_));
+    Float3 result{};
+    NativeMath::StoreFloat3(&result, ForwardVector(yawRadians_, pitchRadians_));
     return result;
 }
 
-XMFLOAT3 Camera::Right() const noexcept
+Float3 Camera::Right() const noexcept
 {
-    XMFLOAT3 result{};
-    XMStoreFloat3(&result, RightVector(yawRadians_, pitchRadians_));
+    Float3 result{};
+    NativeMath::StoreFloat3(&result, RightVector(yawRadians_, pitchRadians_));
     return result;
 }
 
-XMFLOAT3 Camera::Up() const noexcept
+Float3 Camera::Up() const noexcept
 {
     const XMVECTOR forward = ForwardVector(yawRadians_, pitchRadians_);
     const XMVECTOR right = RightVector(yawRadians_, pitchRadians_);
-    XMFLOAT3 result{};
-    XMStoreFloat3(&result, XMVector3Normalize(XMVector3Cross(forward, right)));
+    Float3 result{};
+    NativeMath::StoreFloat3(&result, XMVector3Normalize(XMVector3Cross(forward, right)));
     return result;
 }
 
@@ -334,22 +335,22 @@ float Camera::FarPlane() const noexcept
     return farPlane_;
 }
 
-XMMATRIX Camera::ViewMatrix() const noexcept
+Float4x4 Camera::ViewMatrix() const noexcept
 {
     UpdateViewMatrix();
-    return XMLoadFloat4x4(&viewMatrix_);
+    return viewMatrix_;
 }
 
-XMMATRIX Camera::ProjectionMatrix() const noexcept
+Float4x4 Camera::ProjectionMatrix() const noexcept
 {
     UpdateProjectionMatrix();
-    return XMLoadFloat4x4(&projectionMatrix_);
+    return projectionMatrix_;
 }
 
-XMMATRIX Camera::ViewProjectionMatrix() const noexcept
+Float4x4 Camera::ViewProjectionMatrix() const noexcept
 {
     UpdateViewProjectionMatrix();
-    return XMLoadFloat4x4(&viewProjectionMatrix_);
+    return viewProjectionMatrix_;
 }
 
 const ViewFrustum& Camera::Frustum() const noexcept
@@ -362,8 +363,8 @@ float Camera::ClampPitch(const float pitchRadians) noexcept
 {
     return std::clamp(
         pitchRadians,
-        -XM_PIDIV2 + PitchMarginRadians,
-        XM_PIDIV2 - PitchMarginRadians);
+        -HalfPi + PitchMarginRadians,
+        HalfPi - PitchMarginRadians);
 }
 
 void Camera::MarkViewDirty() noexcept
@@ -387,10 +388,10 @@ void Camera::UpdateViewMatrix() const noexcept
         return;
     }
 
-    XMStoreFloat4x4(
+    NativeMath::StoreFloat4x4(
         &viewMatrix_,
         XMMatrixLookToLH(
-            XMLoadFloat3(&position_),
+            NativeMath::LoadFloat3(&position_),
             ForwardVector(yawRadians_, pitchRadians_),
             XMVectorSet(0.0F, 1.0F, 0.0F, 0.0F)));
     viewDirty_ = false;
@@ -415,7 +416,7 @@ void Camera::UpdateProjectionMatrix() const noexcept
             perspectiveAspectRatio_,
             nearPlane_,
             farPlane_);
-    XMStoreFloat4x4(&projectionMatrix_, projection);
+    NativeMath::StoreFloat4x4(&projectionMatrix_, projection);
     projectionDirty_ = false;
 }
 
@@ -428,10 +429,10 @@ void Camera::UpdateViewProjectionMatrix() const noexcept
         return;
     }
 
-    XMStoreFloat4x4(
+    NativeMath::StoreFloat4x4(
         &viewProjectionMatrix_,
-        XMLoadFloat4x4(&viewMatrix_) *
-            XMLoadFloat4x4(&projectionMatrix_));
+        NativeMath::LoadFloat4x4(&viewMatrix_) *
+            NativeMath::LoadFloat4x4(&projectionMatrix_));
     viewProjectionDirty_ = false;
 }
 

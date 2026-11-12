@@ -5,7 +5,7 @@
 #include "System/Camera.h"
 #include "System/TransformNode.h"
 
-#include <DirectXMath.h>
+#include "../../Math/Math.h"
 
 #include <cstdint>
 
@@ -32,18 +32,18 @@ public:
     [[nodiscard]] TransformNode& Transform() noexcept;
     [[nodiscard]] const TransformNode& Transform() const noexcept;
 
-    void SetColor(const DirectX::XMFLOAT4& color) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT4& Color() const noexcept;
+    void SetColor(const Float4& color) noexcept;
+    [[nodiscard]] const Float4& Color() const noexcept;
     void SetTextureIndex(std::uint32_t textureIndex) noexcept;
     void ClearTexture() noexcept;
     [[nodiscard]] std::uint32_t TextureIndex() const noexcept;
     void SetUvTransform(
-        const DirectX::XMFLOAT2& scale,
-        const DirectX::XMFLOAT2& offset) noexcept;
+        const Float2& scale,
+        const Float2& offset) noexcept;
     void SetUvTransform(
         const UvTransform& transform) noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT2& UvScale() const noexcept;
-    [[nodiscard]] const DirectX::XMFLOAT2& UvOffset() const noexcept;
+    [[nodiscard]] const Float2& UvScale() const noexcept;
+    [[nodiscard]] const Float2& UvOffset() const noexcept;
     [[nodiscard]] bool IsReady() const noexcept;
     [[nodiscard]] const Sphere3D&
         LocalBoundingSphere() const;
@@ -61,9 +61,9 @@ private:
     GpuMeshHandle mesh_;
     MaterialInstanceHandle material_;
     TransformNode transform_;
-    DirectX::XMFLOAT4 color_{1.0F, 1.0F, 1.0F, 1.0F};
-    DirectX::XMFLOAT2 uvScale_{1.0F, 1.0F};
-    DirectX::XMFLOAT2 uvOffset_{0.0F, 0.0F};
+    Float4 color_{1.0F, 1.0F, 1.0F, 1.0F};
+    Float2 uvScale_{1.0F, 1.0F};
+    Float2 uvOffset_{0.0F, 0.0F};
     std::uint32_t textureIndex_{NoTextureIndex};
 };
 

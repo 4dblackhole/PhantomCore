@@ -276,7 +276,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     const std::uint64_t renderIndex = nextRenderIndex_++;
     MeshRenderingBackend::BeginFrame(*meshRenderSystem_, frameIndex_);
     TextRenderingBackend::BeginFrame(*textRenderSystem_, frameIndex_, renderIndex);
-    static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).BeginScreenFrame(renderIndex);
+    static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).BeginScreenFrame(renderIndex, frameIndex_);
     imageReadbacks_->BeginFrame(frameIndex_, renderIndex, *renderTargets_[frameIndex_].Get());
     frameOpen_ = true;
     RenderContext context;

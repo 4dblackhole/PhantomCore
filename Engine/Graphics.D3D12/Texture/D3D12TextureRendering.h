@@ -18,7 +18,7 @@ struct TextureRenderingBackend final
         const TextureManager& textures, const TextureSetHandle& textureSet);
     static void BeginRenderTargetPass(TextureManager& textures,
         ID3D12GraphicsCommandList& commands, const RenderTargetTextureHandle& target,
-        const DirectX::XMFLOAT4& clearColor);
+        const Float4& clearColor);
     static void EndRenderTargetPass(TextureManager& textures,
         ID3D12GraphicsCommandList& commands, const RenderTargetTextureHandle& target);
 };

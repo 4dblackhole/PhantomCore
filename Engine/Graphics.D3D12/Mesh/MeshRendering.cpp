@@ -1,4 +1,5 @@
 #include "Mesh/MeshRendering.h"
+#include "../../Math/DirectXMathBridge.h"
 #include "Mesh/D3D12MeshRendering.h"
 #include "Renderer/FrameResources.h"
 #include <wrl/client.h>
@@ -82,12 +83,12 @@ namespace
     }
 
     [[nodiscard]] D3D12_RENDER_TARGET_BLEND_DESC
-        AlphaBlendDescription() noexcept
+        AlphaBlendDescription(const bool premultiplied) noexcept
     {
         D3D12_RENDER_TARGET_BLEND_DESC description{};
         description.BlendEnable = TRUE;
         description.LogicOpEnable = FALSE;
-        description.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        description.SrcBlend = premultiplied ? D3D12_BLEND_ONE : D3D12_BLEND_SRC_ALPHA;
         description.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
         description.BlendOp = D3D12_BLEND_OP_ADD;
         description.SrcBlendAlpha = D3D12_BLEND_ONE;
@@ -103,7 +104,7 @@ namespace
         ID3D12RootSignature* rootSignature, ID3DBlob& vertexShader,
         ID3DBlob& pixelShader, std::span<const D3D12_INPUT_ELEMENT_DESC> inputLayout,
         const DXGI_FORMAT renderTargetFormat, const DXGI_FORMAT depthStencilFormat,
-        const bool alphaBlended)
+        const bool alphaBlended, const bool premultiplied = false)
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription{};
         pipelineDescription.pRootSignature =
@@ -120,7 +121,7 @@ namespace
             pipelineDescription.BlendState.RenderTarget)
         {
             target = alphaBlended
-                ? AlphaBlendDescription()
+                ? AlphaBlendDescription(premultiplied)
                 : OpaqueBlendDescription();
         }
         pipelineDescription.SampleMask =
@@ -272,6 +273,7 @@ struct MeshRenderSystem::Impl final
 
     [[nodiscard]] MaterialInstanceHandle CreateMaterial(
         BuiltInMaterial material);
+    [[nodiscard]] MaterialInstanceHandle CreatePremultipliedTextureMaterial();
     [[nodiscard]] TextureManager& Textures() noexcept;
     [[nodiscard]] const TextureManager& Textures() const noexcept;
     [[nodiscard]] ID3D12Device* Device() const noexcept;
@@ -284,31 +286,39 @@ struct MeshRenderSystem::Impl final
     void Submit(
         GpuMeshHandle mesh,
         MaterialInstanceHandle material,
-        const DirectX::XMFLOAT4X4& world,
-        const DirectX::XMFLOAT4X4& viewProjection,
-        const DirectX::XMFLOAT4& color,
-        const DirectX::XMFLOAT2& uvScale,
-        const DirectX::XMFLOAT2& uvOffset,
+        const Float4x4& world,
+        const Float4x4& viewProjection,
+        const Float4& color,
+        const Float2& uvScale,
+        const Float2& uvOffset,
         std::uint32_t textureIndex,
-        DirectX::XMFLOAT4 clipRectPixels = {
+        Float4 clipRectPixels = {
             -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F},
-        DirectX::XMFLOAT4 roundedRectLocal = {},
+        Float4 roundedRectLocal = {},
         float cornerRadiusLocal = 0.0F);
 
     void Flush(ID3D12GraphicsCommandList& commandList);
 
     struct InstanceData
     {
-        DirectX::XMFLOAT4X4 worldViewProjection{};
-        DirectX::XMFLOAT4 color{1.0F, 1.0F, 1.0F, 1.0F};
-        DirectX::XMFLOAT4 uvTransform{1.0F, 1.0F, 0.0F, 0.0F};
-        DirectX::XMFLOAT4 clipRectPixels{
+        Float4x4 worldViewProjection{};
+        Float4 color{1.0F, 1.0F, 1.0F, 1.0F};
+        Float4 uvTransform{1.0F, 1.0F, 0.0F, 0.0F};
+        Float4 clipRectPixels{
             -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
-        DirectX::XMFLOAT4 roundedRectLocal{};
+        Float4 roundedRectLocal{};
         float cornerRadiusLocal{};
         std::uint32_t textureIndex{NoTextureIndex};
         std::array<std::uint32_t, 2> padding{};
     };
+
+    static_assert(sizeof(InstanceData) == 144);
+    static_assert(offsetof(InstanceData, color) == 64);
+    static_assert(offsetof(InstanceData, uvTransform) == 80);
+    static_assert(offsetof(InstanceData, clipRectPixels) == 96);
+    static_assert(offsetof(InstanceData, roundedRectLocal) == 112);
+    static_assert(offsetof(InstanceData, cornerRadiusLocal) == 128);
+    static_assert(offsetof(InstanceData, textureIndex) == 132);
 
     struct PendingItem
     {
@@ -340,7 +350,7 @@ struct MeshRenderSystem::Impl final
     [[nodiscard]] std::shared_ptr<MaterialTemplate>
         CreateUnlitVertexColorTextureArrayTemplate(
             BuiltInMaterial materialType,
-            bool alphaBlended);
+            bool alphaBlended, bool premultiplied = false);
     void SortPendingItems();
     void UploadPendingInstances(FrameInstanceBuffer& instanceBuffer);
     [[nodiscard]] std::size_t FindBatchEnd(
@@ -362,6 +372,7 @@ struct MeshRenderSystem::Impl final
         unlitVertexColorTextureArrayTemplate_;
     std::shared_ptr<MaterialTemplate>
         unlitVertexColorTextureArrayAlphaBlendTemplate_;
+    std::shared_ptr<MaterialTemplate> premultipliedTextureTemplate_;
     TextureManager textureManager_;
     std::array<FrameInstanceBuffer, D3D12Detail::FrameCount> instanceBuffers_{};
     std::vector<PendingItem> pendingItems_;
@@ -408,6 +419,8 @@ void MeshRenderSystem::Impl::Initialize(
                 BuiltInMaterial::
                     UnlitVertexColorTextureArrayAlphaBlend,
                 true);
+        premultipliedTextureTemplate_ = CreateUnlitVertexColorTextureArrayTemplate(
+            BuiltInMaterial::UnlitVertexColorTextureArrayAlphaBlend, true, true);
         initialized_ = true;
     }
     catch (...)
@@ -434,6 +447,7 @@ void MeshRenderSystem::Impl::Shutdown() noexcept
         buffer.resource.Reset();
     }
 
+    premultipliedTextureTemplate_.reset();
     unlitVertexColorTextureArrayAlphaBlendTemplate_.reset();
     unlitVertexColorTextureArrayTemplate_.reset();
     unlitVertexColorTemplate_.reset();
@@ -479,6 +493,13 @@ MaterialInstanceHandle MeshRenderSystem::Impl::CreateMaterial(
         new MaterialInstance(std::move(materialTemplate))};
 }
 
+MaterialInstanceHandle MeshRenderSystem::Impl::CreatePremultipliedTextureMaterial()
+{
+    if (!initialized_ || !premultipliedTextureTemplate_)
+        throw std::logic_error("Mesh rendering must be initialized before creating a panel material.");
+    return MaterialInstanceHandle{new MaterialInstance(premultipliedTextureTemplate_)};
+}
+
 TextureManager& MeshRenderSystem::Impl::Textures() noexcept
 {
     return textureManager_;
@@ -520,14 +541,14 @@ void MeshRenderSystem::Impl::BeginFrame(const std::uint32_t frameIndex)
 void MeshRenderSystem::Impl::Submit(
     GpuMeshHandle mesh,
     MaterialInstanceHandle material,
-    const XMFLOAT4X4& world,
-    const XMFLOAT4X4& viewProjection,
-    const XMFLOAT4& color,
-    const XMFLOAT2& uvScale,
-    const XMFLOAT2& uvOffset,
+    const Float4x4& world,
+    const Float4x4& viewProjection,
+    const Float4& color,
+    const Float2& uvScale,
+    const Float2& uvOffset,
     const std::uint32_t textureIndex,
-    const XMFLOAT4 clipRectPixels,
-    const XMFLOAT4 roundedRectLocal,
+    const Float4 clipRectPixels,
+    const Float4 roundedRectLocal,
     const float cornerRadiusLocal)
 {
     if (!frameOpen_)
@@ -568,10 +589,10 @@ void MeshRenderSystem::Impl::Submit(
     }
 
     InstanceData instance{};
-    XMStoreFloat4x4(
+    NativeMath::StoreFloat4x4(
         &instance.worldViewProjection,
-        XMLoadFloat4x4(&world) *
-            XMLoadFloat4x4(&viewProjection));
+        NativeMath::LoadFloat4x4(&world) *
+            NativeMath::LoadFloat4x4(&viewProjection));
     instance.color = color;
     instance.uvTransform = {
         uvScale.x,
@@ -842,8 +863,8 @@ Sphere3D MeshRenderSystem::ComputeLocalBoundingSphere(
         return {{}, -1.0F};
     }
 
-    XMFLOAT3 minimum = vertices.front().position;
-    XMFLOAT3 maximum = minimum;
+    Float3 minimum = vertices.front().position;
+    Float3 maximum = minimum;
     for (const VertexAttributes& vertex : vertices)
     {
         minimum.x = std::min(minimum.x, vertex.position.x);
@@ -854,7 +875,7 @@ Sphere3D MeshRenderSystem::ComputeLocalBoundingSphere(
         maximum.z = std::max(maximum.z, vertex.position.z);
     }
 
-    const XMFLOAT3 center{
+    const Float3 center{
         (minimum.x + maximum.x) * 0.5F,
         (minimum.y + maximum.y) * 0.5F,
         (minimum.z + maximum.z) * 0.5F};
@@ -1029,7 +1050,7 @@ std::shared_ptr<MaterialTemplate>
 std::shared_ptr<MaterialTemplate>
     MeshRenderSystem::Impl::CreateUnlitVertexColorTextureArrayTemplate(
         const BuiltInMaterial materialType,
-        const bool alphaBlended)
+        const bool alphaBlended, const bool premultiplied)
 {
     // The textured variant uses its own embedded shader pair and one SRV
     // descriptor table containing independently sized Texture2D objects.
@@ -1209,7 +1230,7 @@ std::shared_ptr<MaterialTemplate>
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDescription =
         MakeMeshPipelineDescription(material->implementation_->rootSignature_.Get(),
             *vertexShader.Get(), *pixelShader.Get(), inputLayout, renderTargetFormat_,
-            depthStencilFormat_, alphaBlended);
+            depthStencilFormat_, alphaBlended, premultiplied);
 
     D3D12Detail::ThrowIfFailed(
         device_->CreateGraphicsPipelineState(
@@ -1283,10 +1304,10 @@ const TextureManager& MeshRenderSystem::Textures() const noexcept
     return implementation_->Textures();
 }
 void MeshRenderSystem::Submit(GpuMeshHandle mesh, MaterialInstanceHandle material,
-    const XMFLOAT4X4& world, const XMFLOAT4X4& viewProjection,
-    const XMFLOAT4& color, const XMFLOAT2& uvScale, const XMFLOAT2& uvOffset,
-    const std::uint32_t textureIndex, const XMFLOAT4 clipRectPixels,
-    const XMFLOAT4 roundedRectLocal, const float cornerRadiusLocal)
+    const Float4x4& world, const Float4x4& viewProjection,
+    const Float4& color, const Float2& uvScale, const Float2& uvOffset,
+    const std::uint32_t textureIndex, const Float4 clipRectPixels,
+    const Float4 roundedRectLocal, const float cornerRadiusLocal)
 {
     implementation_->Submit(std::move(mesh), std::move(material), world, viewProjection,
         color, uvScale, uvOffset, textureIndex, clipRectPixels, roundedRectLocal,
@@ -1305,6 +1326,11 @@ ID3D12Device* MeshRenderingBackend::Device(const MeshRenderSystem& meshes) noexc
 {
     return meshes.implementation_->Device();
 }
+MaterialInstanceHandle MeshRenderingBackend::CreatePremultipliedTextureMaterial(MeshRenderSystem& meshes)
+{
+    return meshes.implementation_->CreatePremultipliedTextureMaterial();
+}
+
 void MeshRenderingBackend::BeginFrame(MeshRenderSystem& meshes,
     const std::uint32_t frameIndex)
 {

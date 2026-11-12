@@ -206,7 +206,7 @@ struct TextureManager::Impl final
     void BeginRenderTargetPass(
         ID3D12GraphicsCommandList& commandList,
         const RenderTargetTextureHandle& target,
-        const DirectX::XMFLOAT4& clearColor);
+        const Float4& clearColor);
     void EndRenderTargetPass(
         ID3D12GraphicsCommandList& commandList,
         const RenderTargetTextureHandle& target);
@@ -1069,7 +1069,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::Impl::GpuDescriptorStart(
 void TextureManager::Impl::BeginRenderTargetPass(
     ID3D12GraphicsCommandList& commandList,
     const RenderTargetTextureHandle& target,
-    const DirectX::XMFLOAT4& clearColor)
+    const Float4& clearColor)
 {
     RequireOwnerThread();
     if (!initialized_ || target == nullptr)
@@ -1215,7 +1215,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureRenderingBackend::GpuDescriptorStart(
 
 void TextureRenderingBackend::BeginRenderTargetPass(TextureManager& textures,
     ID3D12GraphicsCommandList& commands, const RenderTargetTextureHandle& target,
-    const DirectX::XMFLOAT4& clearColor)
+    const Float4& clearColor)
 {
     textures.implementation_->BeginRenderTargetPass(commands, target, clearColor);
 }

@@ -1,4 +1,5 @@
 #include "Visual2D/Visual2DNode.h"
+#include "../../Math/DirectXMathBridge.h"
 
 #include <algorithm>
 #include <atomic>
@@ -269,7 +270,7 @@ Rect Visual2DNode::BoundsInCanvas() const
 {
     return TransformRect(
         {0.0F, 0.0F, size_.width, size_.height},
-        XMLoadFloat4x4(&transform_.WorldMatrix()));
+        NativeMath::LoadFloat4x4(&transform_.WorldMatrix()));
 }
 
 std::int32_t Visual2DNode::ZIndex() const noexcept
@@ -432,7 +433,7 @@ Visual2DNode::HitResult Visual2DNode::HitTest(
             activeClip,
             TransformRect(
                 *clipRect_,
-                XMLoadFloat4x4(&transform_.WorldMatrix())));
+                NativeMath::LoadFloat4x4(&transform_.WorldMatrix())));
     }
     if (activeClip.has_value() && !activeClip->Contains(canvasPosition))
     {
@@ -474,7 +475,7 @@ bool Visual2DNode::MapCanvasPointToLocal(
     XMVECTOR determinant{};
     const XMMATRIX inverse = XMMatrixInverse(
         &determinant,
-        XMLoadFloat4x4(&transform_.WorldMatrix()));
+        NativeMath::LoadFloat4x4(&transform_.WorldMatrix()));
     if (std::abs(XMVectorGetX(determinant)) <=
         std::numeric_limits<float>::epsilon())
     {
@@ -647,7 +648,7 @@ void Visual2DNode::CollectDrawPackets(
             activeClip,
             TransformRect(
                 *clipRect_,
-                XMLoadFloat4x4(&transform_.WorldMatrix())));
+                NativeMath::LoadFloat4x4(&transform_.WorldMatrix())));
     }
     if (activeClip.has_value() &&
         (activeClip->width <= 0.0F || activeClip->height <= 0.0F))
@@ -659,7 +660,7 @@ void Visual2DNode::CollectDrawPackets(
     {
         component->AppendDrawPackets(packets);
     }
-    const XMFLOAT4X4 world = transform_.WorldMatrix();
+    const Float4x4 world = transform_.WorldMatrix();
     for (std::size_t index = firstPacket; index < packets.size(); ++index)
     {
         packets[index].nodeTransform = world;

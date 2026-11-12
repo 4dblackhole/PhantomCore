@@ -1,4 +1,5 @@
 #include "Visual2D/D3D12Visual2DRenderer.h"
+#include "../../Math/DirectXMathBridge.h"
 #include "Visual2D/ImageCacheKey.h"
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
@@ -18,6 +19,7 @@
 #include <array>
 #include <bit>
 #include <cstring>
+#include <cmath>
 #include <cwctype>
 #include <filesystem>
 #include <limits>
@@ -40,7 +42,7 @@ namespace
         ScreenUiDepthRange /
         static_cast<float>(MaximumScreenCanvasZOrder + 1);
 
-    [[nodiscard]] DirectX::XMFLOAT4 ToFloat4(
+    [[nodiscard]] Float4 ToFloat4(
         const Color color) noexcept
     {
         return {color.red, color.green, color.blue, color.alpha};
@@ -60,7 +62,7 @@ namespace
         }
     }
 
-    [[nodiscard]] DirectX::XMFLOAT4 ToPixelClipRect(
+    [[nodiscard]] Float4 ToPixelClipRect(
         const std::optional<Rect>& clipBounds,
         const Size canvasSize,
         const float scaleX,
@@ -110,23 +112,23 @@ struct D3D12Visual2DRenderer::Impl
 {
     struct RectangleInstance
     {
-        DirectX::XMFLOAT4 bounds{};
-        DirectX::XMFLOAT4 color{};
-        DirectX::XMFLOAT4X4 transform{};
-        DirectX::XMFLOAT4 clipRectPixels{};
-        DirectX::XMFLOAT4 roundedRectLocal{};
+        Float4 bounds{};
+        Float4 color{};
+        Float4x4 transform{};
+        Float4 clipRectPixels{};
+        Float4 roundedRectLocal{};
         float cornerRadiusLocal{};
         std::uint32_t padding[3]{};
     };
 
     struct VisualInstance
     {
-        DirectX::XMFLOAT4 bounds{};
-        DirectX::XMFLOAT4 color{};
-        DirectX::XMFLOAT4X4 transform{};
-        DirectX::XMFLOAT4 uvTransform{};
-        DirectX::XMFLOAT4 clipRectPixels{};
-        DirectX::XMFLOAT4 roundedRectLocal{};
+        Float4 bounds{};
+        Float4 color{};
+        Float4x4 transform{};
+        Float4 uvTransform{};
+        Float4 clipRectPixels{};
+        Float4 roundedRectLocal{};
         float cornerRadiusLocal{};
         std::uint32_t textureIndex{NoTextureIndex};
         std::uint32_t padding[2]{};
@@ -158,7 +160,6 @@ struct D3D12Visual2DRenderer::Impl
     struct ImagePage
     {
         TextureSetHandle textures;
-        MaterialInstanceHandle material;
     };
 
     struct CanvasDrawing
@@ -179,6 +180,13 @@ struct D3D12Visual2DRenderer::Impl
         std::uint32_t height;
         std::uint64_t renderIndex;
         bool screen;
+        bool flattenDepth{};
+    };
+
+    struct PlaneDrawing
+    {
+        RenderTargetTextureHandle target;
+        MaterialInstanceHandle material;
     };
 
     struct FrameRenderTargetLifetime
@@ -232,7 +240,7 @@ struct D3D12Visual2DRenderer::Impl
     struct TextVariant
     {
         float fontSize{};
-        DirectX::XMFLOAT2 area{};
+        Float2 area{};
         std::uint64_t lastUsed{};
         TextLayoutHandle layout;
     };
@@ -257,7 +265,7 @@ struct D3D12Visual2DRenderer::Impl
     TextLayoutHandle ResolveLayout(TextRenderSystem &rendering, const FontHandle &defaultFont,
                                    std::unordered_map<std::wstring, FontHandle> &fonts, TextCache &cache,
                                    const TextContentHandle &source, TextDrawCommand &command,
-                                   DirectX::XMFLOAT2 logicalScale, std::uint64_t renderIndex)
+                                   Float2 logicalScale, std::uint64_t renderIndex)
     {
         if (!source)
             throw std::invalid_argument("A Visual2D text packet requires content.");
@@ -313,12 +321,8 @@ struct D3D12Visual2DRenderer::Impl
         // pixel/logical Bounds. RectangleShape defaults to 2x2, so use an
         // explicit 1x1 unit quad to keep rendering and hit-test sizes equal.
         const RectangleShape rectangle(1.0F, 1.0F);
-        rectangleMesh = meshes.CreateMesh<
-            VertexPositionColor>(rectangle);
         imageMesh = meshes.CreateMesh<
             VertexPositionUvColor>(rectangle);
-        rectangleMaterial = meshes.CreateMaterial(
-            BuiltInMaterial::UnlitVertexColor);
         screenFont = text.LoadSystemFont(L"Segoe UI");
 
         TextRenderingBackend::Initialize(
@@ -356,6 +360,8 @@ struct D3D12Visual2DRenderer::Impl
             arena = {};
         }
         screenCanvases.clear();
+        planeDrawings.clear();
+        planeDrawingCount = 0;
         screenRectanglePipeline.Reset();
         screenImagePipeline.Reset();
         rectanglePipeline.Reset();
@@ -370,39 +376,24 @@ struct D3D12Visual2DRenderer::Impl
         TextRenderingBackend::Shutdown(textureTextRendering);
         screenFonts.clear();
         screenFont.reset();
-        rectangleMaterial.reset();
         imagesByHandle.clear();
         imageHandlesByPath.clear();
         imagePages.clear();
         renderTargetsInFlight = {};
         nextImageHandle = 1;
         imageMesh.reset();
-        rectangleMesh.reset();
         screenTextRendering = nullptr;
         meshRendering = nullptr;
         device = nullptr;
         initialized = false;
     }
 
-    [[nodiscard]] DirectX::XMMATRIX QuadToLocal(
-        const Rect bounds) noexcept
-    {
-        return DirectX::XMMatrixScaling(
-                bounds.width,
-                bounds.height,
-                1.0F) *
-            DirectX::XMMatrixTranslation(
-                bounds.x + bounds.width * 0.5F,
-                bounds.y + bounds.height * 0.5F,
-                0.0F);
-    }
-
     [[nodiscard]] Rect TransformBounds(
         const Rect bounds,
-        const DirectX::XMFLOAT4X4& transform) noexcept
+        const Float4x4& transform) noexcept
     {
         const DirectX::XMMATRIX matrix =
-            DirectX::XMLoadFloat4x4(&transform);
+            NativeMath::LoadFloat4x4(&transform);
         const DirectX::XMVECTOR corners[]{
             DirectX::XMVectorSet(bounds.x, bounds.y, 0.0F, 1.0F),
             DirectX::XMVectorSet(
@@ -430,7 +421,7 @@ struct D3D12Visual2DRenderer::Impl
         return {minimumX, minimumY, maximumX - minimumX, maximumY - minimumY};
     }
 
-    [[nodiscard]] ImageHandle LoadImage(
+    [[nodiscard]] ImageHandle LoadImageFile(
         const std::filesystem::path& path)
     {
         if (!initialized || meshRendering == nullptr || path.empty())
@@ -454,10 +445,6 @@ struct D3D12Visual2DRenderer::Impl
             const std::array paths{normalized};
             ImagePage page{};
             page.textures = meshRendering->Textures().LoadTextureSet(paths);
-            page.material = meshRendering->CreateMaterial(
-                BuiltInMaterial::
-                    UnlitVertexColorTextureArrayAlphaBlend);
-            page.material->SetTextureSet(page.textures);
             imagePages.push_back(std::move(page));
         }
         else
@@ -945,7 +932,8 @@ struct D3D12Visual2DRenderer::Impl
             const Point center{
                 canvas.origin.x + size.width * scaleX * 0.5F,
                 canvas.origin.y + size.height * scaleY * 0.5F};
-            const auto pixelScale = DirectX::XMMatrixScaling(scaleX, -scaleY, 0.0001F);
+            const auto pixelScale = DirectX::XMMatrixScaling(
+                scaleX, -scaleY, target.flattenDepth ? 0.0F : 0.0001F);
             const float canvasFarDepth = ScreenUiDepthRange -
                 static_cast<float>(std::min(canvas.zOrder, MaximumScreenCanvasZOrder)) * ScreenVisual2DCanvasDepthBand;
             const auto depthStep = target.screen
@@ -977,7 +965,7 @@ struct D3D12Visual2DRenderer::Impl
                         return;
                 }
 
-                const auto localToPixels = DirectX::XMLoadFloat4x4(&command.nodeTransform) * pixelScale;
+                const auto localToPixels = NativeMath::LoadFloat4x4(&command.nodeTransform) * pixelScale;
                 if (command.type == DrawPacketType::Text)
                 {
                     if (!command.text)
@@ -990,7 +978,7 @@ struct D3D12Visual2DRenderer::Impl
                         -(bounds.y + bounds.height + command.textOffset.y) * scaleY};
                     draw.layoutSizePixels = {bounds.width * scaleX, bounds.height * scaleY};
                     draw.depth = depth;
-                    DirectX::XMStoreFloat4x4(&draw.transform,
+                    NativeMath::StoreFloat4x4(&draw.transform,
                         DirectX::XMMatrixScaling(1.0F / scaleX, -1.0F / scaleY, 1.0F) *
                         localToPixels * DirectX::XMMatrixTranslation(center.x, center.y, 0.0F));
                     draw.verticalAlignment = TextVerticalAlignment::Center;
@@ -1006,11 +994,11 @@ struct D3D12Visual2DRenderer::Impl
                     return;
                 }
 
-                DirectX::XMFLOAT4X4 transform{};
-                DirectX::XMStoreFloat4x4(&transform,
+                Float4x4 transform{};
+                NativeMath::StoreFloat4x4(&transform,
                     localToPixels * DirectX::XMMatrixTranslation(center.x, center.y, depth));
-                const DirectX::XMFLOAT4 instanceBounds{bounds.x, bounds.y, bounds.width, bounds.height};
-                const DirectX::XMFLOAT4 roundedRect{0.0F, 0.0F, bounds.width, bounds.height};
+                const Float4 instanceBounds{bounds.x, bounds.y, bounds.width, bounds.height};
+                const Float4 roundedRect{0.0F, 0.0F, bounds.width, bounds.height};
                 const float radius = std::min(command.cornerRadius, std::min(bounds.width, bounds.height) * 0.5F);
                 if (command.type == DrawPacketType::Rectangle)
                 {
@@ -1036,9 +1024,7 @@ struct D3D12Visual2DRenderer::Impl
     MeshRenderSystem* meshRendering{};
     TextRenderSystem* screenTextRendering{};
     ID3D12Device* device{};
-    GpuMeshHandle rectangleMesh;
     GpuMeshHandle imageMesh;
-    MaterialInstanceHandle rectangleMaterial;
     std::unordered_map<std::uint64_t, ImageResource> imagesByHandle;
     std::unordered_map<std::wstring, std::uint64_t> imageHandlesByPath;
     std::vector<ImagePage> imagePages;
@@ -1052,6 +1038,8 @@ struct D3D12Visual2DRenderer::Impl
     TextCache textureTextCache;
     std::uint64_t textPruneIndex{};
     std::vector<CanvasDrawing> screenCanvases;
+    std::vector<PlaneDrawing> planeDrawings;
+    std::size_t planeDrawingCount{};
     std::uint64_t screenRenderIndex{};
     ComPtr<ID3D12PipelineState> screenRectanglePipeline;
     ComPtr<ID3D12PipelineState> screenImagePipeline;
@@ -1087,10 +1075,10 @@ void D3D12Visual2DRenderer::Shutdown() noexcept
     implementation_->Shutdown();
 }
 
-ImageHandle D3D12Visual2DRenderer::LoadImage(
+ImageHandle D3D12Visual2DRenderer::LoadImageFile(
     const std::filesystem::path& path)
 {
-    return implementation_->LoadImage(path);
+    return implementation_->LoadImageFile(path);
 }
 
 Size D3D12Visual2DRenderer::GetImageSize(
@@ -1110,9 +1098,18 @@ bool D3D12Visual2DRenderer::PrepareImages(std::span<const std::filesystem::path>
     return implementation_->meshRendering->Textures().PrepareImages(missing, error);
 }
 
-void D3D12Visual2DRenderer::BeginScreenFrame(const std::uint64_t renderIndex)
+void D3D12Visual2DRenderer::BeginScreenFrame(
+    const std::uint64_t renderIndex, const std::uint32_t frameIndex)
 {
+    if (frameIndex >= D3D12Detail::FrameCount)
+        throw std::logic_error("The Visual2D frame index is invalid.");
+    // BeginFrame already waited for this slot. Release retired targets even
+    // when no Canvas texture pass is submitted in the new frame.
+    auto& targets = implementation_->renderTargetsInFlight[frameIndex];
+    targets.targets.clear();
+    targets.renderIndex = renderIndex;
     implementation_->screenCanvases.clear();
+    implementation_->planeDrawingCount = 0;
     implementation_->screenRenderIndex = renderIndex;
 }
 
@@ -1145,6 +1142,8 @@ void D3D12Visual2DRenderer::DrawScreen(
     const std::uint32_t height)
 {
     Impl& state = *implementation_;
+    // Mesh flush has retained submitted materials; fence retention owns old targets.
+    state.planeDrawings.resize(state.planeDrawingCount);
     // Equal Z uses submission order. DrawList already contains tree paint order.
     std::stable_sort(state.screenCanvases.begin(), state.screenCanvases.end(),
         [](const auto& left, const auto& right) { return left.zOrder < right.zOrder; });
@@ -1159,88 +1158,52 @@ void D3D12Visual2DRenderer::DrawScreen(
 void D3D12Visual2DRenderer::SubmitPlane(
     const Visual2DCanvas& canvas,
     const RenderContext& context,
-    const DirectX::XMFLOAT4X4& surfaceWorld,
+    const Float4x4& surfaceWorld,
     const Size surfaceWorldSize,
-    const DirectX::XMFLOAT4X4& viewProjection)
+    const Float4x4& viewProjection)
 {
     Impl& state = *implementation_;
-    if (!IsInitialized() || context.meshRendering != state.meshRendering)
-    {
-        throw std::logic_error(
-            "The D3D12 Visual2D renderer is not initialized for this context.");
-    }
-    if (surfaceWorldSize.width <= 0.0F || surfaceWorldSize.height <= 0.0F)
-    {
-        throw std::invalid_argument(
-            "A world UI plane must have positive size.");
-    }
+    const auto* frame = RenderFrameContext::Find(context);
+    if (!IsInitialized() || context.meshRendering != state.meshRendering ||
+        context.renderIndex != state.screenRenderIndex || frame == nullptr ||
+        frame->commandList == nullptr || context.frameIndex >= D3D12Detail::FrameCount)
+        throw std::logic_error("The world Canvas requires an active renderer frame.");
+    if (!std::isfinite(surfaceWorldSize.width) || !std::isfinite(surfaceWorldSize.height) ||
+        surfaceWorldSize.width <= 0.0F || surfaceWorldSize.height <= 0.0F)
+        throw std::invalid_argument("A world UI plane must have positive finite size.");
 
     const Size canvasSize = canvas.LogicalSize();
-    const std::vector<DrawPacket> commands = canvas.BuildDrawList();
-    const DirectX::XMMATRIX surface =
-        DirectX::XMLoadFloat4x4(&surfaceWorld);
-    std::size_t primitiveIndex = 0;
-    ForEachDrawPrimitive(commands, [&](const DrawPacket &command)
+    if (!std::isfinite(canvasSize.width) || !std::isfinite(canvasSize.height) ||
+        canvasSize.width <= 0.0F || canvasSize.height <= 0.0F ||
+        canvasSize.width > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
+        canvasSize.height > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION)
+        throw std::invalid_argument("The world Canvas exceeds the texture dimensions.");
+    auto commands = canvas.BuildDrawList();
+    if (commands.empty()) return;
+    const auto width = static_cast<std::uint32_t>(std::ceil(canvasSize.width));
+    const auto height = static_cast<std::uint32_t>(std::ceil(canvasSize.height));
+
+    // Each submission owns a snapshot, even if one Canvas changes twice in a frame.
+    // Across frames, queue order serializes target writes and panel draws. Replaced
+    // targets/materials stay alive through the existing frame fence retention.
+    const auto slot = state.planeDrawingCount;
+    if (slot == state.planeDrawings.size()) state.planeDrawings.emplace_back();
+    auto& drawing = state.planeDrawings[slot];
+    if (!drawing.target || drawing.target->Width() != width || drawing.target->Height() != height)
     {
-        if (command.bounds.width <= 0.0F || command.bounds.height <= 0.0F)
-        {
-            return;
-        }
-
-        const float layer = -static_cast<float>(primitiveIndex++) * 0.0005F;
-        DirectX::XMFLOAT4X4 world{};
-        DirectX::XMStoreFloat4x4(
-            &world,
-            state.QuadToLocal(command.bounds) *
-            DirectX::XMLoadFloat4x4(&command.nodeTransform) *
-            DirectX::XMMatrixScaling(
-                surfaceWorldSize.width / canvasSize.width,
-                surfaceWorldSize.height / canvasSize.height,
-                1.0F) *
-            DirectX::XMMatrixTranslation(
-                0.0F,
-                0.0F,
-                layer) *
-            surface);
-
-        if (command.type == DrawPacketType::Image)
-        {
-            const auto image = state.imagesByHandle.find(
-                command.image.value);
-            if (image == state.imagesByHandle.end())
-            {
-                return;
-            }
-
-            state.meshRendering->Submit(
-                state.imageMesh,
-                state.imagePages[image->second.pageIndex].material,
-                world,
-                viewProjection,
-                ToFloat4(command.color),
-                command.uvScale,
-                command.uvOffset,
-                image->second.textureIndex);
-            return;
-        }
-
-        if (command.type != DrawPacketType::Rectangle)
-        {
-            // Plane text is intentionally omitted. Curved surfaces use the
-            // render-to-texture path below so glyphs can follow the mesh UVs.
-            return;
-        }
-
-        state.meshRendering->Submit(
-            state.rectangleMesh,
-            state.rectangleMaterial,
-            world,
-            viewProjection,
-            ToFloat4(command.color),
-            {1.0F, 1.0F},
-            {0.0F, 0.0F},
-            NoTextureIndex);
-    });
+        auto target = state.meshRendering->Textures().CreateRenderTargetTexture(width, height);
+        auto material = MeshRenderingBackend::CreatePremultipliedTextureMaterial(*state.meshRendering);
+        material->SetTextureSet(target->Textures());
+        drawing = {std::move(target), std::move(material)};
+    }
+    RecordCanvasTexture(canvasSize, std::move(commands), drawing.target, context, true);
+    Float4x4 world;
+    NativeMath::StoreFloat4x4(&world,
+        DirectX::XMMatrixScaling(surfaceWorldSize.width, surfaceWorldSize.height, 1.0F) *
+        NativeMath::LoadFloat4x4(&surfaceWorld));
+    state.meshRendering->Submit(state.imageMesh, drawing.material, world, viewProjection,
+        {1.0F, 1.0F, 1.0F, 1.0F}, {1.0F, 1.0F}, {}, 0);
+    ++state.planeDrawingCount;
 }
 
 RenderTargetTextureHandle D3D12Visual2DRenderer::CreateCanvasRenderTarget(
@@ -1260,6 +1223,14 @@ void D3D12Visual2DRenderer::RenderToTexture(
     const Visual2DCanvas& canvas,
     const RenderTargetTextureHandle& target,
     const RenderContext& context)
+{
+    RecordCanvasTexture(canvas.LogicalSize(), canvas.BuildDrawList(), target, context, false);
+}
+
+void D3D12Visual2DRenderer::RecordCanvasTexture(
+    const Size canvasSize, std::vector<DrawPacket> commands,
+    const RenderTargetTextureHandle& target, const RenderContext& context,
+    const bool flattenDepth)
 {
     Impl& state = *implementation_;
     const auto* frame = RenderFrameContext::Find(context);
@@ -1292,11 +1263,10 @@ void D3D12Visual2DRenderer::RenderToTexture(
     const std::uint32_t targetWidth = target->Width();
     const std::uint32_t targetHeight = target->Height();
 
-    const Size canvasSize = canvas.LogicalSize();
     const Impl::CanvasDrawing drawing{canvasSize, {},
         static_cast<float>(targetWidth) / canvasSize.width,
-        static_cast<float>(targetHeight) / canvasSize.height, 0, canvas.BuildDrawList()};
-    state.RecordCanvases({commandList, context.frameIndex, targetWidth, targetHeight, context.renderIndex, false},
+        static_cast<float>(targetHeight) / canvasSize.height, 0, std::move(commands)};
+    state.RecordCanvases({commandList, context.frameIndex, targetWidth, targetHeight, context.renderIndex, false, flattenDepth},
         std::span{&drawing, 1});
 
     TextureRenderingBackend::EndRenderTargetPass(textureManager, commandList, target);

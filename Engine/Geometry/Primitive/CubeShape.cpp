@@ -10,8 +10,8 @@ namespace PhantomCore
 {
 namespace
 {
-    DirectX::XMFLOAT4 CornerColor(
-        const DirectX::XMFLOAT3& position) noexcept
+    Float4 CornerColor(
+        const Float3& position) noexcept
     {
         if (position.z < 0.0F)
         {
@@ -48,14 +48,14 @@ namespace
     void AppendFace(
         std::vector<VertexAttributes>& vertices,
         std::vector<std::uint32_t>& indices,
-        const std::array<DirectX::XMFLOAT3, 4>& positions,
-        const DirectX::XMFLOAT3& normal)
+        const std::array<Float3, 4>& positions,
+        const Float3& normal)
     {
         constexpr std::array uvs{
-            DirectX::XMFLOAT2{0.0F, 1.0F},
-            DirectX::XMFLOAT2{0.0F, 0.0F},
-            DirectX::XMFLOAT2{1.0F, 0.0F},
-            DirectX::XMFLOAT2{1.0F, 1.0F}};
+            Float2{0.0F, 1.0F},
+            Float2{0.0F, 0.0F},
+            Float2{1.0F, 0.0F},
+            Float2{1.0F, 1.0F}};
 
         const auto baseIndex =
             static_cast<std::uint32_t>(vertices.size());
