@@ -1,4 +1,6 @@
 #include "Texture/TextureManager.h"
+#include <atomic>
+#include <unordered_map>
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
 
@@ -142,13 +144,6 @@ namespace
         return *concrete;
     }
 
-    [[nodiscard]] D3D12TextureSet& RequireMutableTextureSet(
-        const TextureSetHandle& textureSet)
-    {
-        return const_cast<D3D12TextureSet&>(
-            RequireTextureSet(textureSet));
-    }
-
     [[nodiscard]] D3D12TextureSet& RequireTextureSet(
         TextureSet& textureSet)
     {
@@ -216,6 +211,11 @@ struct TextureManager::Impl final
         ID3D12GraphicsCommandList& commandList,
         const RenderTargetTextureHandle& target);
 
+    void RequireOwnerThread() const;
+    void RegisterTextureSet(const std::shared_ptr<D3D12TextureSet>& textureSet);
+    [[nodiscard]] std::shared_ptr<D3D12TextureSet> RequireOwnedTextureSet(
+        const TextureSetHandle& textureSet) const;
+
     struct DecodedImage;
     struct DescriptorBlockPool;
 
@@ -260,6 +260,8 @@ struct TextureManager::Impl final
     std::uint32_t descriptorSize_{};
     std::shared_ptr<DescriptorBlockPool> descriptorBlocks_;
     bool initialized_{};
+    std::atomic<DWORD> ownerThreadId_{};
+    std::unordered_map<const TextureSet*, std::weak_ptr<D3D12TextureSet>> ownedTextureSets_;
 };
 
 struct TextureManager::Impl::DescriptorBlockPool final
@@ -374,6 +376,7 @@ void TextureManager::Impl::PollPreparation()
 
 bool TextureManager::Impl::PrepareImages(std::span<const std::filesystem::path> paths, std::string &error)
 {
+    RequireOwnerThread();
     if (!initialized_)
         throw std::logic_error("Image preparation requires an initialized texture manager.");
     PollPreparation();
@@ -420,6 +423,29 @@ TextureManager::Impl::DecodedImage TextureManager::Impl::TakePreparedImage(const
     return DecodeImage(path);
 }
 
+void TextureManager::Impl::RequireOwnerThread() const
+{
+    const auto owner = ownerThreadId_.load(std::memory_order_acquire);
+    if (owner != 0 && owner != GetCurrentThreadId())
+        throw std::logic_error("Texture operations require the renderer owner thread.");
+}
+
+void TextureManager::Impl::RegisterTextureSet(const std::shared_ptr<D3D12TextureSet>& textureSet)
+{
+    std::erase_if(ownedTextureSets_, [](const auto& entry) { return entry.second.expired(); });
+    ownedTextureSets_.insert_or_assign(textureSet.get(), textureSet);
+}
+
+std::shared_ptr<D3D12TextureSet> TextureManager::Impl::RequireOwnedTextureSet(
+    const TextureSetHandle& textureSet) const
+{
+    const auto found = ownedTextureSets_.find(textureSet.get());
+    auto owned = found == ownedTextureSets_.end() ? nullptr : found->second.lock();
+    if (!owned)
+        throw std::invalid_argument("The texture set does not belong to this texture manager generation.");
+    return owned;
+}
+
 TextureManager::Impl::~Impl()
 {
     Shutdown();
@@ -429,6 +455,7 @@ void TextureManager::Impl::Initialize(
     ID3D12Device& device,
     ID3D12CommandQueue& commandQueue)
 {
+    RequireOwnerThread();
     if (initialized_)
     {
         throw std::logic_error(
@@ -490,6 +517,7 @@ void TextureManager::Impl::Initialize(
         }
 
         initialized_ = true;
+        ownerThreadId_.store(GetCurrentThreadId(), std::memory_order_release);
     }
     catch (...)
     {
@@ -544,12 +572,15 @@ void TextureManager::Impl::Shutdown() noexcept
     nextUploadFenceValue_ = 1;
     descriptorSize_ = 0;
     descriptorBlocks_.reset();
+    ownedTextureSets_.clear();
     initialized_ = false;
+    ownerThreadId_.store(0, std::memory_order_release);
 }
 
 TextureSetHandle TextureManager::Impl::LoadTextureSet(
     const std::span<const std::filesystem::path> paths)
 {
+    RequireOwnerThread();
     ValidateTextureSetRequest(paths);
 
     // Decode first so a bad file cannot leave an open D3D12 upload list.
@@ -595,6 +626,7 @@ TextureSetHandle TextureManager::Impl::LoadTextureSet(
     }
 
     ExecuteUpload(std::move(uploadBuffers), textureSet);
+    RegisterTextureSet(textureSet);
     return textureSet;
 }
 
@@ -602,6 +634,7 @@ TextureSetHandle TextureManager::Impl::AppendTexture(
     const TextureSetHandle& textureSet,
     const std::filesystem::path& path)
 {
+    RequireOwnerThread();
     if (!initialized_ || device_ == nullptr || commandQueue_ == nullptr)
     {
         throw std::logic_error(
@@ -612,7 +645,8 @@ TextureSetHandle TextureManager::Impl::AppendTexture(
         throw std::invalid_argument(
             "Appending a texture requires an existing set and path.");
     }
-    if (textureSet->Size() >= MaxTexturesPerSet)
+    const auto mutableSet = RequireOwnedTextureSet(textureSet);
+    if (mutableSet->Size() >= MaxTexturesPerSet)
     {
         throw std::length_error(
             "A texture descriptor table cannot contain more than 64 images.");
@@ -621,8 +655,6 @@ TextureSetHandle TextureManager::Impl::AppendTexture(
     // Decode before opening the upload list so invalid user assets cannot
     // leave the reusable allocator in a recording state.
     const DecodedImage decodedImage = TakePreparedImage(path);
-    D3D12TextureSet& mutableSet =
-        RequireMutableTextureSet(textureSet);
     BeginUploadCommands();
     std::vector<ComPtr<ID3D12Resource>> uploadBuffers;
     uploadBuffers.reserve(1);
@@ -631,9 +663,9 @@ TextureSetHandle TextureManager::Impl::AppendTexture(
     {
         RecordTextureUpload(
             decodedImage,
-            mutableSet.Size(),
-            mutableSet.cpuDescriptorStart,
-            mutableSet,
+            mutableSet->Size(),
+            mutableSet->cpuDescriptorStart,
+            *mutableSet,
             uploadBuffers);
         D3D12Detail::ThrowIfFailed(
             uploadCommandList_->Close(),
@@ -653,6 +685,7 @@ RenderTargetTextureHandle TextureManager::Impl::CreateRenderTargetTexture(
     const std::uint32_t width,
     const std::uint32_t height)
 {
+    RequireOwnerThread();
     if (!initialized_ || device_ == nullptr ||
         width == 0 || height == 0)
     {
@@ -711,6 +744,7 @@ RenderTargetTextureHandle TextureManager::Impl::CreateRenderTargetTexture(
     target->textures = textureSet;
     target->width = width;
     target->height = height;
+    RegisterTextureSet(textureSet);
     return target;
 }
 
@@ -990,6 +1024,7 @@ void TextureManager::Impl::RecordTextureUpload(
 
 void TextureManager::Impl::CollectCompletedUploads()
 {
+    RequireOwnerThread();
     if (!uploadFence_)
         return;
     while (!pendingUploads_.empty() && pendingUploads_.front().fence != 0 &&
@@ -1022,12 +1057,13 @@ ID3D12DescriptorHeap* TextureManager::Impl::DescriptorHeap() const noexcept
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::Impl::GpuDescriptorStart(
     const TextureSetHandle& textureSet) const
 {
+    RequireOwnerThread();
     if (!initialized_ || textureSet == nullptr)
     {
         throw std::invalid_argument(
             "A GPU descriptor table requires an initialized manager and texture set.");
     }
-    return RequireTextureSet(textureSet).gpuDescriptorStart;
+    return RequireOwnedTextureSet(textureSet)->gpuDescriptorStart;
 }
 
 void TextureManager::Impl::BeginRenderTargetPass(
@@ -1035,6 +1071,7 @@ void TextureManager::Impl::BeginRenderTargetPass(
     const RenderTargetTextureHandle& target,
     const DirectX::XMFLOAT4& clearColor)
 {
+    RequireOwnerThread();
     if (!initialized_ || target == nullptr)
     {
         throw std::invalid_argument(
@@ -1042,6 +1079,7 @@ void TextureManager::Impl::BeginRenderTargetPass(
     }
     D3D12RenderTargetTexture& concreteTarget =
         RequireRenderTarget(target);
+    static_cast<void>(RequireOwnedTextureSet(concreteTarget.textures));
 
     if (concreteTarget.state != D3D12_RESOURCE_STATE_RENDER_TARGET)
     {
@@ -1089,6 +1127,7 @@ void TextureManager::Impl::EndRenderTargetPass(
     ID3D12GraphicsCommandList& commandList,
     const RenderTargetTextureHandle& target)
 {
+    RequireOwnerThread();
     if (!initialized_ || target == nullptr)
     {
         throw std::invalid_argument(
@@ -1096,6 +1135,7 @@ void TextureManager::Impl::EndRenderTargetPass(
     }
     D3D12RenderTargetTexture& concreteTarget =
         RequireRenderTarget(target);
+    static_cast<void>(RequireOwnedTextureSet(concreteTarget.textures));
     if (concreteTarget.state ==
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
     {

@@ -8,12 +8,15 @@
 #include "App/WindowControlTests.h"
 #include "App/InputStateTests.h"
 #include "App/TextureLifetimeTests.h"
+#include "App/TextureAssetTests.h"
 #include "Collision/CollisionTests.h"
 #include "Audio/ManagedPlaybackTests.h"
 #include <string_view>
 
 int main(int argc, char** argv)
 {
+    if (argc == 3 && std::string_view(argv[1]) == "--texture-assets")
+        return TestTextureAssets(argv[2]);
     if (argc == 2 && std::string_view(argv[1]) == "--texture-lifetime")
         return TestTextureLifetime();
     if (argc == 2 && std::string_view(argv[1]) == "--input-state")

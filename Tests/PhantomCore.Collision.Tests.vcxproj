@@ -71,8 +71,10 @@
     <ClInclude Include="Audio\ManagedPlaybackTests.h" />
     <ClCompile Include="App\InputStateTests.cpp" />
     <ClCompile Include="App\TextureLifetimeTests.cpp" />
+    <ClCompile Include="App\TextureAssetTests.cpp" />
     <ClInclude Include="App\InputStateTests.h" />
     <ClInclude Include="App\TextureLifetimeTests.h" />
+    <ClInclude Include="App\TextureAssetTests.h" />
     <ClCompile Include="App\HeadlessRunTests.cpp" />
     <ClCompile Include="App\TextRenderingTests.cpp" />
     <ClCompile Include="App\TextPixelTests.cpp" />

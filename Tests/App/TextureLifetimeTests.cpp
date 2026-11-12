@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 
 using namespace PhantomCore;
 
@@ -21,6 +22,7 @@ namespace
     {
         unsigned frames{};
         bool shutdown{};
+        TextureSetHandle retained;
         std::vector<std::shared_future<RgbaImage>> captures;
     };
     class TextureLifetimeClient final : public IGameClient
@@ -81,6 +83,16 @@ namespace
             firstUpload_ = upload;
             upload.reset();
             Require(!firstUpload_.expired(), "A submitted upload must retain its descriptor lease until its fence.");
+            report_.retained = textures_->LoadTextureSet(paths);
+            const auto originalSize = report_.retained->Size();
+            auto wrongThread = std::async(std::launch::async, [this]
+            {
+                try { static_cast<void>(textures_->AppendTexture(report_.retained, imagePath_)); }
+                catch (const std::logic_error&) { return true; }
+                return false;
+            });
+            Require(wrongThread.get() && report_.retained->Size() == originalSize,
+                "A foreign thread must be rejected before texture mutation.");
         }
         bool Update(const UpdateContext &context) override
         {
@@ -94,6 +106,12 @@ namespace
             const auto previous = targets_[context.frameIndex];
             auto target = textures_->CreateRenderTargetTexture(16, 16);
             rendering_->RenderToTexture(redCanvas_, target, context);
+            const auto originalInfo = target->Textures()->Info(0);
+            const auto originalHandle = target->Textures();
+            const auto appended = textures_->AppendTexture(originalHandle, imagePath_);
+            Require(appended == originalHandle && appended->Size() == 2 &&
+                appended->Info(0).width == originalInfo.width && appended->Info(0).height == originalInfo.height,
+                "Appending must keep the same handle and preserve prior slots.");
             Require(previous.expired(), "A reused frame slot must release its completed target.");
             targets_[context.frameIndex] = target;
             SubmitTarget(context, target->Textures(), -1);
@@ -145,6 +163,56 @@ namespace
         std::weak_ptr<const TextureSet> firstUpload_;
         std::array<std::weak_ptr<RenderTargetTexture>, 16> targets_;
     };
+    class NextGenerationClient final : public IGameClient
+    {
+    public:
+        explicit NextGenerationClient(TextureSetHandle& old) : old_(old) {}
+        EngineConfig GetEngineConfig() const override
+        {
+            EngineConfig config;
+            config.showWindow = false;
+            config.audio.preferredBackend = AudioOutputBackend::NoSound;
+            return config;
+        }
+        void Initialize(const EngineServices& services) override
+        {
+            auto& textures = services.meshRendering.Textures();
+            bool rejected = false;
+            try { static_cast<void>(textures.AppendTexture(old_, "missing-texture-generation.bmp")); }
+            catch (const std::invalid_argument&) { rejected = true; }
+            Require(rejected, "An old-generation handle must be rejected before decoding its path.");
+            std::vector<RenderTargetTextureHandle> live;
+            for (int index = 0; index < 16; ++index)
+                live.push_back(textures.CreateRenderTargetTexture(1, 1));
+            old_.reset();
+            bool refused = false;
+            try { static_cast<void>(textures.CreateRenderTargetTexture(1, 1)); }
+            catch (const std::runtime_error&) { refused = true; }
+            Require(refused, "Releasing an old generation must not free a live slot in the new heap.");
+            live.pop_back();
+            static_cast<void>(textures.CreateRenderTargetTexture(1, 1));
+        }
+        bool Update(const UpdateContext&) override { return false; }
+        void Render(const RenderContext&) override {}
+        void OnResize(std::uint32_t, std::uint32_t) override {}
+        void Shutdown() noexcept override {}
+    private:
+        TextureSetHandle& old_;
+    };
+
+    int RunOnFreshThread(std::unique_ptr<IGameClient> client, GraphicsDiagnostics& diagnostics)
+    {
+        int result = 1;
+        std::jthread engine([&] { result = RunWithGraphicsDiagnostics(std::move(client), diagnostics); });
+        engine.join();
+        Require(diagnostics.status != GraphicsDiagnostics::Status::ReadFailed,
+                "Graphics diagnostics must be readable when available.");
+        for (const auto& message : diagnostics.messages) std::cerr << message.description << '\n';
+        Require(diagnostics.messages.empty(), "Texture lifetime checks must not produce GPU errors or corruption.");
+        std::cout << "Graphics diagnostics: " <<
+            (diagnostics.status == GraphicsDiagnostics::Status::Collected ? "collected, no errors" : "unavailable") << '\n';
+        return result;
+    }
     std::array<std::uint8_t, 3> Sample(const RgbaImage& image, const std::uint32_t x)
     {
         const auto offset = (static_cast<std::size_t>(image.height / 2) * image.width + x) * 4;
@@ -154,7 +222,8 @@ namespace
 int TestTextureLifetime()
 {
     Report report;
-    const auto exitCode = Run(std::make_unique<TextureLifetimeClient>(report));
+    GraphicsDiagnostics firstDiagnostics;
+    const auto exitCode = RunOnFreshThread(std::make_unique<TextureLifetimeClient>(report), firstDiagnostics);
     if (exitCode || report.frames != 64 || !report.shutdown || report.captures.size() != 64)
         return 1;
     for (const auto& capture : report.captures)
@@ -166,6 +235,9 @@ int TestTextureLifetime()
                     right == std::array<std::uint8_t, 3>{0, 0, 255},
                 "Red and blue targets must retain independent contents through presentation.");
     }
+    GraphicsDiagnostics nextDiagnostics;
+    if (RunOnFreshThread(std::make_unique<NextGenerationClient>(report.retained), nextDiagnostics) != 0) return 1;
+    std::cout << "Owner-thread rejection, append slot preservation and renderer-generation isolation passed.\n";
     std::cout << "Descriptor reuse: 200 released targets, live-capacity limit "
                  "and 64 GPU frames with independent target colors passed.\n";
     return 0;
