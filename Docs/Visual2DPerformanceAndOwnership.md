@@ -77,6 +77,13 @@ TextureSet은 64칸 SRV 블록의 공유 lease를 소유합니다. 마지막 참
 원래 heap의 pool로 반환하며, 업로드·material·RenderToTexture의 프레임 참조가 GPU
 fence까지 이를 유지하므로 사용 중인 descriptor는 재사용하지 않습니다. 관리자를
 재초기화해도 이전 handle은 새 heap의 pool에 블록을 반환하지 않습니다.
+관리자의 이미지 준비·로드·append·타깃 생성 및 GPU pass/descriptor 접근은 초기화한
+renderer 스레드에서 수행합니다. 다른 스레드의 변경 요청은 작업 전에 logic_error로 거부합니다.
+이 스레드 제한은 마지막 handle 해제에는 적용하지 않으며, lease pool의 반환은 mutex로 보호합니다.
+append 권한은 현재 관리자 세대가 만든 집합의 약한 typed registry로 확인합니다. 읽기 전용
+공개 handle을 const_cast하지 않으며 다른 관리자/이전 세대 handle은 디코드·업로드 전에 거부합니다.
+정상 append는 같은 handle과 기존 슬롯을 유지합니다. Info가 반환한 참조는 이후 append 때
+무효화될 수 있으므로 append 전후를 비교할 때는 TextureInfo 값을 복사합니다.
 화면 SubmitScreen은 크기·배율·화면 원점·Z와 불변 payload를 포함한 draw 목록을
 복사해 보관합니다. EndFrame에서 기록하므로 제출 뒤 Canvas와 node를 제거해도
 그 프레임의 내용은 유지됩니다. clip 밖의 primitive는 기록 시 텍스트 shaping/instance
