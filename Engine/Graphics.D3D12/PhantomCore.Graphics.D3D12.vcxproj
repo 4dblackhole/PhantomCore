@@ -101,5 +101,12 @@
   <ImportGroup Label="ExtensionTargets" />
   <ItemGroup>
     <ClInclude Include="Renderer\D3D12Error.h" />
+    <ClInclude Include="Renderer\D3D12ResourceDescriptions.h" />
+    <ClInclude Include="Renderer\FrameResources.h" />
+    <ClInclude Include="Renderer\RenderFrameContext.h" />
+    <ClInclude Include="Mesh\D3D12MeshRendering.h" />
+    <ClInclude Include="Text\D3D12TextRendering.h" />
+    <ClInclude Include="Texture\D3D12TextureRendering.h" />
+    <ClInclude Include="Visual2D\D3D12Visual2DRenderer.h" />
   </ItemGroup>
 </Project>

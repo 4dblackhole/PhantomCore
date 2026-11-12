@@ -2,6 +2,8 @@
 #include "../../Math/DirectXMathBridge.h"
 #include "Text/D3D12TextRendering.h"
 #include "Renderer/FrameResources.h"
+#include "Renderer/D3D12Error.h"
+#include "Renderer/D3D12ResourceDescriptions.h"
 
 #include "Shader/ShaderCompiler.h"
 
@@ -39,16 +41,8 @@ namespace
     constexpr std::uint32_t DefaultAtlasPages = 16;
     constexpr std::uint32_t GlyphPadding = 1;
 
-    void ThrowIfFailed(const HRESULT result, const char* operation)
-    {
-        if (FAILED(result))
-        {
-            throw std::runtime_error(
-                std::string(operation) +
-                " failed with HRESULT " +
-                std::to_string(static_cast<unsigned long>(result)) + ".");
-        }
-    }
+    using D3D12Detail::BufferDescription;
+    using D3D12Detail::ThrowIfFailed;
 
     [[nodiscard]] D3D12_HEAP_PROPERTIES HeapProperties(
         const D3D12_HEAP_TYPE type) noexcept
@@ -62,23 +56,6 @@ namespace
         return properties;
     }
 
-    [[nodiscard]] D3D12_RESOURCE_DESC BufferDescription(
-        const std::size_t sizeBytes) noexcept
-    {
-        D3D12_RESOURCE_DESC description{};
-        description.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        description.Alignment = 0;
-        description.Width = static_cast<UINT64>(sizeBytes);
-        description.Height = 1;
-        description.DepthOrArraySize = 1;
-        description.MipLevels = 1;
-        description.Format = DXGI_FORMAT_UNKNOWN;
-        description.SampleDesc.Count = 1;
-        description.SampleDesc.Quality = 0;
-        description.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        description.Flags = D3D12_RESOURCE_FLAG_NONE;
-        return description;
-    }
 
     [[nodiscard]] D3D12_RESOURCE_BARRIER TransitionBarrier(
         ID3D12Resource& resource,

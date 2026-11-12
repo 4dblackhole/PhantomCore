@@ -3,6 +3,7 @@
 #include "Visual2D/ImageCacheKey.h"
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/D3D12ResourceDescriptions.h"
 #include "Renderer/RenderFrameContext.h"
 #include "Renderer/FrameResources.h"
 #include "Mesh/D3D12MeshRendering.h"
@@ -93,19 +94,7 @@ namespace
                 targetHeight)};
     }
 
-    [[nodiscard]] D3D12_RESOURCE_DESC BufferDescription(
-        const std::size_t byteCount) noexcept
-    {
-        D3D12_RESOURCE_DESC result{};
-        result.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        result.Width = byteCount;
-        result.Height = 1;
-        result.DepthOrArraySize = 1;
-        result.MipLevels = 1;
-        result.SampleDesc.Count = 1;
-        result.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        return result;
-    }
+    using D3D12Detail::BufferDescription;
 }
 
 struct D3D12Visual2DRenderer::Impl

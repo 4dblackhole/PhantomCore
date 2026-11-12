@@ -234,6 +234,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12Error.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
+    <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12ResourceDescriptions.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
+    <ClInclude Include="..\Platform.Win32\Window\WindowControl.h"><Filter>Platform.Win32\Window</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Core\Visual2D\ImageCacheKey.h"><Filter>Core\Visual2D</Filter></ClInclude>

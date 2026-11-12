@@ -5,6 +5,7 @@
 #include <wrl/client.h>
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/D3D12ResourceDescriptions.h"
 
 #include "Shader/ShaderCompiler.h"
 
@@ -27,20 +28,7 @@ using Microsoft::WRL::ComPtr;
 
 namespace
 {
-    [[nodiscard]] D3D12_RESOURCE_DESC BufferDescription(
-        const std::size_t byteCount) noexcept
-    {
-        D3D12_RESOURCE_DESC description{};
-        description.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        description.Width = byteCount;
-        description.Height = 1;
-        description.DepthOrArraySize = 1;
-        description.MipLevels = 1;
-        description.Format = DXGI_FORMAT_UNKNOWN;
-        description.SampleDesc.Count = 1;
-        description.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        return description;
-    }
+    using D3D12Detail::BufferDescription;
 
     [[nodiscard]] ComPtr<ID3D12Resource> CreateUploadBuffer(
         ID3D12Device& device,

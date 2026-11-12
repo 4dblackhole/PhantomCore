@@ -225,6 +225,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12Error.h" />
+    <ClInclude Include="..\Graphics.D3D12\Renderer\D3D12ResourceDescriptions.h" />
+    <ClInclude Include="..\Platform.Win32\Window\WindowControl.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Core\Visual2D\ImageCacheKey.h" />

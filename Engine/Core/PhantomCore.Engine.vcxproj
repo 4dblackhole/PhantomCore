@@ -113,6 +113,9 @@
   <ImportGroup Label="ExtensionTargets" />
   <ItemGroup>
     <ClInclude Include="Visual2D\ImageCacheKey.h" />
+    <ClInclude Include="Visual2D\ScreenVisual2DManager.h" />
+    <ClCompile Include="Visual2D\ScreenVisual2DManager.cpp" />
+    <ClInclude Include="Rendering\RenderContext.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Math\Math.h" />

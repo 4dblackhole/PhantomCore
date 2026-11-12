@@ -83,5 +83,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Renderer\D3D12Error.h"><Filter>Renderer</Filter></ClInclude>
+    <ClInclude Include="Renderer\D3D12ResourceDescriptions.h"><Filter>Renderer</Filter></ClInclude>
+    <ClInclude Include="Renderer\FrameResources.h"><Filter>Renderer</Filter></ClInclude>
+    <ClInclude Include="Renderer\RenderFrameContext.h"><Filter>Renderer</Filter></ClInclude>
+    <ClInclude Include="Mesh\D3D12MeshRendering.h"><Filter>Mesh</Filter></ClInclude>
+    <ClInclude Include="Text\D3D12TextRendering.h"><Filter>Text</Filter></ClInclude>
+    <ClInclude Include="Texture\D3D12TextureRendering.h"><Filter>Texture</Filter></ClInclude>
+    <ClInclude Include="Visual2D\D3D12Visual2DRenderer.h"><Filter>Visual2D</Filter></ClInclude>
   </ItemGroup>
 </Project>

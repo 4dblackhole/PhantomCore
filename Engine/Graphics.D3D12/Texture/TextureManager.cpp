@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/D3D12ResourceDescriptions.h"
 
 #include <Windows.h>
 #include <wincodec.h>
@@ -33,19 +34,7 @@ namespace
 {
     constexpr std::uint32_t DescriptorHeapCapacity = 1024;
 
-    [[nodiscard]] D3D12_RESOURCE_DESC BufferDescription(
-        const std::uint64_t byteCount) noexcept
-    {
-        D3D12_RESOURCE_DESC description{};
-        description.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        description.Width = byteCount;
-        description.Height = 1;
-        description.DepthOrArraySize = 1;
-        description.MipLevels = 1;
-        description.SampleDesc.Count = 1;
-        description.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        return description;
-    }
+    using D3D12Detail::BufferDescription;
 
     [[nodiscard]] D3D12_RESOURCE_DESC TextureDescription(
         const std::uint32_t width,

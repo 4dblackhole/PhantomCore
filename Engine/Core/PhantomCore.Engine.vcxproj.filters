@@ -3,6 +3,9 @@
   <ItemGroup>
     <Filter Include="Rendering" />
     <ClInclude Include="Rendering\ImageReadback.h"><Filter>Rendering</Filter></ClInclude>
+    <ClInclude Include="Rendering\RenderContext.h"><Filter>Rendering</Filter></ClInclude>
+    <ClInclude Include="Visual2D\ScreenVisual2DManager.h"><Filter>Visual2D</Filter></ClInclude>
+    <ClCompile Include="Visual2D\ScreenVisual2DManager.cpp"><Filter>Visual2D</Filter></ClCompile>
     <Filter Include="App">
       <UniqueIdentifier>{40444444-4444-4444-8444-444444444441}</UniqueIdentifier>
     </Filter>

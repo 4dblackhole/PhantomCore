@@ -1,4 +1,5 @@
 #include "Renderer/FrameImageReadbackQueue.h"
+#include "Renderer/D3D12ResourceDescriptions.h"
 
 #include <cstring>
 #include <exception>
@@ -43,14 +44,7 @@ std::unique_ptr<FrameImageReadbackQueue::PendingImage> FrameImageReadbackQueue::
     device_.GetCopyableFootprints(&targetDescription, 0, 1, 0, &pending->footprint, nullptr, nullptr,
                                  &pending->bufferSize);
 
-    D3D12_RESOURCE_DESC buffer{};
-    buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    buffer.Width = pending->bufferSize;
-    buffer.Height = 1;
-    buffer.DepthOrArraySize = 1;
-    buffer.MipLevels = 1;
-    buffer.SampleDesc.Count = 1;
-    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    const D3D12_RESOURCE_DESC buffer = D3D12Detail::BufferDescription(pending->bufferSize);
     D3D12_HEAP_PROPERTIES properties{};
     properties.Type = D3D12_HEAP_TYPE_READBACK;
     if (FAILED(device_.CreateCommittedResource(

@@ -2,6 +2,7 @@
 #include "Mesh/D3D12MeshRendering.h"
 #include "Text/D3D12TextRendering.h"
 #include "Renderer/FrameImageReadbackQueue.h"
+#include "Renderer/D3D12Error.h"
 
 #include "Mesh/MeshRendering.h"
 #include "Text/TextRendering.h"
@@ -18,27 +19,7 @@ namespace PhantomCore
 {
 namespace
 {
-
-    void ThrowIfFailed(const HRESULT result, const char* operation)
-    {
-        if (FAILED(result))
-        {
-            throw std::runtime_error(
-                std::string(operation) + " failed with HRESULT 0x" +
-                [] (const HRESULT value)
-                {
-                    constexpr char digits[] = "0123456789ABCDEF";
-                    std::string text(8, '0');
-                    const auto bits = static_cast<std::uint32_t>(value);
-                    for (std::size_t index = 0; index < text.size(); ++index)
-                    {
-                        const std::size_t shift = (text.size() - index - 1) * 4;
-                        text[index] = digits[(bits >> shift) & 0xF];
-                    }
-                    return text;
-                }(result));
-        }
-    }
+    using D3D12Detail::ThrowIfFailed;
 
     D3D12_CPU_DESCRIPTOR_HANDLE OffsetDescriptor(
         const D3D12_CPU_DESCRIPTOR_HANDLE start,
