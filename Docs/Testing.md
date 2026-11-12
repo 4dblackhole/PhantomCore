@@ -29,10 +29,25 @@ foreach ($configuration in 'Debug', 'Release') {
 
 `Tests/PhantomCore.Collision.Tests.vcxproj`는 통합 SDK를 사용합니다. 기본 실행은
 공유 CPU 검사와 실제 FMOD NoSound 서비스 기반 재생 관리 검사를 모두 수행합니다.
-`--texture-lifetime`, `--text-rendering`, `--text-pixels`, `--image-readback`,
-`--visual2d-pixels`, `--headless-error`, `--scene-manager`, `--window-control`,
-`--audio-pcm` 등의 기존 통합 실행 경로는 유지됩니다. 이 프로젝트와 전체 솔루션의
-빌드에는 FMOD SDK가 필요합니다. CPU CI 통과는 실제 GPU·오디오 실행의 검증을 대신하지 않습니다.
+장치를 쓰는 검사는 옵션 하나씩 별도 프로세스로 실행합니다.
+
+| 옵션 | 검사 내용 |
+| --- | --- |
+| `--input-state` | 순서 있는 Raw Input 이벤트·키 전이·버퍼 재사용 |
+| `--texture-lifetime` | 텍스처 변경 권한, descriptor 상한·재사용, fence 수명 |
+| `--texture-assets <자산 루트>` | 지정한 WIC 이미지 전체의 등록·재사용·Canvas 렌더링 |
+| `--text-rendering` | 글꼴·배치 캐시·아틀라스 회수와 GPU 진단 |
+| `--text-pixels` | 글자 합성 픽셀 |
+| `--visual2d-pixels` | Canvas의 사각형·이미지·글자 합성 순서와 깊이, 월드 패널 |
+| `--image-readback` | 완료 프레임의 RGBA 읽기와 취소 |
+| `--draw-statistics` | 성능 표본의 프레임당 draw 수 |
+| `--scene-manager` | 지연 전환, 보존 정책과 종료 순서 |
+| `--window-control` | 창 크기 변경과 해상도 조회 |
+| `--headless-error` | 숨김 실행의 Update 예외 정리 |
+| `--audio-pcm [경로]` | 공통 PCM 디코딩과 고정 속도 변환 |
+
+이 프로젝트와 전체 솔루션의 빌드에는 FMOD SDK가 필요합니다. CPU CI 통과는 실제
+GPU·오디오 실행의 검증을 대신하지 않습니다.
 
 `--texture-lifetime`은 렌더 스레드·현재 관리자 세대의 변경 권한, 같은 handle append와 기존
 슬롯 보존, 이전 세대 handle 해제 후 새 heap 격리, descriptor 상한·재사용·fence 수명을 검사합니다.

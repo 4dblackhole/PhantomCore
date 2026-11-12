@@ -184,13 +184,13 @@ Debug/Release x64 빌드 후 `PhantomCore.Collision.Tests.exe`를 실행합니�
 `--text-pixels`는 다중 페이지의 겹친 글자 합성 순서를 GPU readback으로 검사합니다.
 `--visual2d-pixels`는 공개 ReadImage와 그래픽 진단 API로 화면 알파, 글자 위 패널·이미지,
 Canvas Z와 동일 Z의 제출 순서, snapshot 및 프레임 자원 재사용을 검사합니다.
-합성·깊이 회귀 가드 24개와 월드 평면 알파의 알려진 실패 1개를 별도로 집계합니다.
+월드 평면 Canvas를 포함한 모든 합성·깊이 사례가 종료 코드에 반영되는 회귀 가드입니다.
 각 경로는 별도 프로세스로 실행합니다.
 
-## FPS/UPS 성능 오버레이
+## 성능 오버레이
 
-엔진은 `UpdateContext::performance`로 QPC 기반 FPS/UPS 표본만 전달한다.
-글꼴 선택, F1 입력, 표시 여부와 화면 배치는 게임마다 달라지는 Client 책임이다.
+엔진은 `UpdateContext::performance`로 QPC 기반 FPS/UPS와 프레임당 draw 수 표본만 전달한다.
+글꼴 선택, 단축키, 표시 여부와 화면 배치는 게임마다 달라지는 Client 책임이다.
 따라서 엔진은 성능 오버레이 텍스트를 자동으로 제출하지 않는다.
 
 `SceneGameClient`를 쓰는 Client는 `OnClientInitialized`, `OnClientUpdated`,

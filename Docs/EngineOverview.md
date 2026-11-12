@@ -1,6 +1,6 @@
 # PhantomCore 전체 안내서
 
-이 문서는 PhantomCore을 처음 사용하는 개발자와 새 Codex 세션을 위한 시작점이다.
+이 문서는 PhantomCore을 처음 사용하는 개발자와 새 작업 세션을 위한 시작점이다.
 엔진의 기능, 코드 위치, 객체 수명, Client 경계와 후속 상세 문서를 한곳에서 찾을
 수 있도록 정리한다.
 
@@ -43,7 +43,7 @@ Client 저장소의 `Docs/ExecutionFlow.md`를 참고한다.
 7. Debug/Release x64 빌드와 관련 테스트를 모두 실행한다.
 
 FMOD 없는 CPU 테스트는 [Testing](Testing.md)의 별도 프로젝트와 CI를 사용한다.
-실제 GPU·오디오 통합 테스트는 기존 SDK 테스트에서 유지한다.
+실제 GPU·오디오 통합 테스트는 SDK 테스트의 옵션별 실행으로 검사한다.
 
 최소 진입점은 다음과 같다.
 
@@ -150,7 +150,7 @@ Client wWinMain
 - 음악 동기화가 필요할 때는 FMOD DSP clock을 오디오 timeline의 기준으로 삼고,
   QPC와 DSP clock의 보정은 `AudioSystem` 경계 뒤에 둔다.
 
-FPS/UPS 통계 데이터의 엔진·Client 경계는
+FPS/UPS와 프레임당 draw 수 통계의 엔진·Client 경계는
 [PerformanceStatistics.md](PerformanceStatistics.md)에 설명되어 있다.
 
 ## 6. Scene 사용 원칙
@@ -167,7 +167,6 @@ FPS/UPS 통계 데이터의 엔진·Client 경계는
   `BeginScene`/`EndScene`에 둔다.
 
 게임의 Scene 구성은 Client 저장소의 `Docs/ExecutionFlow.md`에서 확인한다.
-Client에 포함되었던 기술 예제 Scene은 제거되었으며 별도 검증 프로젝트는 아직 없다.
 공개 SDK 테스트의 `--scene-manager`는 지연 전환, Scene 보존과 종료 순서를 검증한다.
 
 ## 7. Graphics·Geometry·인스턴싱
@@ -213,6 +212,9 @@ DirectXMath 저장 값과 SIMD 변환은 내부 구현에 한정한다. 이미�
 
 메시 재질의 PSO 기술자는 내부 공통 빌더로 만든다. 정점 레이아웃과
 셰이더·root signature는 각 템플릿이 전달하고 불투명/알파의 기존 blend·depth 설정을 보존한다.
+D3D12·DXGI·DirectWrite·WIC 실패는 내부 `Renderer/D3D12Error.h`의 `ThrowIfFailed`가
+`<작업> failed with HRESULT 0x8007000E.` 형식으로 보고하며, 선형 버퍼 기술자는
+`Renderer/D3D12ResourceDescriptions.h` 한 곳에서 만든다.
 
 `GpuMesh` 생성 시 Shape의 canonical position 정점으로 로컬 Bounding Sphere를 한
 번 계산한다. `MeshInstance::Submit`은 부모를 포함한 월드 행렬로 Sphere 중심과
@@ -351,10 +353,12 @@ backend 프로젝트에 둔다.
 | [Collision.md](Collision.md) | 충돌 타입과 질의 계약을 사용할 때 |
 | [TextRendering.md](TextRendering.md) | 글꼴·글자·glyph atlas 수명을 다룰 때 |
 | [ImageReadback.md](ImageReadback.md) | 완료된 화면 프레임을 CPU 이미지로 읽을 때 |
-| [PerformanceStatistics.md](PerformanceStatistics.md) | FPS/UPS 수집과 표시 책임을 구분할 때 |
+| [PerformanceStatistics.md](PerformanceStatistics.md) | FPS/UPS·draw 수 수집과 표시 책임을 구분할 때 |
 | [Visual2DArchitecture.md](Visual2DArchitecture.md) | Sprite·위젯·Canvas·입력 구조를 이해할 때 |
 | [Visual2DRendererLifecycle.md](Visual2DRendererLifecycle.md) | 엔진 소유 Visual2D renderer와 Scene 경계를 볼 때 |
 | [Visual2DPerformanceAndOwnership.md](Visual2DPerformanceAndOwnership.md) | BVH, 최소 Canvas, Z-Order와 GPU 소유권을 볼 때 |
+| [WindowControl.md](WindowControl.md) | 실행 중 창 크기와 Unicode 텍스트 입력을 다룰 때 |
+| [Math.md](Math.md) | 공개 수학 값과 행렬 규약을 볼 때 |
 
 Client 저장소의 추가 문서는 다음과 같다.
 
@@ -363,7 +367,7 @@ Client 저장소의 추가 문서는 다음과 같다.
 | `Docs/ExecutionFlow.md` | 실제 샘플의 시작, 프레임, 종료와 객체 수명 |
 | `Docs/Visual2DGuide.md` | Sprite·위젯 생성, 입력, PNG, Canvas와 Z-Order |
 
-## 14. 새 Codex 세션 체크리스트
+## 14. 새 작업 세션 체크리스트
 
 1. 현재 작업 저장소의 `AGENTS.md`를 끝까지 읽는다.
 2. 엔진 작업이면 이 문서, Client 작업이면 `Docs/ExecutionFlow.md`도 읽는다.
@@ -372,8 +376,8 @@ Client 저장소의 추가 문서는 다음과 같다.
 5. 공개 API 변경 전 원본 header, `PublicHeaders.props`, `GenerateCoreHeader.ps1`을 함께 확인한다.
 6. 기존 사용자 변경과 미추적 asset을 보존한다.
 7. 긴 함수는 동작별 helper로 분리하고, 한 작업이 길 때는 단계 경계 주석을 둔다.
-8. 엔진 변경은 Debug/Release x64와 관련 공개 SDK 테스트를 검증한다.
-9. Client 변경은 Debug/Release x64와 두 구성의 `--smoke-test`를 검증한다.
+8. 엔진 변경은 `AGENTS.md`의 검증 절에 따라 Debug/Release x64 빌드·분석과 두 테스트 실행 파일을 검증한다.
+9. Client 변경은 Client 저장소의 `Docs/Verification.md`를 따른다.
 10. 엔진과 Client를 함께 바꾸면 엔진을 먼저 병합하고 Client gitlink를 그
     `main` commit으로 갱신한다.
 

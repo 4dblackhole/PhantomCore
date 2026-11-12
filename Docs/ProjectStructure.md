@@ -23,7 +23,10 @@ PhantomCore/
 ```
 
 기능별 프로젝트는 원본 파일의 소유 경계를 나타낸다. 소비자는 이 모듈들을 여러
-개 링크하지 않고 `Engine/SDK/PhantomCore.vcxproj` 하나만 참조한다.
+개 링크하지 않고 `Engine/SDK/PhantomCore.vcxproj` 하나만 참조한다. 모든 엔진 원본
+파일은 자기 기능 프로젝트와 SDK 프로젝트에 함께 등록하고, 두 `.filters`의 경로를
+실제 폴더와 맞춘다. 내부 헤더(예: `Graphics.D3D12/Renderer/D3D12Error.h`의 HRESULT
+오류 문구, `D3D12ResourceDescriptions.h`의 버퍼 기술자)도 마찬가지다.
 
 `Tests/PhantomCore.Cpu.Tests.vcxproj`는 실제 CPU 구현만 빌드하는 테스트 전용
 프로젝트이며, 통합 SDK/FMOD를 참조하지 않는다. 테스트 본문은 기존 SDK 검사와 공유한다.

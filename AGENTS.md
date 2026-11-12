@@ -79,6 +79,19 @@ This file applies to the entire repository.
 
 ## Verification
 
-After engine changes, rebuild `PhantomCore.sln` in Debug and Release x64.
-Run `bin/x64/<Configuration>/PhantomCore.Collision.Tests.exe` after collision or public
-SDK changes. Tests must include only `PhantomCore.h`.
+After engine changes, rebuild `PhantomCore.sln` in Debug and Release x64 with
+MSVC Code Analysis, and treat new diagnostics as failures. Run both test
+executables in both configurations:
+
+- `bin/CpuTests/x64/<Configuration>/PhantomCore.Cpu.Tests.exe` builds without
+  FMOD and is also run by the CPU CI workflow.
+- `bin/x64/<Configuration>/PhantomCore.Collision.Tests.exe` without arguments,
+  then once per device option listed in `Docs/Testing.md`. Run each option in
+  its own process.
+
+Tests include only `PhantomCore.h`. When a source file is added, moved or
+removed, update its feature project, `Engine/SDK/PhantomCore.vcxproj`, both
+`.filters` files and, for CPU sources, `Tests/PhantomCore.Cpu.Tests.vcxproj`.
+Do not run timing-sensitive device tests while another build or test is using
+the machine. Report automated checks and manual screen, input or listening
+checks separately.

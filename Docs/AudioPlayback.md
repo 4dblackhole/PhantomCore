@@ -21,10 +21,9 @@ Manager::Restart는 종료/탈취된 채널만 같은 ID 아래 새 Voice로 교
 유효 프레임으로 제한하며 파일 끝 이상의 요청은 계속 거부합니다.
 FindVoice의 빌린 포인터는 종료 채널을 교체한 Restart에서도 무효가 되므로 호출 후 다시 조회합니다.
 
-2026-10-17: Debug/Release x64 전체 Rebuild와 SDK 회귀(종료 중 Restart 교체,
-활성 채널 실패 보존 포함)를 통과했습니다. 별도 공개 SDK NoSound 진단에서 실제 MP3
-4회 재사용, 같은 채널의 0/1/5초 탐색, 종료 샘플 교체, 끝 1us 전 허용/끝 거부와
-지연 Clip 정리 후 종료를 두 구성에서 확인했습니다. 실제 출력 장치 청취는 미검증입니다.
+SDK 회귀는 종료 중 Restart 교체와 활성 채널 실패 보존을, 공개 SDK NoSound 검사는 같은
+MP3의 반복 재사용, 같은 채널의 0/1/5초 탐색, 종료 샘플 교체, 끝 1us 전 허용/끝 거부와
+지연 Clip 정리 후 종료를 검사합니다. 실제 출력 장치 청취는 자동 검사 범위가 아닙니다.
 
 ## 하나의 DSP 기준 타임라인
 
@@ -61,10 +60,9 @@ SceneGameClient는 native Voice 종료 확인을 최대 500Hz(2ms 주기)로 실
 AudioPlaybackManager를 직접 사용하는 호출자의 Update는 즉시 검사하며, 입력 timestamp나
 DSP 예약 정밀도에는 영향이 없습니다.
 
-2026-10-12 source seek/duration/retire 변경은 Debug/Release x64 전체
-`PhantomCore.sln` Rebuild와 두 구성의 `PhantomCore.Collision.Tests`로 검증했다.
-SDK probe는 원본 us 위치·길이·DSP 예약 전달과 Loading Clip 유지/Ready 후 해제를 검사한다.
-Client의 별도 에디터 회귀는 실제 MP3의 정확한 비동기 열기/끝부분 seek/정상 종료/범위 밖
+원본 위치 탐색·길이·퇴역 계약은 `PhantomCore.Collision.Tests`의 SDK 검사가 원본 us
+위치·길이·DSP 예약 전달과 Loading Clip 유지/Ready 후 해제로 검사한다.
+Client의 에디터 회귀는 실제 MP3의 정확한 비동기 열기/끝부분 seek/정상 종료/범위 밖
 위치 거부를 FMOD NoSound로 검사한다. 물리 장치 청취나 수동 UI 검증은 아니다.
 
 `AudioLoadMode::StreamAsync`는 FMOD 비동기 파일 열기를 사용한다. 생성 직후의 clip은
@@ -164,7 +162,7 @@ Clip, Voice, Bus, Effect는 모두 Client 소유 RAII 객체다. Mixer sample ra
 buffer를 재시작하기 전에는 이 객체를 모두 해제해야 한다. 이 규칙은 재초기화로 인해
 FMOD native handle이 조용히 무효화되는 상황을 막는다.
 
-## 공통 PCM 시간축 (2026-10-20)
+## 공통 PCM 시간축
 
 `Audio/Decode/AudioPcmDecoder.h`의 `DecodeAudioPcm(path, stop, consume)`는
 장치/AudioSystem 없이 실행하는 공개 SDK 함수입니다. 첫 빈 callback은 채널 수와
@@ -191,7 +189,7 @@ Loading/Ready/Failed, Voice 준비, DSP 예약과 RetireClip 계약은 유지합
 `PhantomCore.Collision.Tests --audio-pcm [UTF-8 audio path]`는 실제 SDK API로 LAME 패딩,
 원본 앞 무음, 취소, 재생 길이 일치, 비동기 로딩과 반복 탐색을 검증합니다.
 
-## 고정 속도와 음정 유지 (2026-10-23)
+## 고정 속도와 음정 유지
 
 `AudioClip::PrepareTimeStretch(rate, error)`는 비동기 clip을 로드한 직후,
 LoadState polling이나 Play 전에 한 번 설정합니다. 0.5..2.0의 고정 속도로

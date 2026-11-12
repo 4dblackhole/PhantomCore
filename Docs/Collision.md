@@ -79,8 +79,8 @@ PhantomCore::Ray3D mouseRay{{0.0F, 10.0F, 0.0F}, {0.0F, -2.0F, 0.0F}};
 
 if (const auto hit = PhantomCore::Intersect(ground, mouseRay))
 {
-    const DirectX::XMFLOAT3 point = hit->point;
-    const DirectX::XMFLOAT3 normalizedNormal = hit->normal;
+    const PhantomCore::Float3 point = hit->point;
+    const PhantomCore::Float3 normalizedNormal = hit->normal;
 
     // ray: origin + direction * parameter
     const float rayParameter = hit->parameter;
@@ -149,7 +149,9 @@ Camera 절두체 경로를 사용하지 않는다.
 
 ## 테스트
 
-`Tests/PhantomCore.Collision.Tests.vcxproj`는 다음 항목을 Debug/Release에서 검증한다.
+FMOD 없는 `Tests/PhantomCore.Cpu.Tests.vcxproj`와 통합 SDK의
+`Tests/PhantomCore.Collision.Tests.vcxproj` 기본 실행이 같은 검사 본문으로 다음 항목을
+Debug/Release에서 검증한다.
 
 - 평면 교점, 평행·동일 평면 처리, ray 방향 제한
 - 원과 직선·선분의 접촉 및 비접촉

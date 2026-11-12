@@ -38,8 +38,10 @@ TextStyle/TextVisualComponent는 1~999 굵기를 지원하며 글꼴 배치·글
 Scene 대신 매 프레임 제출한다. 월드·곡면 Canvas는 명시적 pass로 유지한다.
 `RenderContext::ReadImage()`로 완료된 화면 프레임을 RGBA 이미지로 읽을 수 있다.
 [프레임 이미지 읽기](Docs/ImageReadback.md)
+`UpdateContext::performance`는 FPS/UPS와 프레임당 draw 수를 1초마다 제공한다.
+[성능 통계](Docs/PerformanceStatistics.md)
 
-처음 사용하는 개발자나 새 Codex 세션은
+처음 사용하는 개발자나 새 작업 세션은
 [Docs/EngineOverview.md](Docs/EngineOverview.md)부터 읽는다. 주요 기능, 코드 위치,
 객체 수명, Client 경계, 기능별 문서와 작업 체크리스트를 한곳에서 확인할 수 있다.
 
@@ -84,14 +86,13 @@ FMOD SDK 헤더, import library와 DLL은 라이선스상 이 저장소에 포�
 submodule 내부의 `Engine/SDK/PhantomCore.vcxproj`만 참조하며 엔진의 기능 헤더를
 직접 포함하지 않는다.
 
-Client에 함께 보관했던 기술 예제 Scene은 제거되었다. 엔진의 공개 API 검증은
-현재 `Tests/PhantomCore.Collision.Tests.vcxproj`의 SDK 단위 테스트를 사용한다.
-FMOD 없는 CPU 검사는 `Tests/PhantomCore.Cpu.Tests.vcxproj`로 분리되어 있으며,
-Debug·Release CI에서 빌드·실행한다. 범위와 실행법은 [Testing](Docs/Testing.md)을 참고한다.
+엔진의 공개 API 검증은 `Tests/PhantomCore.Collision.Tests.vcxproj`의 SDK 테스트와
+옵션별 장치 검사를 사용한다. FMOD 없는 CPU 검사는 `Tests/PhantomCore.Cpu.Tests.vcxproj`로
+분리되어 있으며 Debug·Release CI에서 빌드·실행한다. 범위와 실행법은 [Testing](Docs/Testing.md)을 참고한다.
 
 실행 중 창 크기 변경과 모니터 해상도 조회는 EngineServices의 비소유
 [IWindowControl 서비스](Docs/WindowControl.md)를 사용합니다. 게임별 저장 정책은 Client가 소유합니다.
 
-오디오 재생과 외부 파형 분석은 공통 `DecodeAudioPcm` 시간축을 사용할 수 있습니다. MP3 패딩 처리와 메모리 비용은 [AudioPlayback](Docs/AudioPlayback.md#공통-pcm-시간축-2026-10-20)을 참고합니다.
+오디오 재생과 외부 파형 분석은 공통 `DecodeAudioPcm` 시간축을 사용할 수 있습니다. MP3 패딩 처리와 메모리 비용은 [AudioPlayback](Docs/AudioPlayback.md#공통-pcm-시간축)을 참고합니다.
 
 고정 속도 PCM 음정 유지와 원본 좌표 탐색은 [AudioPlayback](Docs/AudioPlayback.md)의 PrepareTimeStretch를 참고합니다.
