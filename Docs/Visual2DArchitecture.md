@@ -135,11 +135,11 @@ capture를 재사용하고 hit-test와 move 이벤트를 생략한다. 포인터
 
 ## Sprite 이미지와 인스턴싱
 
-`Visual2DRenderSystem::LoadImage`는 서로 크기가 다른 PNG를 각각 독립된
+`Visual2DRenderSystem::LoadImageFile`는 서로 크기가 다른 PNG를 각각 독립된
 `Texture2D`로 올린다. 같은 Descriptor Table 안의 texture index를 인스턴스 데이터로
 전달하므로 크기를 강제로 통일하는 `Texture2DArray`가 필요하지 않다. 화면 Sprite는
-Canvas 표시 순서에 따라 `DrawInstanced`로 기록한다. 평면 Sprite는
-mesh/material 조합별 `DrawIndexedInstanced` 배치에 들어간다.
+Canvas 표시 순서에 따라 `DrawInstanced`로 기록한다. 월드 평면은 사각형·이미지·글자를
+내부 타깃에 합성한 뒤 패널 하나를 `DrawIndexedInstanced`로 제출한다.
 
 `GetImageSize(ImageHandle)`은 WIC가 읽은 원본 픽셀 크기를 돌려준다. Sprite Bounds는
 여전히 Client가 정하지만, 이 크기로 목표 폭 또는 높이에 맞는 다른 축을 계산하면
@@ -226,4 +226,25 @@ renderContext.visual2DRendering->SubmitScreen(canvas, renderContext);
 화면 요소는 기존 depth band로 월드 깊이를 검사하고 깊이 쓰기는 끈다.
 Z 31을 넘는 Canvas도 전체 Z 값으로 정렬하며 월드 검사에 쓰는 band만 31로 제한한다.
 `TextRenderSystem`에 직접 제출한 텍스트는 화면 Canvas 뒤 최종 pass에서 기록한다.
-`SubmitPlane`은 Mesh 렌더러의 재질·깊이 경로를 사용한다.
+## 월드 평면 Canvas
+
+`SubmitPlane`은 사각형·이미지·글자를 Canvas 트리 paint 순서로 먼저 합성한다.
+자식의 Z는 외부 3D 깊이 층으로 사용하지 않는다. 결과 전체를 surfaceWorld와
+surfaceWorldSize가 정한 한 장의 패널로 제출하며 3D 물체는 그 평면 기준으로 가린다.
+패널은 기존 투명 메시와 같은 깊이 검사·깊이 쓰기 금지 계약을 사용한다.
+월드 투명 메시 사이의 순서는 기존 제출 순서를 유지한다.
+
+내부 타깃은 Canvas 논리 폭·높이를 픽셀 수로 사용하고 소수 크기는 각각 올림한다.
+양의 유한 크기와 backend의 최대 텍스처 크기를 검사한다. 별도 해상도 지정 API는 없다.
+합성된 RGB에는 알파가 이미 곱해져 있으므로 패널 전용 내부 재질은 ONE/INV_SRC_ALPHA로
+배경과 합성한다. 투명한 영역은 뒤쪽 3D 물체를 보여 준다.
+
+같은 프레임의 각 제출은 별도 타깃·재질 snapshot을 사용하므로 Canvas를 수정해 재제출해도
+앞선 패널이 바뀌지 않는다. 다음 프레임에는 같은 제출 슬롯의 크기가 맞는 타깃을 재사용한다.
+같은 그래픽 queue의 기록 순서가 타깃 쓰기와 패널 읽기를 직렬화하며, 크기 변경이나
+미사용 슬롯 회수 뒤에도 기존 frame fence 수명 보관이 GPU 참조를 유지한다.
+Canvas texture pass가 없는 프레임에도 기존 fence 대기가 끝난 슬롯의 보관 목록을 비운다.
+프레임 fence 모델과 기존 descriptor 용량은 유지한다.
+
+공개 SDK 픽셀 검증은 반투명, 혼합 트리 순서, 글자, 3D 앞/뒤 가림, 투명 영역,
+같은 Canvas의 두 제출, 프레임 재사용, 크기 변경과 제출 후 Canvas 해제를 검사한다.

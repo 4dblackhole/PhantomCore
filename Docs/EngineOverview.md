@@ -81,6 +81,7 @@ SDK 테스트의 `--headless-error`는 실제 D3D12/NoSound 실행 중 Update �
 | Client 계약 | `Engine/Core/Client` | `IGameClient`, `SceneGameClient`, `EngineServices`, Update context |
 | 렌더 프레임 계약 | `Engine/Core/Rendering` | `RenderContext`, `ClearColor`, `RgbaImage`, 이미지 읽기 결과 |
 | Scene | `Engine/Core/Scene` | `GameScene`, `SceneManager`, factory, 지연 전환, 수명 정책 |
+| 수학 값·연산 | `Engine/Math` | `Float2/3/4`, `Float4x4`, 행렬·좌표 변환; [Math](Math.md) |
 | 공통 시스템 | `Engine/Core/System` | `Camera`, `TransformNode`, `MeshInstance`, `HighResolutionClock` |
 | 입력·창 | `Engine/Platform.Win32` | HWND, 메시지 펌프, Raw Input, Virtual-Key, QPC 입력 이벤트; [창 크기·Unicode 텍스트 입력](WindowControl.md) |
 | 오디오 | `Engine/Audio` | backend-neutral `AudioSystem`, 출력 API·장치·DSP buffer, FMOD backend |
@@ -205,11 +206,12 @@ MeshRenderSystem의 장치·파이프라인·프레임 버퍼도 비공개 구�
 초기화·프레임 준비·GPU 기록을 연결한다. swap chain과 Mesh/Text/Visual2D의 프레임
 개수는 내부 Renderer/FrameResources.h의 D3D12Detail::FrameCount 하나로 정의한다.
 
-공개 Visual2D 계약은 기존 Win32 `LoadImage` 매크로 동작을 유지하도록 Windows.h를
-명시적으로 포함한다. D3D12 타입은 공개하지 않지만 DirectXMath, Win32 매크로와
-Windows 라이브러리 링크 의존은 남는다. 네임스페이스로 이 매크로 충돌을 해결하지 않는다.
+공개 수학 값은 엔진의 `Float2/3/4`, `Float4x4`를 사용하고 Camera도 엔진 행렬을 반환한다.
+DirectXMath 저장 값과 SIMD 변환은 내부 구현에 한정한다. 이미지 파일 로드는
+`LoadImageFile`로 명명해 Win32 `LoadImage` 매크로와 충돌하지 않는다. Windows 실행과
+플랫폼 API·링크 의존은 유지한다. 수학 규약과 소스 소유권은 [Math](Math.md)를 따른다.
 
-메시 재질 두 종류의 PSO 기술자는 내부 공통 빌더로 만든다. 정점 레이아웃과
+메시 재질의 PSO 기술자는 내부 공통 빌더로 만든다. 정점 레이아웃과
 셰이더·root signature는 각 템플릿이 전달하고 불투명/알파의 기존 blend·depth 설정을 보존한다.
 
 `GpuMesh` 생성 시 Shape의 canonical position 정점으로 로컬 Bounding Sphere를 한

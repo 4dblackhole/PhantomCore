@@ -8,6 +8,8 @@ PhantomCore은 Visual Studio 2022, C++20, DirectX 12 기반의 Windows 게임 �
 Sphere를 사용해 화면 밖 인스턴스를 제출 전에 제외한다.
 Visual2D Canvas는 화면과 월드 표면 모두 정중앙 원점과 Y-up 논리 좌표를 사용한다.
 화면의 사각형·이미지·글자는 Canvas Z와 트리 순서대로 알파 합성한다.
+월드 평면 Canvas도 내부를 트리 순서로 합성하고 한 장의 패널 평면에서 3D 깊이를 검사한다.
+공개 수학 값은 엔진 소유 Float2/3/4와 Float4x4를 사용한다([수학 계약](Docs/Math.md)).
 세부 순서와 배치는 [Visual2D 구조](Docs/Visual2DArchitecture.md)를 따른다.
 프레임 공개 계약은 크기·렌더 서비스·ReadImage를 제공하는 RenderContext이며,
 기록 상태와 구체 Renderer는 엔진 내부에서 소유한다.

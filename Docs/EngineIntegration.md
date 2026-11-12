@@ -64,7 +64,9 @@ Release 엔진과 `fmod_vc.lib`/`fmod.dll`을 사용한다. 런타임 라이브�
 `PhantomCore::IGameClient`, `PhantomCore::RenderContext`처럼 명시한다. 구현 파일에서
 짧은 이름을 쓰려면 모든 include 뒤에 `using namespace PhantomCore;`를 둘 수 있다.
 공용 헤더에는 이 using 지시문을 두지 않으며 이전 전역 이름의 별칭은 제공하지 않는다.
-Win32의 `LoadImage` 같은 매크로는 네임스페이스와 별개로 적용된다.
+Win32의 매크로는 네임스페이스와 별개로 적용된다. 이미지 파일은 충돌하지 않는
+`Visual2DRenderSystem::LoadImageFile`로 읽으며 전역 `#undef`는 필요하지 않다.
+공개 수학 값과 Camera 행렬은 엔진 자체 타입을 사용한다([Math](Math.md)).
 
 ## 최소 Client 예시
 

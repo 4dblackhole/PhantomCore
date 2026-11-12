@@ -86,7 +86,7 @@ Canvas를 제거한다. handle은 관리자를 빌려 쓰므로 `ScreenVisual2DM
 ```cpp
 void ExampleScene::Initialize(const PhantomCore::EngineServices& services)
 {
-    panelImage_ = services.visual2DRendering.LoadImage(imagePath);
+    panelImage_ = services.visual2DRendering.LoadImageFile(imagePath);
     panelTarget_ =
         services.visual2DRendering.CreateCanvasRenderTarget(960, 630);
 }

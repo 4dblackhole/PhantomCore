@@ -66,9 +66,9 @@ Scene의 Canvas dispatcher가 결정한다.
 
 `Visual2DRenderSystem::PrepareImages(paths, error)`는 D3D12에서 복사한 파일 경로의 WIC
 디코드를 worker로 보냅니다. false는 준비 중이며, true라도 error가 있으면 실패입니다.
-Ready 뒤 기존 LoadImage/RegisterImage로 GPU 자원을 만듭니다. 다른 renderer의 기본 구현은
-동기 LoadImage 계약을 유지합니다. worker는 그래픽/Scene observer를 빌리지 않습니다.
-PrepareImages/LoadImage/poll은 기존 렌더 소유 스레드에서 호출합니다.
+Ready 뒤 기존 LoadImageFile/RegisterImage로 GPU 자원을 만듭니다. 다른 renderer의 기본 구현은
+동기 LoadImageFile 계약을 유지합니다. worker는 그래픽/Scene observer를 빌리지 않습니다.
+PrepareImages/LoadImageFile/poll은 기존 렌더 소유 스레드에서 호출합니다.
 
 텍스처 업로드는 렌더 queue에 제출한 뒤 이미지별 fence 대기를 하지 않습니다. 같은 queue의
 후속 draw가 copy 뒤에 실행되며, command allocator/list·upload buffer·destination handle을
