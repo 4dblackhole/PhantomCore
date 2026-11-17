@@ -360,11 +360,15 @@ AudioClockSnapshot AudioSystem::CaptureClockSnapshot() const noexcept
     LARGE_INTEGER frequency{};
     QueryPerformanceCounter(&counter);
     QueryPerformanceFrequency(&frequency);
+    const AudioMixerClockEstimate clock = backend_ != nullptr
+        ? backend_->EstimateDspClock(counter.QuadPart)
+        : AudioMixerClockEstimate{};
     return AudioClockSnapshot{
-        DspClock(),
+        clock.dspClock,
         SampleRate(),
         counter.QuadPart,
-        frequency.QuadPart};
+        frequency.QuadPart,
+        clock.smoothed};
 }
 
 std::unique_ptr<AudioClip> AudioSystem::LoadSound(

@@ -35,7 +35,11 @@
   <ItemGroup>
     <ClCompile Include="RuntimeTestsMain.cpp" />
     <ClCompile Include="Audio\ManagedPlaybackTests.cpp"><Filter>Audio</Filter></ClCompile>
+    <ClCompile Include="Audio\AudioMixerClockTests.cpp"><Filter>Audio</Filter></ClCompile>
+    <ClCompile Include="Audio\AudioClockSnapshotTests.cpp"><Filter>Audio</Filter></ClCompile>
     <ClInclude Include="Audio\ManagedPlaybackTests.h"><Filter>Audio</Filter></ClInclude>
+    <ClInclude Include="Audio\AudioMixerClockTests.h"><Filter>Audio</Filter></ClInclude>
+    <ClInclude Include="Audio\AudioClockSnapshotTests.h"><Filter>Audio</Filter></ClInclude>
     <ClInclude Include="Collision\CollisionTests.h"><Filter>Collision</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>

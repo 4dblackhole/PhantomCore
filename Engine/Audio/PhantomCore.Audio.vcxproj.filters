@@ -4,6 +4,9 @@
     <ClInclude Include="System\AudioPlayback.h">
       <Filter>System</Filter>
     </ClInclude>
+    <ClInclude Include="System\AudioMixerClock.h">
+      <Filter>System</Filter>
+    </ClInclude>
     <Filter Include="System">
       <UniqueIdentifier>{30333333-3333-4333-8333-333333333331}</UniqueIdentifier>
     </Filter>
@@ -33,6 +36,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="System\AudioPlayback.cpp">
+      <Filter>System</Filter>
+    </ClCompile>
+    <ClCompile Include="System\AudioMixerClock.cpp">
       <Filter>System</Filter>
     </ClCompile>
     <ClCompile Include="System\AudioSystem.cpp">

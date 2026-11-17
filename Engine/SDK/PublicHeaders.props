@@ -7,6 +7,7 @@
     <CorePublicHeader Include="Engine\Audio\Decode\AudioPcmDecoder.h" />
     <CorePublicHeader Include="Engine\Audio\Processing\TimeStretch.h" />
     <CorePublicHeader Include="Engine\Audio\System\AudioPlayback.h" />
+    <CorePublicHeader Include="Engine\Audio\System\AudioMixerClock.h" />
     <CorePublicHeader Include="Engine\Audio\System\AudioSystem.h" />
     <CorePublicHeader Include="Engine\Audio\System\AudioPlaybackManager.h" />
     <CorePublicHeader Include="Engine\Platform.Win32\System\RuntimePaths.h" />

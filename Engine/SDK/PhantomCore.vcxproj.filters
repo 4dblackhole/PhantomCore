@@ -92,6 +92,7 @@
     <ClInclude Include="..\Platform.Win32\System\RuntimePaths.h"><Filter>Platform.Win32\System</Filter></ClInclude>
     <ClInclude Include="..\Platform.Win32\Window\Win32Window.h"><Filter>Platform.Win32\Window</Filter></ClInclude>
     <ClInclude Include="..\Audio\System\AudioPlayback.h"><Filter>Audio\System</Filter></ClInclude>
+    <ClInclude Include="..\Audio\System\AudioMixerClock.h"><Filter>Audio\System</Filter></ClInclude>
     <ClInclude Include="..\Audio\System\AudioPlaybackManager.h"><Filter>Audio\System</Filter></ClInclude>
     <ClInclude Include="..\Audio\System\AudioSystem.h"><Filter>Audio\System</Filter></ClInclude>
     <ClInclude Include="..\Audio\Backend\Fmod\FmodAudioBackend.h"><Filter>Audio\Backend\Fmod</Filter></ClInclude>
@@ -144,6 +145,7 @@
     <ClCompile Include="..\Platform.Win32\System\RuntimePaths.cpp"><Filter>Platform.Win32\System</Filter></ClCompile>
     <ClCompile Include="..\Platform.Win32\Window\Win32Window.cpp"><Filter>Platform.Win32\Window</Filter></ClCompile>
     <ClCompile Include="..\Audio\System\AudioPlayback.cpp"><Filter>Audio\System</Filter></ClCompile>
+    <ClCompile Include="..\Audio\System\AudioMixerClock.cpp"><Filter>Audio\System</Filter></ClCompile>
     <ClCompile Include="..\Audio\System\AudioPlaybackManager.cpp"><Filter>Audio\System</Filter></ClCompile>
     <ClCompile Include="..\Audio\System\AudioSystem.cpp"><Filter>Audio\System</Filter></ClCompile>
     <ClCompile Include="..\Audio\Backend\Fmod\FmodAudioBackend.cpp"><Filter>Audio\Backend\Fmod</Filter></ClCompile>

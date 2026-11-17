@@ -87,6 +87,50 @@ namespace
     {
         OutputDebugStringA(("[PhantomCore.Audio] " + message + "\n").c_str());
     }
+
+    // Mixer-thread callback of the pass-through probe on the master group.
+    // It only copies the block and records when the block was mixed; it
+    // calls no FMOD API beyond the DSP state functions meant for callbacks.
+    FMOD_RESULT F_CALL RecordMixerClock(
+        FMOD_DSP_STATE* const state,
+        float* const inBuffer,
+        float* const outBuffer,
+        const unsigned int length,
+        const int inChannels,
+        int* const outChannels)
+    {
+        std::copy_n(
+            inBuffer,
+            static_cast<std::size_t>(length) * static_cast<std::size_t>(inChannels),
+            outBuffer);
+        *outChannels = inChannels;
+
+        LARGE_INTEGER counter{};
+        QueryPerformanceCounter(&counter);
+        void* userData = nullptr;
+        unsigned long long blockClock = 0;
+        unsigned int blockOffset = 0;
+        unsigned int blockLength = 0;
+        if (state->functions->getuserdata(state, &userData) != FMOD_OK ||
+            state->functions->getclock(state, &blockClock, &blockOffset, &blockLength) != FMOD_OK)
+        {
+            return FMOD_OK;
+        }
+        if (userData != nullptr)
+        {
+            static_cast<AudioMixerClockEstimator*>(userData)->RecordMixedBlock(
+                counter.QuadPart,
+                static_cast<std::uint64_t>(blockClock) + length);
+        }
+        return FMOD_OK;
+    }
+
+    std::int64_t PerformanceCounterFrequency() noexcept
+    {
+        LARGE_INTEGER frequency{};
+        QueryPerformanceFrequency(&frequency);
+        return frequency.QuadPart;
+    }
 }
 
 FmodAudioBackend::~FmodAudioBackend()
@@ -164,6 +208,7 @@ void FmodAudioBackend::Update()
 
 void FmodAudioBackend::Shutdown() noexcept
 {
+    ReleaseMixerClockProbe();
     InvalidateNativeObjects();
     masterChannelGroup_ = nullptr;
     if (system_ != nullptr)
@@ -391,6 +436,12 @@ std::uint64_t FmodAudioBackend::DspClock() const noexcept
     return static_cast<std::uint64_t>(dspClock);
 }
 
+AudioMixerClockEstimate FmodAudioBackend::EstimateDspClock(
+    const std::int64_t performanceCounterTicks) const noexcept
+{
+    return mixerClock_.Estimate(performanceCounterTicks, DspClock());
+}
+
 std::unique_ptr<IAudioBusBackend> FmodAudioBackend::CreateBus(
     const std::string_view name,
     IAudioBusBackend* const parent,
@@ -563,6 +614,7 @@ bool FmodAudioBackend::InitializeMixer(
 
         // System::init succeeded but resolved an exact request to another
         // output. Close that mixer so callers can retry a fallback safely.
+        ReleaseMixerClockProbe();
         InvalidateNativeObjects();
         masterChannelGroup_ = nullptr;
         const FMOD_RESULT closeResult = system_->close();
@@ -574,6 +626,7 @@ bool FmodAudioBackend::InitializeMixer(
         }
         return false;
     }
+    AttachMixerClockProbe();
     errorMessage.clear();
     return true;
 }
@@ -628,6 +681,7 @@ bool FmodAudioBackend::RestartMixer(
     const int previousDriver = activeDriverIndex_;
     const AudioOutputBackend previousActiveOutput = activeOutput_;
 
+    ReleaseMixerClockProbe();
     InvalidateNativeObjects();
     masterChannelGroup_ = nullptr;
     const FMOD_RESULT closeResult = system_->close();
@@ -779,6 +833,10 @@ void FmodAudioBackend::RefreshRuntimeState() noexcept
     {
         masterChannelGroup_ = nullptr;
     }
+
+    // An output, driver, or mixer change can change the rate or restart
+    // the clock, so earlier mixer history no longer applies.
+    ResetMixerClock();
 }
 
 void FmodAudioBackend::InvalidateNativeObjects() noexcept
@@ -788,6 +846,59 @@ void FmodAudioBackend::InvalidateNativeObjects() noexcept
         lifetime_->system = nullptr;
         ++lifetime_->generation;
     }
+}
+
+void FmodAudioBackend::ResetMixerClock() noexcept
+{
+    mixerClock_.Reset(sampleRate_, PerformanceCounterFrequency());
+}
+
+void FmodAudioBackend::AttachMixerClockProbe() noexcept
+{
+    if (mixerClockProbe_ != nullptr || masterChannelGroup_ == nullptr)
+    {
+        return;
+    }
+
+    // Without the probe, EstimateDspClock keeps returning the raw clock.
+    FMOD_DSP_DESCRIPTION description{};
+    description.pluginsdkversion = FMOD_PLUGIN_SDK_VERSION;
+    constexpr char probeName[] = "PhantomCore mixer clock";
+    std::copy_n(probeName, sizeof(probeName), description.name);
+    description.numinputbuffers = 1;
+    description.numoutputbuffers = 1;
+    description.read = &RecordMixerClock;
+    description.userdata = &mixerClock_;
+
+    FMOD::DSP* probe = nullptr;
+    FMOD_RESULT result = system_->createDSP(&description, &probe);
+    if (result != FMOD_OK || probe == nullptr)
+    {
+        DebugLog(FmodDetail::MakeFmodError("FMOD::System::createDSP", result));
+        return;
+    }
+    result = masterChannelGroup_->addDSP(FMOD_CHANNELCONTROL_DSP_HEAD, probe);
+    if (result != FMOD_OK)
+    {
+        DebugLog(FmodDetail::MakeFmodError("FMOD::ChannelGroup::addDSP", result));
+        static_cast<void>(probe->release());
+        return;
+    }
+    mixerClockProbe_ = probe;
+}
+
+void FmodAudioBackend::ReleaseMixerClockProbe() noexcept
+{
+    if (mixerClockProbe_ == nullptr)
+    {
+        return;
+    }
+    if (masterChannelGroup_ != nullptr)
+    {
+        static_cast<void>(masterChannelGroup_->removeDSP(mixerClockProbe_));
+    }
+    static_cast<void>(mixerClockProbe_->release());
+    mixerClockProbe_ = nullptr;
 }
 
 } // namespace PhantomCore

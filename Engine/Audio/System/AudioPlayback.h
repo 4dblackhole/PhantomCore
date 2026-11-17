@@ -65,12 +65,18 @@ struct AudioPlaybackSettings
     std::uint64_t startPositionMicroseconds{};
 };
 
+// dspClock is the mixer clock at performanceCounterTicks. When smoothed is
+// true it is estimated from recent mixer blocks instead of read raw, so it
+// does not carry the mixer's per-wake step error. It never decreases between
+// snapshots of one mixer, but may lead the raw clock by up to about half a
+// mixer wake period; schedule SetDelay starts at least one period ahead.
 struct AudioClockSnapshot
 {
     std::uint64_t dspClock{};
     int sampleRate{};
     std::int64_t performanceCounterTicks{};
     std::int64_t performanceCounterFrequency{};
+    bool smoothed{};
 };
 
 enum class AudioPreparationState : std::uint8_t { Loading, Ready, Failed };
