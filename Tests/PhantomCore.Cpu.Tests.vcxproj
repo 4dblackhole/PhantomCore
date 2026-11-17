@@ -49,7 +49,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)PublicSdk;$(ProjectDir)..\Engine\Core;$(ProjectDir)..\Engine\Collision;$(ProjectDir)..\Engine\Geometry;$(ProjectDir)..\Engine\Platform.Win32;$(ProjectDir)..\Engine\Graphics.D3D12;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)PublicSdk;$(ProjectDir)..\Engine\Core;$(ProjectDir)..\Engine\Collision;$(ProjectDir)..\Engine\Geometry;$(ProjectDir)..\Engine\Platform.Win32;$(ProjectDir)..\Engine\Graphics.D3D12;$(ProjectDir)..\Engine\Audio;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>PHANTOMCORE_NO_AUTOLINK;WIN32_LEAN_AND_MEAN;NOMINMAX;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>
@@ -64,6 +64,8 @@
     <ClCompile Include="Collision\Visual2DUpdateTests.cpp" />
     <ClInclude Include="Collision\Visual2DUpdateTests.h" />
     <ClCompile Include="App\InputStateTests.cpp" />
+    <ClCompile Include="Audio\AudioMixerClockTests.cpp" />
+    <ClInclude Include="Audio\AudioMixerClockTests.h" />
     <ClInclude Include="Collision\CollisionTests.h" />
     <ClInclude Include="App\InputStateTests.h" />
     <ClCompile Include="..\Engine\Core\System\Camera.cpp" />
@@ -82,6 +84,7 @@
     <ClCompile Include="..\Engine\Geometry\Primitive\CubeShape.cpp" />
     <ClCompile Include="..\Engine\Geometry\Primitive\SphereShape.cpp" />
     <ClCompile Include="..\Engine\Platform.Win32\Input\Input.cpp" />
+    <ClCompile Include="..\Engine\Audio\System\AudioMixerClock.cpp" />
   </ItemGroup>
   <!-- Compile the same CPU implementations; no SDK project, backend, or FMOD runtime. -->
   <Import Project="..\Engine\SDK\PublicHeaders.props" />

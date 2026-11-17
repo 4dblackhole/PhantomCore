@@ -1,3 +1,5 @@
+#include "Audio/AudioClockSnapshotTests.h"
+#include "Audio/AudioMixerClockTests.h"
 #include "Audio/AudioPcmTests.h"
 #include "App/HeadlessRunTests.h"
 #include "App/ImageReadbackTests.h"
@@ -23,6 +25,8 @@ int main(int argc, char** argv)
         return TestInputState();
     if ((argc == 2 || argc == 3) && std::string_view(argv[1]) == "--audio-pcm")
         return TestAudioPcm(argc == 3 ? argv[2] : nullptr);
+    if (argc == 2 && std::string_view(argv[1]) == "--audio-clock")
+        return TestAudioClockSnapshot();
     if (argc == 2 && std::string_view(argv[1]) == "--window-control")
         return TestWindowControl();
     if (argc == 2 && std::string_view(argv[1]) == "--draw-statistics")
@@ -41,5 +45,7 @@ int main(int argc, char** argv)
         return TestVisual2DPixels();
     const int cpuResult = TestCollisionAndVisual2D();
     const int audioResult = TestManagedPlayback();
-    return cpuResult != 0 || audioResult != 0 ? 1 : 0;
+    const int audioClockResult = TestAudioMixerClockEstimator();
+    const bool failed = cpuResult != 0 || audioResult != 0;
+    return failed || audioClockResult != 0 ? 1 : 0;
 }

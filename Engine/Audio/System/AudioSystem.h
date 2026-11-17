@@ -3,6 +3,7 @@
 // Audio feature: backend-neutral system, device, and clip contracts.
 
 #include "System/AudioPlayback.h"
+#include "System/AudioMixerClock.h"
 
 #include <atomic>
 #include <cstdint>
@@ -158,6 +159,14 @@ public:
         std::string& errorMessage) = 0;
 
     [[nodiscard]] virtual std::uint64_t DspClock() const noexcept = 0;
+    // The clock at a QPC time, without block steps when the backend can
+    // observe its mixer. Backends that cannot return the raw clock.
+    [[nodiscard]] virtual AudioMixerClockEstimate EstimateDspClock(
+        const std::int64_t performanceCounterTicks) const noexcept
+    {
+        static_cast<void>(performanceCounterTicks);
+        return AudioMixerClockEstimate{DspClock(), false};
+    }
     [[nodiscard]] virtual std::unique_ptr<IAudioBusBackend> CreateBus(
         std::string_view name,
         IAudioBusBackend* parent,

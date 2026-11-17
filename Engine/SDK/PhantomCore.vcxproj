@@ -69,6 +69,7 @@
     <ClInclude Include="..\Platform.Win32\System\RuntimePaths.h" />
     <ClInclude Include="..\Platform.Win32\Window\Win32Window.h" />
     <ClInclude Include="..\Audio\System\AudioPlayback.h" />
+    <ClInclude Include="..\Audio\System\AudioMixerClock.h" />
     <ClInclude Include="..\Audio\System\AudioPlaybackManager.h" />
     <ClInclude Include="..\Audio\System\AudioSystem.h" />
     <ClInclude Include="..\Audio\Backend\Fmod\FmodAudioBackend.h" />
@@ -126,6 +127,7 @@
     <ClCompile Include="..\Platform.Win32\System\RuntimePaths.cpp" />
     <ClCompile Include="..\Platform.Win32\Window\Win32Window.cpp" />
     <ClCompile Include="..\Audio\System\AudioPlayback.cpp" />
+    <ClCompile Include="..\Audio\System\AudioMixerClock.cpp" />
     <ClCompile Include="..\Audio\System\AudioPlaybackManager.cpp" />
     <ClCompile Include="..\Audio\System\AudioSystem.cpp" />
     <ClCompile Include="..\Audio\Backend\Fmod\FmodAudioBackend.cpp" />

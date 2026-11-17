@@ -286,7 +286,7 @@ Canvas 좌표로 변환한다.
 - `SceneGameClient::AudioPlayback()`의 공통 재생 관리: Voice ID 제어, 재생 중 Clip/Bus
   유지, Scene 전환 중 재생 유지와 Client 종료 시 정지
 - 계층적 `AudioBus`, DSP effect, sample-accurate volume fade point
-- DSP/QPC clock snapshot 및 출력 지연 정보 제공
+- mixer block 계단을 없앤 DSP/QPC clock snapshot 및 출력 지연 정보 제공
 
 output API를 변경할 때 backend가 다시 초기화되고 그 시점에만 장치 목록을 다시
 조사한다. wav/음악 clip은 게임 asset이므로 Client가 소유한다. FMOD SDK와 DLL은

@@ -1,7 +1,7 @@
 # CPU 테스트와 장치 통합 테스트
 
 `Tests/PhantomCore.Cpu.Tests.vcxproj`는 Camera·충돌·입력·Visual2D 트리/위젯/표면과
-화면 관리자의 CPU 계약을 검사합니다. 테스트는 공개 `PhantomCore.h`만 사용하며,
+화면 관리자, 모의 mixer로 돌리는 오디오 clock 추정기의 CPU 계약을 검사합니다. 테스트는 공개 `PhantomCore.h`만 사용하며,
 기존 SDK 테스트와 동일한 테스트 본문 및 실제 엔진 CPU 소스를 빌드합니다.
 별도 엔진 동작이나 테스트용 오디오 backend를 제공하지 않습니다.
 
@@ -43,6 +43,7 @@ foreach ($configuration in 'Debug', 'Release') {
 | `--draw-statistics` | 성능 표본의 프레임당 draw 수 |
 | `--scene-manager` | 지연 전환, 보존 정책과 종료 순서 |
 | `--window-control` | 창 크기 변경과 해상도 조회 |
+| `--audio-clock` | 기본 출력에서 스냅샷 400개의 흔들림: 날 DSP clock 짝짓기와 `CaptureClockSnapshot` 비교 |
 | `--headless-error` | 숨김 실행의 Update 예외 정리 |
 | `--audio-pcm [경로]` | 공통 PCM 디코딩과 고정 속도 변환 |
 

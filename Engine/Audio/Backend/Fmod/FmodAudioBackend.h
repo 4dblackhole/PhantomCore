@@ -58,6 +58,8 @@ public:
         std::string& errorMessage) override;
 
     [[nodiscard]] std::uint64_t DspClock() const noexcept override;
+    [[nodiscard]] AudioMixerClockEstimate EstimateDspClock(
+        std::int64_t performanceCounterTicks) const noexcept override;
     [[nodiscard]] std::unique_ptr<IAudioBusBackend> CreateBus(
         std::string_view name,
         IAudioBusBackend* parent,
@@ -92,9 +94,16 @@ private:
     [[nodiscard]] bool EnumerateCurrentDrivers(std::string& errorMessage);
     void RefreshRuntimeState() noexcept;
     void InvalidateNativeObjects() noexcept;
+    void ResetMixerClock() noexcept;
+    void AttachMixerClockProbe() noexcept;
+    void ReleaseMixerClockProbe() noexcept;
 
     FMOD::System* system_{};
     FMOD::ChannelGroup* masterChannelGroup_{};
+    // Records every mixed block for EstimateDspClock. The estimator is a
+    // member so it outlives the probe DSP, which is released before close.
+    FMOD::DSP* mixerClockProbe_{};
+    AudioMixerClockEstimator mixerClock_;
     std::shared_ptr<FmodSystemLifetime> lifetime_;
     AudioOutputBackend requestedOutput_{AudioOutputBackend::Automatic};
     AudioOutputBackend activeOutput_{AudioOutputBackend::NoSound};

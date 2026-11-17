@@ -59,6 +59,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="System\AudioPlayback.h" />
+    <ClInclude Include="System\AudioMixerClock.h" />
     <ClInclude Include="System\AudioPlaybackManager.h" />
     <ClInclude Include="System\AudioSystem.h" />
     <ClInclude Include="Backend\Fmod\FmodAudioBackend.h" />
@@ -67,6 +68,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="System\AudioPlayback.cpp" />
+    <ClCompile Include="System\AudioMixerClock.cpp" />
     <ClCompile Include="System\AudioPlaybackManager.cpp" />
     <ClCompile Include="System\AudioSystem.cpp" />
     <ClCompile Include="Backend\Fmod\FmodAudioBackend.cpp" />
