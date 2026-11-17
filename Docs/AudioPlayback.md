@@ -27,11 +27,32 @@ MP3의 반복 재사용, 같은 채널의 0/1/5초 탐색, 종료 샘플 교체,
 
 ## 하나의 DSP 기준 타임라인
 
-`AudioSystem::CaptureClockSnapshot()`은 가능한 한 가까운 시점의 DSP clock,
+`AudioSystem::CaptureClockSnapshot()`은 같은 QPC tick의 DSP clock,
 software mixer sample rate, QPC tick과 QPC frequency를 반환한다. Client는 이 값으로
 게임의 단일 리듬 타임라인을 DSP clock에 고정하고 음악, BMS 사운드와 히트사운드를
 모두 같은 clock domain에 예약한다. 렌더 프레임이나 Update 횟수는 오디오 예약 시각의
 기준으로 사용하지 않는다.
+
+software mixer는 장치 주기마다 깨어나 block 단위로 섞으므로 FMOD의 날 DSP clock은
+그 주기(WASAPI 공유 모드에서 약 10 ms)의 계단으로 움직인다. 날값을 QPC와 바로
+짝지으면 기준점마다 그 폭만큼 무작위 오차가 생긴다. 그래서 스냅샷의 `dspClock`은
+계단을 없앤 추정값이다.
+
+- FMOD backend는 master group의 통과 DSP로 섞인 block마다 QPC와 block 뒤 clock을
+  기록한다. mixer thread는 대기 없이 고정 링에 쓰고, 읽는 쪽은 seqlock 순서로 검증한다.
+- 깨어날 때마다 mixer는 장치보다 일정 목표만큼 앞설 때까지 섞으므로, 깨어난 직후
+  clock이 공칭 rate 직선보다 앞선 양은 목표 + 1 block 미만이다. 늦게 기록된 깨어남은
+  이 값을 줄이기만 하므로, 최근 2초의 최대 앞섬 − 1 block이 목표의 안정된 추정이다.
+- 이 직선을 반 block과 깨어남 사이의 평균 톱니 낙차만큼 내려, 임의 시각에 읽은
+  날값의 평균과 맞춘다. 깨어남 위상이 block 격자를 고르게 지나는 WASAPI에서는
+  예전 평균이 유지되고, 위상이 block 경계에 고정된 mixer에서는 반 block 안에서 다르다.
+- 결과는 한 mixer 안에서 줄어들지 않는다. 날값보다 최대 반 주기쯤 앞설 수 있으므로
+  `SetDelay`/`startDspClock` 예약은 최소 한 mixer 주기 뒤로 잡는다.
+- 기록이 0.2초(또는 깨어남 8번) 미만이거나, 마지막 block 뒤 0.1초(또는 깨어남 간격
+  4배)가 지났거나, 추정이 날값과 크게 어긋나면 날값을 반환한다. `smoothed`가 이를 알린다.
+- output·driver 변경과 mixer 재시작은 기록을 새로 시작한다. 날값은 `AudioSystem::DspClock()`으로
+  계속 읽을 수 있다. 다른 backend는 `IAudioBackend::EstimateDspClock`을 재정의하지 않으면
+  날값을 쓰고, 같은 계산이 필요하면 공개 `AudioMixerClockEstimator`를 쓸 수 있다.
 
 ```cpp
 const PhantomCore::AudioClockSnapshot clock =
