@@ -1,9 +1,5 @@
 # PaddedTone.mp3
 
-Synthetic test audio generated for this repository: 44100 Hz stereo, one second,
-250 ms silence + 500 ms 1 kHz sine at half scale with opposite channel phase +
-250 ms silence. Encoded with FFmpeg libmp3lame at 128 kbit/s. No third-party
-recording or music is used. The waveform and fixture are dedicated to the public
-domain under CC0-1.0. The file's LAME tag intentionally retains encoder delay and
-padding, so the public PCM reader and FMOD playback duration must both expose
-44100 frames and retain the intentional leading silence.
+이 저장소를 위해 만든 합성 테스트 오디오입니다: 44100 Hz 스테레오 1초, 무음 250 ms + 반대 위상 채널의 절반 크기 1 kHz 사인파 500 ms + 무음 250 ms.
+FFmpeg libmp3lame 128 kbit/s로 인코딩했습니다. 제3자 녹음이나 음악은 쓰지 않았습니다. 파형과 예제는 CC0-1.0으로 퍼블릭 도메인에 기증합니다.
+파일의 LAME 태그는 인코더 지연과 padding을 일부러 남겨 두므로, 공개 PCM reader와 FMOD 재생 길이가 모두 44100 프레임을 보이고 의도한 앞쪽 무음을 유지해야 합니다.

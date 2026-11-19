@@ -7,7 +7,7 @@
 - 새 세션에서 엔진 코드를 바꾸기 전에 `Docs/EngineOverview.md`를 읽습니다. 기능·소유·소스 위치·Client 경계·
   검증과 나머지 상세 문서의 기준 색인입니다.
 - 엔진과 Client를 함께 바꾸는 작업은 변경 위치를 정하기 전에 Client 저장소의 `AGENTS.md`,
-  `Docs/Contributing/Workflow.md`, `Docs/ExecutionFlow.md`도 읽습니다.
+  `Docs/Contributing/Workflow.md`, `Docs/Architecture/ExecutionFlow.md`도 읽습니다.
 - 주요 공개 기능·소유 경계·검증 규칙이 바뀌면 `README.md`, `Docs/EngineOverview.md`, 기능 문서를 함께 맞춥니다.
 
 ## 목적과 경계
