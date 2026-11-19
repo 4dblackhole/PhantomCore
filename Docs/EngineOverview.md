@@ -29,7 +29,7 @@
 
 새 게임에서 엔진을 연결하는 방법은
 [EngineIntegration.md](EngineIntegration.md), 현재 샘플의 실제 시작·종료 과정은
-Client 저장소의 `Docs/ExecutionFlow.md`를 참고한다.
+Client 저장소의 `Docs/Architecture/ExecutionFlow.md`를 참고한다.
 
 ## 2. 5분 시작 경로
 
@@ -113,6 +113,48 @@ Client wWinMain
    → 지역 객체 소멸: window → input → audio → renderer
 ```
 
+소유 관계를 그림으로 보면 다음과 같다. 실선 마름모는 소유, 점선은 빌린 참조다.
+
+```mermaid
+classDiagram
+    direction TB
+    class Run {
+        <<함수>>
+        지역 객체로 subsystem 소유
+    }
+    class IGameClient {
+        <<interface>>
+    }
+    class SceneGameClient {
+        Client가 상속
+    }
+    class GameScene {
+        <<interface>>
+    }
+    Run *-- HighResolutionClock
+    Run *-- Win32Window
+    Run *-- InputState
+    Run *-- D3D12Renderer
+    Run *-- AudioSystem
+    Run o-- IGameClient : unique_ptr로 받음
+    D3D12Renderer *-- MeshRenderSystem
+    D3D12Renderer *-- TextRenderSystem
+    D3D12Renderer *-- Visual2DRenderSystem
+    AudioSystem *-- IAudioBackend
+    IAudioBackend <|.. FmodAudioBackend
+    IGameClient <|-- SceneGameClient
+    SceneGameClient *-- SceneManager
+    SceneGameClient *-- AudioPlaybackManager
+    SceneGameClient *-- ScreenVisual2DManager
+    SceneManager *-- GameScene : factory · 수명 정책
+    GameScene ..> EngineServices : 빌린 참조
+    GameScene ..> ScreenVisual2DManager : Canvas handle
+```
+
+근거: `Engine/Core/App/Engine.cpp`(`Run`의 지역 객체), `Engine/Core/Client/SceneGameClient.h`,
+`Engine/Graphics.D3D12/Renderer/D3D12Renderer.h`, `Engine/Audio/System/AudioSystem.h`. 이 클래스들의 소유가 바뀌면 그림도 고친다.
+Client(YOUMU) 쪽 구조 그림은 Client 저장소 `Docs/Architecture/Overview.md`에 있다.
+
 핵심 소유권 규칙은 다음과 같다.
 
 - `Run`이 플랫폼, 그래픽, 오디오 subsystem을 소유한다.
@@ -131,7 +173,7 @@ Client wWinMain
   추가 보관하므로 동적 Scene 삭제 직후에도 GPU 참조가 안전하다.
 - raw pointer는 명시적으로 다르게 문서화되지 않는 한 비소유 참조다.
 
-상세 호출 순서와 종료 순서는 Client의 `Docs/ExecutionFlow.md`에 있다.
+상세 호출 순서와 종료 순서는 Client의 `Docs/Architecture/ExecutionFlow.md`에 있다.
 
 ## 5. 시간·입력·렌더 스케줄
 
@@ -166,7 +208,7 @@ FPS/UPS와 프레임당 draw 수 통계의 엔진·Client 경계는
 - 일회성 리소스는 `Initialize`/`Shutdown`, 활성화마다 바뀌는 상태는
   `BeginScene`/`EndScene`에 둔다.
 
-게임의 Scene 구성은 Client 저장소의 `Docs/ExecutionFlow.md`에서 확인한다.
+게임의 Scene 구성은 Client 저장소의 `Docs/Architecture/Overview.md`와 `Docs/Architecture/ExecutionFlow.md`에서 확인한다.
 공개 SDK 테스트의 `--scene-manager`는 지연 전환, Scene 보존과 종료 순서를 검증한다.
 
 ## 7. Graphics·Geometry·인스턴싱
@@ -267,7 +309,10 @@ Canvas 좌표로 변환한다.
 - [Visual2DArchitecture.md](Visual2DArchitecture.md)
 - [Visual2DRendererLifecycle.md](Visual2DRendererLifecycle.md)
 - [Visual2DPerformanceAndOwnership.md](Visual2DPerformanceAndOwnership.md)
-- Client `Docs/Visual2DGuide.md`
+- Client `Docs/Features/Visual2DGuide.md`
+
+엔진 문서 세 개는 Visual2D의 내부 구조·renderer 수명·성능과 GPU 소유를, Client 가이드는 게임 코드에서
+node·component·Canvas를 만들고 쓰는 방법을 다룬다. 엔진 동작을 바꾸면 엔진 문서를, 사용 방법만 바뀌면 Client 가이드를 고친다.
 
 ## 9. 오디오
 
@@ -364,13 +409,14 @@ Client 저장소의 추가 문서는 다음과 같다.
 
 | Client 문서 | 내용 |
 | --- | --- |
-| `Docs/ExecutionFlow.md` | 실제 샘플의 시작, 프레임, 종료와 객체 수명 |
-| `Docs/Visual2DGuide.md` | Sprite·위젯 생성, 입력, PNG, Canvas와 Z-Order |
+| `Docs/Architecture/Overview.md` | 저장소·프로젝트 의존과 Scene 구성 그림 |
+| `Docs/Architecture/ExecutionFlow.md` | 실제 게임의 시작, 프레임, 종료와 객체 수명(순서도 포함) |
+| `Docs/Features/Visual2DGuide.md` | Sprite·위젯 생성, 입력, PNG, Canvas와 Z-Order |
 
 ## 14. 새 작업 세션 체크리스트
 
 1. 현재 작업 저장소의 `AGENTS.md`를 끝까지 읽는다.
-2. 엔진 작업이면 이 문서, Client 작업이면 `Docs/ExecutionFlow.md`도 읽는다.
+2. 엔진 작업이면 이 문서, Client 작업이면 `Docs/Architecture/ExecutionFlow.md`도 읽는다.
 3. `git status -sb`, 현재 branch, `origin/main`과 submodule gitlink를 확인한다.
 4. 요청을 엔진 재사용 기능과 Client 게임 정책으로 나눈다.
 5. 공개 API 변경 전 원본 header, `PublicHeaders.props`, `GenerateCoreHeader.ps1`을 함께 확인한다.
