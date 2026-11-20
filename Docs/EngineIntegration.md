@@ -39,8 +39,11 @@ SDK/
 - **링커 > 추가 라이브러리 디렉터리**: FMOD x64 import library 폴더
 
 Debug Client는 Debug 엔진과 `fmodL_vc.lib`/`fmodL.dll`을, Release Client는
-Release 엔진과 `fmod_vc.lib`/`fmod.dll`을 사용한다. 런타임 라이브러리 설정
-(`/MDd`, `/MD`)도 구성을 맞춘다.
+Release 엔진과 `fmod_vc.lib`/`fmod.dll`을 사용한다. 런타임 라이브러리 설정도 구성을 맞춘다.
+Debug는 `/MDd`이고 Release는 정적 CRT인 `/MT`다. 이 저장소의 `Directory.Build.props`가
+Release 엔진 프로젝트 전체에 `/MT`를 지정하므로 Release 소비 프로젝트도 `/MT`로 빌드해야 한다
+(섞으면 LNK2038). Release 결과물은 Visual C++ 재배포 패키지(`VCRUNTIME140.dll`, `MSVCP140.dll`)가
+필요 없다.
 
 자동 링크를 사용하지 않으려면 Client 전처리기에
 `PHANTOMCORE_NO_AUTOLINK`를 정의하고 필요한 라이브러리를 직접 링크한다.
