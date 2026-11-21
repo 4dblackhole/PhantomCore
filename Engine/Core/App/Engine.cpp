@@ -360,7 +360,8 @@ static int RunClient(std::unique_ptr<IGameClient> client,
                     config.windowTitle,
                     config.windowWidth,
                     config.windowHeight,
-                    config.showWindow},
+                    config.showWindow,
+                    config.windowMode},
                 input);
 
             renderer.Initialize(

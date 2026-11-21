@@ -85,6 +85,7 @@ namespace
                 for (std::size_t j = i + 1; j < modes.size(); ++j)
                     Check(modes[i] != modes[j], "Deduplicate refresh rates.");
             Check(window_->SetClientSize({960, 540}, error) && error.empty(), "Native resize accepted.");
+            TestWindowModes();
             Check(!report_.resized, "OnResize is deferred outside initialization.");
         }
         bool Update(const UpdateContext &context) override
@@ -156,6 +157,53 @@ namespace
             editor.reset();
             Check(!IsWindow(child), "Editor owns and releases native control.");
         }
+        // Runs on the hidden 960x540 window and leaves it Windowed at that size.
+        void TestWindowModes()
+        {
+            HWND native = FindWindowW(L"PhantomCore.D3D12.Window", nullptr);
+            MONITORINFO monitor{};
+            monitor.cbSize = sizeof(monitor);
+            Check(GetMonitorInfoW(MonitorFromWindow(native, MONITOR_DEFAULTTONEAREST), &monitor) != FALSE,
+                  "Read the test monitor.");
+            const RECT screen = monitor.rcMonitor;
+            const LONG screenWidth = screen.right - screen.left;
+            const LONG screenHeight = screen.bottom - screen.top;
+            Check(screenWidth > 960 && screenHeight > 540, "The window mode test needs a monitor larger than 960x540.");
+            const auto framed = [native] { return (GetWindowLongPtrW(native, GWL_STYLE) & WS_CAPTION) == WS_CAPTION; };
+            const auto outer = [native]
+            {
+                RECT rectangle{};
+                GetWindowRect(native, &rectangle);
+                return rectangle;
+            };
+            std::string error;
+            Check(window_->Mode() == WindowMode::Windowed && framed(), "A window starts framed.");
+
+            Check(window_->SetMode(WindowMode::Borderless, error) && window_->Mode() == WindowMode::Borderless,
+                  "Borderless mode accepted.");
+            Check(!framed() && window_->ClientSize() == WindowResolution{960, 540},
+                  "Borderless drops the frame and keeps the client size.");
+            Check(outer().left - screen.left == (screenWidth - 960) / 2 &&
+                      outer().top - screen.top == (screenHeight - 540) / 2,
+                  "Borderless centres the picture on its monitor.");
+            Check(FindWindowW(L"PhantomCore.D3D12.Backdrop", nullptr) == nullptr,
+                  "A hidden window shows no backdrop.");
+
+            Check(window_->SetMode(WindowMode::Windowed, error) && framed(), "Windowed mode restores the frame.");
+            Check(window_->ClientSize() == WindowResolution{960, 540}, "Changing the mode keeps the client size.");
+            const WindowResolution full{static_cast<std::uint32_t>(screenWidth),
+                                        static_cast<std::uint32_t>(screenHeight)};
+            Check(window_->SetClientSize(full, error) && !framed(),
+                  "A windowed size that covers the monitor has no frame.");
+            Check(outer().left == screen.left && outer().top == screen.top && window_->ClientSize() == full,
+                  "A monitor-sized picture fills the monitor.");
+            Check(window_->SetClientSize({960, 540}, error) && framed(),
+                  "A smaller windowed size gets its frame back.");
+            const RECT restored = outer();
+            const bool onScreen = restored.left >= monitor.rcWork.left && restored.top >= monitor.rcWork.top;
+            Check(onScreen && window_->ClientSize() == WindowResolution{960, 540},
+                  "The framed window returns inside the work area.");
+        }
         ResizeReport &report_;
         IWindowControl *window_{};
     };
@@ -166,6 +214,6 @@ int TestWindowControl()
     const auto result = Run(std::make_unique<ResizeClient>(report));
     if (result != 0 || !report.resized || !report.rendered || !report.shutdown)
         return 1;
-    std::cout << "Native Unicode input/IME lifecycle, window resize, display modes and renderer notification passed.\n";
+    std::cout << "Native Unicode input/IME lifecycle, window resize, window modes, display modes and renderer notification passed.\n";
     return 0;
 }
