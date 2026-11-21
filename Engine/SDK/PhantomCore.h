@@ -965,6 +965,7 @@ class ITextInput
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -975,6 +976,14 @@ struct WindowResolution
 {
     std::uint32_t width{}, height{};
     bool operator==(const WindowResolution &) const = default;
+};
+
+// Where the client area (the game picture) sits: its top-left corner in
+// pixels from the top-left corner of the monitor the window is on.
+struct WindowPosition
+{
+    std::int32_t x{}, y{};
+    bool operator==(const WindowPosition &) const = default;
 };
 
 // How the game window sits on its monitor. The client size is the game
@@ -1005,6 +1014,28 @@ class IWindowControl
     {
         error = "This window cannot change its mode.";
         return mode == Mode();
+    }
+    // Pixel size of the monitor the window is on; zero when there is none.
+    [[nodiscard]] virtual WindowResolution MonitorSize() const noexcept { return {}; }
+    // Where the client area is now.
+    [[nodiscard]] virtual WindowPosition Position() const noexcept { return {}; }
+    // Remembers a position and moves the window there; an empty value forgets
+    // it and returns to the default placement of the mode. A position that
+    // does not fit is brought to the nearest one that does: Borderless keeps
+    // the whole picture on the monitor, Windowed keeps the framed window
+    // inside the work area. The remembered position also applies to later
+    // size and mode changes.
+    [[nodiscard]] virtual bool SetPosition(std::optional<WindowPosition> position, std::string &error)
+    {
+        error = "This window cannot be moved.";
+        return !position.has_value();
+    }
+    // True once after the user finished dragging the framed window; the
+    // position is where it ended up and is remembered like SetPosition.
+    [[nodiscard]] virtual bool TakeUserMove(WindowPosition &position) noexcept
+    {
+        static_cast<void>(position);
+        return false;
     }
     // Optional for offscreen/test implementations. The caller owns the editor.
     [[nodiscard]] virtual std::unique_ptr<ITextInput> CreateTextInput() { return {}; }
@@ -3616,6 +3647,8 @@ struct EngineConfig
     std::uint32_t windowWidth{1280};
     std::uint32_t windowHeight{720};
     WindowMode windowMode{WindowMode::Windowed};
+    // Client-area position on the monitor; empty uses the mode's default placement.
+    std::optional<WindowPosition> windowPosition{};
     ClearColor clearColor{
         240.0F / 255.0F,
         248.0F / 255.0F,
