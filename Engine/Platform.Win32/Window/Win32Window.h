@@ -17,6 +17,7 @@ struct WindowConfig
     std::uint32_t clientWidth{1280};
     std::uint32_t clientHeight{720};
     bool visible{true};
+    WindowMode mode{WindowMode::Windowed};
 };
 
 struct WindowSize
@@ -42,6 +43,8 @@ public:
     [[nodiscard]] WindowResolution ClientSize() const noexcept override;
     [[nodiscard]] std::vector<WindowResolution> DisplayResolutions() const override;
     [[nodiscard]] bool SetClientSize(WindowResolution size, std::string &error) override;
+    [[nodiscard]] WindowMode Mode() const noexcept override;
+    [[nodiscard]] bool SetMode(WindowMode mode, std::string &error) override;
     [[nodiscard]] std::unique_ptr<ITextInput> CreateTextInput() override;
 
     [[nodiscard]] HWND Handle() const noexcept;
@@ -73,9 +76,14 @@ private:
     void UpdateMousePosition() noexcept;
     void ReleaseMouseCapture();
     void RefreshDisplayRate() noexcept;
+    [[nodiscard]] bool Place(WindowResolution size, WindowMode mode, std::string &error);
+    void UpdateBackdrop() noexcept;
 
     HINSTANCE instance_{};
     HWND window_{};
+    // Black window behind a Borderless picture that is smaller than its monitor.
+    HWND backdrop_{};
+    WindowMode mode_{WindowMode::Windowed};
     InputState* input_{};
     std::uint32_t clientWidth_{};
     std::uint32_t clientHeight_{};

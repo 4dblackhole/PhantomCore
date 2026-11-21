@@ -37,6 +37,7 @@ struct EngineConfig
     std::wstring windowTitle{L"My Rhythm Game"};
     std::uint32_t windowWidth{1280};
     std::uint32_t windowHeight{720};
+    WindowMode windowMode{WindowMode::Windowed};
     ClearColor clearColor{
         240.0F / 255.0F,
         248.0F / 255.0F,

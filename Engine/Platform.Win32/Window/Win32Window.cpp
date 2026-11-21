@@ -16,6 +16,51 @@ namespace PhantomCore
 namespace
 {
     constexpr wchar_t WindowClassName[] = L"PhantomCore.D3D12.Window";
+    constexpr wchar_t BackdropClassName[] = L"PhantomCore.D3D12.Backdrop";
+    constexpr DWORD FramedStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
+    // The system menu and minimize box keep Alt+F4 and taskbar minimize.
+    constexpr DWORD FramelessStyle =
+        WS_POPUP | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
+
+    // The backdrop never takes activation; a click on it returns to the game
+    // window stored in its user data.
+    LRESULT CALLBACK BackdropProcedure(
+        const HWND window,
+        const UINT message,
+        const WPARAM wParam,
+        const LPARAM lParam)
+    {
+        if (message == WM_MOUSEACTIVATE)
+        {
+            const auto game = reinterpret_cast<HWND>(
+                GetWindowLongPtrW(window, GWLP_USERDATA));
+            if (game != nullptr)
+            {
+                SetForegroundWindow(game);
+            }
+            return MA_NOACTIVATEANDEAT;
+        }
+        return DefWindowProcW(window, message, wParam, lParam);
+    }
+
+    [[nodiscard]] LONG Width(const RECT& rectangle) noexcept
+    {
+        return rectangle.right - rectangle.left;
+    }
+
+    [[nodiscard]] LONG Height(const RECT& rectangle) noexcept
+    {
+        return rectangle.bottom - rectangle.top;
+    }
+
+    // Top-left that centres an extent inside [low, high), never before low.
+    [[nodiscard]] LONG Centered(
+        const LONG low,
+        const LONG high,
+        const LONG extent) noexcept
+    {
+        return low + std::max<LONG>((high - low - extent) / 2, 0);
+    }
 
     std::runtime_error MakeWin32Error(const char* operation)
     {
@@ -115,10 +160,16 @@ Win32Window::~Win32Window()
         DestroyWindow(window_);
         window_ = nullptr;
     }
+    if (backdrop_ != nullptr)
+    {
+        DestroyWindow(backdrop_);
+        backdrop_ = nullptr;
+    }
 
     if (instance_ != nullptr)
     {
         UnregisterClassW(WindowClassName, instance_);
+        UnregisterClassW(BackdropClassName, instance_);
     }
 }
 
@@ -151,13 +202,27 @@ void Win32Window::Initialize(const WindowConfig& config, InputState& input)
         }
     }
 
+    WNDCLASSEXW backdropClass{};
+    backdropClass.cbSize = sizeof(backdropClass);
+    backdropClass.lpfnWndProc = BackdropProcedure;
+    backdropClass.hInstance = instance_;
+    backdropClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    backdropClass.hbrBackground =
+        static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    backdropClass.lpszClassName = BackdropClassName;
+    if (RegisterClassExW(&backdropClass) == 0 &&
+        GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+    {
+        throw MakeWin32Error("RegisterClassExW");
+    }
+
     RECT windowRectangle{
         0,
         0,
         static_cast<LONG>(config.clientWidth),
         static_cast<LONG>(config.clientHeight)};
 
-    constexpr DWORD windowStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
+    constexpr DWORD windowStyle = FramedStyle;
     if (!AdjustWindowRect(&windowRectangle, windowStyle, FALSE))
     {
         throw MakeWin32Error("AdjustWindowRect");
@@ -187,8 +252,17 @@ void Win32Window::Initialize(const WindowConfig& config, InputState& input)
     RegisterRawInputDevices();
     RefreshDisplayRate();
 
+    // The window was created framed at the default position. Place it for
+    // the requested mode, or without a frame when its size covers the monitor.
+    std::string placementError;
+    if (!Place({config.clientWidth, config.clientHeight}, config.mode, placementError))
+    {
+        throw std::runtime_error(placementError);
+    }
+
     ShowWindow(window_, config.visible ? SW_SHOW : SW_HIDE);
     UpdateWindow(window_);
+    UpdateBackdrop();
 }
 
 bool Win32Window::PumpMessages()
@@ -261,8 +335,50 @@ bool Win32Window::SetClientSize(WindowResolution size, std::string &error)
         error = "Window dimensions must be within 1..16384 pixels.";
         return false;
     }
-    RECT outer{0, 0, static_cast<LONG>(size.width), static_cast<LONG>(size.height)};
-    const auto style = static_cast<DWORD>(GetWindowLongPtrW(window_, GWL_STYLE));
+    return Place(size, mode_, error);
+}
+
+WindowMode Win32Window::Mode() const noexcept
+{
+    return mode_;
+}
+
+bool Win32Window::SetMode(const WindowMode mode, std::string &error)
+{
+    error.clear();
+    if (!window_)
+    {
+        error = "The window is closed.";
+        return false;
+    }
+    return Place(ClientSize(), mode, error);
+}
+
+// Gives the window the frame and position its mode asks for:
+// - a client size that covers the monitor, in either mode: no frame, at the monitor's top-left;
+// - Borderless: no frame, centred on the monitor;
+// - Windowed: framed. It stays where it is while it fits the work area and is centred there otherwise,
+//   so the title bar never ends up off screen.
+bool Win32Window::Place(const WindowResolution size, const WindowMode mode, std::string &error)
+{
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof(monitor);
+    if (!GetMonitorInfoW(MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST), &monitor))
+    {
+        error = MakeWin32Error("GetMonitorInfoW").what();
+        return false;
+    }
+    const RECT &screen = monitor.rcMonitor;
+    const RECT &work = monitor.rcWork;
+    const auto width = static_cast<LONG>(size.width);
+    const auto height = static_cast<LONG>(size.height);
+    const bool coversMonitor = width >= Width(screen) && height >= Height(screen);
+    const bool framed = mode == WindowMode::Windowed && !coversMonitor;
+
+    const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrW(window_, GWL_STYLE));
+    const bool wasFramed = (oldStyle & WS_CAPTION) == WS_CAPTION;
+    const DWORD style = (framed ? FramedStyle : FramelessStyle) | (oldStyle & WS_VISIBLE);
+    RECT outer{0, 0, width, height};
     const auto extended = static_cast<DWORD>(GetWindowLongPtrW(window_, GWL_EXSTYLE));
     if (!AdjustWindowRectEx(&outer, style, GetMenu(window_) != nullptr, extended))
     {
@@ -271,13 +387,90 @@ bool Win32Window::SetClientSize(WindowResolution size, std::string &error)
     }
     if (IsZoomed(window_))
         ShowWindow(window_, SW_RESTORE);
-    if (!SetWindowPos(window_, nullptr, 0, 0, outer.right - outer.left, outer.bottom - outer.top,
-                      SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE))
+
+    LONG left = coversMonitor ? screen.left : Centered(screen.left, screen.right, Width(outer));
+    LONG top = coversMonitor ? screen.top : Centered(screen.top, screen.bottom, Height(outer));
+    if (framed)
+    {
+        RECT current{};
+        const bool hasPosition = wasFramed && GetWindowRect(window_, &current);
+        const bool fitsAcross = current.left >= work.left && current.left + Width(outer) <= work.right;
+        const bool fitsDown = current.top >= work.top && current.top + Height(outer) <= work.bottom;
+        const bool keepPosition = hasPosition && fitsAcross && fitsDown;
+        left = keepPosition ? current.left : Centered(work.left, work.right, Width(outer));
+        top = keepPosition ? current.top : Centered(work.top, work.bottom, Height(outer));
+    }
+
+    // The mode is published before the move so the size and position
+    // messages it sends already see the new mode.
+    const WindowMode previousMode = mode_;
+    mode_ = mode;
+    SetWindowLongPtrW(window_, GWL_STYLE, static_cast<LONG_PTR>(style));
+    if (!SetWindowPos(window_, nullptr, left, top, Width(outer), Height(outer),
+                      SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED))
     {
         error = MakeWin32Error("SetWindowPos").what();
+        mode_ = previousMode;
+        SetWindowLongPtrW(window_, GWL_STYLE, static_cast<LONG_PTR>(oldStyle));
+        SetWindowPos(window_, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         return false;
     }
+    UpdateBackdrop();
     return true;
+}
+
+// Shows the black backdrop directly behind a visible Borderless window that
+// leaves part of its monitor uncovered, and hides it otherwise.
+void Win32Window::UpdateBackdrop() noexcept
+{
+    const bool unused = mode_ != WindowMode::Borderless && backdrop_ == nullptr;
+    if (window_ == nullptr || unused)
+    {
+        return;
+    }
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof(monitor);
+    RECT client{};
+    const bool measured =
+        GetMonitorInfoW(MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST), &monitor) &&
+        GetClientRect(window_, &client);
+    const RECT &screen = monitor.rcMonitor;
+    const bool shown = IsWindowVisible(window_) && !IsIconic(window_);
+    const bool uncovered = Width(client) < Width(screen) || Height(client) < Height(screen);
+    const bool needed = mode_ == WindowMode::Borderless && measured && shown;
+    if (!needed || !uncovered)
+    {
+        if (backdrop_ != nullptr)
+        {
+            ShowWindow(backdrop_, SW_HIDE);
+        }
+        return;
+    }
+    if (backdrop_ == nullptr)
+    {
+        backdrop_ = CreateWindowExW(
+            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+            BackdropClassName,
+            L"",
+            WS_POPUP,
+            screen.left,
+            screen.top,
+            Width(screen),
+            Height(screen),
+            nullptr,
+            nullptr,
+            instance_,
+            nullptr);
+        if (backdrop_ == nullptr)
+        {
+            return;
+        }
+        SetWindowLongPtrW(backdrop_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window_));
+    }
+    // Inserting after the game window keeps the backdrop directly behind it.
+    SetWindowPos(backdrop_, window_, screen.left, screen.top, Width(screen), Height(screen),
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
 }
 
 HWND Win32Window::Handle() const noexcept
@@ -413,10 +606,19 @@ LRESULT Win32Window::WindowProcedure(
         // The same monitor may now run a mode with the same whole-number rate.
         rateMonitor_ = nullptr;
         RefreshDisplayRate();
+        // The monitor may have a new size: centre or fill it again.
+        if (!IsIconic(window_) && !IsZoomed(window_))
+        {
+            std::string ignored;
+            static_cast<void>(Place(ClientSize(), mode_, ignored));
+        }
         break;
 
     case WM_WINDOWPOSCHANGED:
         RefreshDisplayRate();
+        // Keeps the backdrop behind the game window when it is raised,
+        // minimized or restored.
+        UpdateBackdrop();
         break;
 
     case WM_SYSCOMMAND:
@@ -441,6 +643,11 @@ LRESULT Win32Window::WindowProcedure(
 
     case WM_DESTROY:
         ReleaseMouseCapture();
+        if (backdrop_ != nullptr)
+        {
+            DestroyWindow(backdrop_);
+            backdrop_ = nullptr;
+        }
         window_ = nullptr;
         PostQuitMessage(0);
         return 0;
