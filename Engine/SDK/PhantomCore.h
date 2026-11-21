@@ -2220,6 +2220,7 @@ private:
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 
 
@@ -2314,6 +2315,10 @@ public:
     // the GPU texture while this manager owns the game-facing registry.
     [[nodiscard]] ImageHandle RegisterImage(const std::filesystem::path& path);
     [[nodiscard]] Size GetImageSize(ImageHandle image) const noexcept;
+    // Pixel images through the renderer (see Visual2DRenderSystem::CreatePixelImage).
+    [[nodiscard]] ImageHandle CreatePixelImage(std::uint32_t width, std::uint32_t height,
+                                               std::span<const std::uint8_t> rgba8);
+    void ReleaseImage(ImageHandle image) noexcept;
 
     void Update(double elapsedSeconds);
     void Render(const RenderContext& context);
@@ -3074,6 +3079,7 @@ public:
 protected:
     TextureSet() = default;
     void AppendInfo(TextureInfo info);
+    void ReplaceInfo(std::size_t index, TextureInfo info);
 
 private:
     std::vector<TextureInfo> textureInfo_;
@@ -3122,6 +3128,17 @@ public:
     // Append into the same descriptor table while retaining existing slots.
     [[nodiscard]] TextureSetHandle AppendTexture(
         const TextureSetHandle& textureSet, const std::filesystem::path& path);
+    // Pixel textures: tightly packed RGBA8 rows, top row first, exactly width * height * 4 bytes.
+    // The pixels are copied. Like files, they must be created on the render thread; a wrong size
+    // throws std::invalid_argument before any upload is recorded.
+    [[nodiscard]] TextureSetHandle CreateTextureSet(
+        std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8);
+    [[nodiscard]] TextureSetHandle AppendTexture(const TextureSetHandle& textureSet,
+        std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8);
+    // Puts new pixels in slot index of a set. The caller guarantees that no submitted frame still
+    // samples that slot (Visual2D retires released image slots through its frame ring first).
+    void ReplaceTexture(const TextureSetHandle& textureSet, std::size_t index,
+        std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8);
     [[nodiscard]] RenderTargetTextureHandle CreateRenderTargetTexture(
         std::uint32_t width, std::uint32_t height);
 
@@ -3437,10 +3454,14 @@ private:
 
 #include <cstdint>
 #include <filesystem>
+#include <span>
 
 
 namespace PhantomCore
 {
+// Pixel images alive at once in one renderer; their texture slots are reused after release.
+inline constexpr std::size_t MaxPixelImages = 128;
+
 class Visual2DRenderSystem
 {
 public:
@@ -3467,6 +3488,25 @@ public:
     // ratios when scaling to a game-specific target width or height.
     [[nodiscard]] virtual Size GetImageSize(
         ImageHandle image) const noexcept = 0;
+
+    // Creates an image from CPU pixels: tightly packed RGBA8 rows, top row first, exactly
+    // width * height * 4 bytes (copied). Use it like a file image in sprites and draw packets.
+    // Call on the engine thread (Initialize, Update or Render). It lives until ReleaseImage or
+    // renderer shutdown. Throws std::invalid_argument for an empty size or a wrong byte count and
+    // std::length_error while MaxPixelImages slots are alive or still waiting for their frames
+    // (see ReleaseImage). A backend without textures (a test fake) returns an empty handle;
+    // draw nothing or fall back on that.
+    [[nodiscard]] virtual ImageHandle CreatePixelImage(
+        std::uint32_t, std::uint32_t, std::span<const std::uint8_t>)
+    {
+        return {};
+    }
+    // Releases an image made by CreatePixelImage; file images and unknown handles are ignored.
+    // Frames already submitted keep sampling it, so its slot is reused only after the frame ring
+    // has passed them. Packets that still name it after release draw nothing.
+    virtual void ReleaseImage(ImageHandle) noexcept
+    {
+    }
 
     // Renders a centered, Y-up Canvas at pixel size. screenOrigin remains
     // the Canvas panel's top-left point in Win32 screen pixels. A larger

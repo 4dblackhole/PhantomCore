@@ -22,11 +22,15 @@
 #include <cstring>
 #include <cmath>
 #include <cwctype>
+#include <deque>
 #include <filesystem>
 #include <limits>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -149,6 +153,16 @@ struct D3D12Visual2DRenderer::Impl
     struct ImagePage
     {
         TextureSetHandle textures;
+        // Pixel pages hold CreatePixelImage textures; file images never share them.
+        bool pixels{};
+    };
+
+    // A released pixel image slot waits until every frame that could sample it has completed.
+    struct RetiredPixelSlot
+    {
+        std::uint32_t pageIndex{};
+        std::uint32_t textureIndex{};
+        std::uint64_t reusableAt{};
     };
 
     struct CanvasDrawing
@@ -368,6 +382,10 @@ struct D3D12Visual2DRenderer::Impl
         imagesByHandle.clear();
         imageHandlesByPath.clear();
         imagePages.clear();
+        fileImagePage.reset();
+        pixelImages.clear();
+        freePixelSlots.clear();
+        retiredPixelSlots.clear();
         renderTargetsInFlight = {};
         nextImageHandle = 1;
         imageMesh.reset();
@@ -427,34 +445,116 @@ struct D3D12Visual2DRenderer::Impl
             return ImageHandle{existing->second};
         }
 
-        const bool requiresNewPage = imagePages.empty() ||
-            imagePages.back().textures->Size() >= MaxTexturesPerSet;
+        // File images fill their own pages; pixel pages may sit between them.
+        const bool requiresNewPage = !fileImagePage ||
+            imagePages[*fileImagePage].textures->Size() >= MaxTexturesPerSet;
         if (requiresNewPage)
         {
             const std::array paths{normalized};
             ImagePage page{};
             page.textures = meshRendering->Textures().LoadTextureSet(paths);
             imagePages.push_back(std::move(page));
+            fileImagePage = imagePages.size() - 1;
         }
         else
         {
-            ImagePage& page = imagePages.back();
+            ImagePage& page = imagePages[*fileImagePage];
             page.textures = meshRendering->Textures().AppendTexture(
                 page.textures,
                 normalized);
         }
 
         const std::uint64_t handleValue = nextImageHandle++;
-        const std::uint32_t pageIndex = static_cast<std::uint32_t>(
-            imagePages.size() - 1);
+        const auto pageIndex = static_cast<std::uint32_t>(*fileImagePage);
         imageHandlesByPath.emplace(cacheKey, handleValue);
         imagesByHandle.emplace(
             handleValue,
             ImageResource{
                 pageIndex,
                 static_cast<std::uint32_t>(
-                    imagePages.back().textures->Size() - 1)});
+                    imagePages[pageIndex].textures->Size() - 1)});
         return ImageHandle{handleValue};
+    }
+
+    [[nodiscard]] ImageHandle CreatePixelImage(
+        const std::uint32_t width, const std::uint32_t height, const std::span<const std::uint8_t> rgba8)
+    {
+        if (!initialized || meshRendering == nullptr)
+        {
+            throw std::logic_error("Creating a pixel image requires an initialized renderer.");
+        }
+        const std::uint64_t byteCount = static_cast<std::uint64_t>(width) * height * 4;
+        if (width == 0 || height == 0 || rgba8.size() != byteCount)
+        {
+            throw std::invalid_argument(
+                "A pixel image needs a positive size and exactly width * height * 4 RGBA8 bytes.");
+        }
+        // Slots released before the frame ring passed are free again.
+        while (!retiredPixelSlots.empty() && retiredPixelSlots.front().reusableAt <= screenRenderIndex)
+        {
+            freePixelSlots.push_back({retiredPixelSlots.front().pageIndex, retiredPixelSlots.front().textureIndex});
+            retiredPixelSlots.pop_front();
+        }
+        TextureManager& textures = meshRendering->Textures();
+        ImageResource resource{};
+        if (!freePixelSlots.empty())
+        {
+            resource = freePixelSlots.back();
+            textures.ReplaceTexture(imagePages[resource.pageIndex].textures, resource.textureIndex, width, height, rgba8);
+            freePixelSlots.pop_back();
+        }
+        else
+        {
+            std::size_t allocated = 0;
+            std::optional<std::size_t> open;
+            for (std::size_t page = 0; page < imagePages.size(); ++page)
+            {
+                if (!imagePages[page].pixels)
+                    continue;
+                const std::size_t size = imagePages[page].textures->Size();
+                allocated += size;
+                if (size < MaxTexturesPerSet)
+                    open = page;
+            }
+            if (allocated >= MaxPixelImages)
+                throw std::length_error("All pixel image slots are in use or waiting for their frames.");
+            if (open)
+            {
+                ImagePage& page = imagePages[*open];
+                page.textures = textures.AppendTexture(page.textures, width, height, rgba8);
+                resource = {static_cast<std::uint32_t>(*open), static_cast<std::uint32_t>(page.textures->Size() - 1)};
+            }
+            else
+            {
+                imagePages.push_back({textures.CreateTextureSet(width, height, rgba8), true});
+                resource = {static_cast<std::uint32_t>(imagePages.size() - 1), 0};
+            }
+        }
+        const std::uint64_t handleValue = nextImageHandle++;
+        imagesByHandle.emplace(handleValue, resource);
+        pixelImages.insert(handleValue);
+        return ImageHandle{handleValue};
+    }
+
+    void ReleaseImage(const ImageHandle image) noexcept
+    {
+        if (!image || pixelImages.erase(image.value) == 0)
+            return;
+        const auto found = imagesByHandle.find(image.value);
+        if (found == imagesByHandle.end())
+            return;
+        // The frame now being built and the ring before it may still sample the slot.
+        const ImageResource resource = found->second;
+        imagesByHandle.erase(found);
+        try
+        {
+            retiredPixelSlots.push_back(
+                {resource.pageIndex, resource.textureIndex, screenRenderIndex + D3D12Detail::FrameCount + 1});
+        }
+        catch (...)
+        {
+            // Without memory to remember it the slot stays unused; the image is already gone.
+        }
     }
 
     [[nodiscard]] Size GetImageSize(
@@ -1019,6 +1119,10 @@ struct D3D12Visual2DRenderer::Impl
     std::unordered_map<std::uint64_t, ImageResource> imagesByHandle;
     std::unordered_map<std::wstring, std::uint64_t> imageHandlesByPath;
     std::vector<ImagePage> imagePages;
+    std::optional<std::size_t> fileImagePage;
+    std::unordered_set<std::uint64_t> pixelImages;
+    std::vector<ImageResource> freePixelSlots;
+    std::deque<RetiredPixelSlot> retiredPixelSlots;
     std::uint64_t nextImageHandle{1};
     FontHandle screenFont;
     std::unordered_map<std::wstring, FontHandle> screenFonts;
@@ -1070,6 +1174,17 @@ ImageHandle D3D12Visual2DRenderer::LoadImageFile(
     const std::filesystem::path& path)
 {
     return implementation_->LoadImageFile(path);
+}
+
+ImageHandle D3D12Visual2DRenderer::CreatePixelImage(
+    const std::uint32_t width, const std::uint32_t height, const std::span<const std::uint8_t> rgba8)
+{
+    return implementation_->CreatePixelImage(width, height, rgba8);
+}
+
+void D3D12Visual2DRenderer::ReleaseImage(const ImageHandle image) noexcept
+{
+    implementation_->ReleaseImage(image);
 }
 
 Size D3D12Visual2DRenderer::GetImageSize(

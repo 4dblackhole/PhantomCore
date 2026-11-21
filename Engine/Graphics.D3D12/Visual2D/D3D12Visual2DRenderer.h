@@ -39,6 +39,9 @@ public:
     bool PrepareImages(std::span<const std::filesystem::path> paths, std::string &error) override;
     [[nodiscard]] Size GetImageSize(
         ImageHandle image) const noexcept override;
+    [[nodiscard]] ImageHandle CreatePixelImage(
+        std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8) override;
+    void ReleaseImage(ImageHandle image) noexcept override;
     void SubmitScreen(
         const Visual2DCanvas& canvas,
         const RenderContext& context,

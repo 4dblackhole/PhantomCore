@@ -144,6 +144,27 @@ Scene 전환 중 GPU 리소스 파괴 문제를 피하고 재진입 시 업로�
 향후 매우 큰 사용자 스킨을 스트리밍해야 한다면 fence 기반 퇴거 정책을
 별도의 AssetManager에 추가한다.
 
+## 픽셀 이미지
+
+`Visual2DRenderSystem::CreatePixelImage(width, height, rgba8)`는 CPU가 만든 RGBA8 픽셀(위 행부터, 정확히
+`width * height * 4`바이트, 복사함)로 이미지를 만든다. 결과 handle은 파일 이미지와 똑같이 Sprite와 draw packet에 쓴다.
+`ScreenVisual2DManager`에도 같은 이름의 전달 함수가 있다. 많은 사각형으로 그리던 그림(예: 스펙트로그램 타일)을
+텍스처 한 장으로 바꿀 때 쓴다.
+
+- 스레드: 파일 이미지와 같이 엔진 스레드(Initialize·Update·Render)에서 만들고 해제한다.
+- 페이지: 픽셀 이미지는 파일 이미지와 섞이지 않는 자기 페이지(64칸 Descriptor 블록)를 쓰며, 블록은 필요할 때 하나씩 잡는다.
+  한 번에 살아 있을 수 있는 수는 `MaxPixelImages`(128)이고, 넘으면 `std::length_error`를 던진다. 크기가 0이거나 바이트 수가
+  다르면 업로드 전에 `std::invalid_argument`를 던진다.
+- 수명: `ReleaseImage(handle)`로 놓는다. 이미 제출한 프레임이 그 칸을 샘플링할 수 있으므로, 칸은 프레임 링
+  (`FrameCount`)을 지난 뒤(놓은 렌더 인덱스 + `FrameCount` + 1)에만 다른 픽셀 이미지에 다시 쓴다. 그전까지는 용량에
+  포함된다. 놓은 handle을 아직 가리키는 packet은 아무것도 그리지 않는다. 파일 이미지와 알 수 없는 handle의 해제는 무시한다.
+- 갱신: 픽셀을 바꾸려면 새 이미지를 만들고 이전 것을 놓는다. 칸 교체(`TextureManager::ReplaceTexture`)는 렌더러가 프레임 링을
+  지난 칸에만 한다.
+- 텍스처가 없는 backend(테스트용 가짜)의 기본 구현은 빈 handle을 돌려주고 해제는 아무것도 하지 않는다.
+  호출하는 쪽은 빈 handle이면 다른 방법으로 그린다.
+
+검사: `PhantomCore.Collision.Tests.exe --pixel-images`([Testing](Testing.md)).
+
 ## 입력 소유권
 
 렌더러를 하나로 통합해도 `Visual2DInputRouter`는 Canvas별로 유지한다.

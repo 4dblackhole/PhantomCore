@@ -39,6 +39,7 @@ foreach ($configuration in 'Debug', 'Release') {
 | `--text-rendering` | 글꼴·배치 캐시·아틀라스 회수와 GPU 진단 |
 | `--text-pixels` | 글자 합성 픽셀 |
 | `--visual2d-pixels` | Canvas의 사각형·이미지·글자 합성 순서와 깊이, 월드 패널 |
+| `--pixel-images` | CPU 픽셀 이미지의 화면 색, 잘못된 크기 거부, 용량 상한, 놓은 칸의 프레임 링 뒤 재사용과 새 픽셀 |
 | `--image-readback` | 완료 프레임의 RGBA 읽기와 취소 |
 | `--draw-statistics` | 성능 표본의 프레임당 draw 수 |
 | `--render-rate` | 실행 중 렌더 속도 모드 전환: 기준 속도의 1배·2배에서 Render 횟수, 무제한에서 Update마다 Render |
