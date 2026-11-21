@@ -279,6 +279,8 @@ D3D12·DXGI·DirectWrite·WIC 실패는 내부 `Renderer/D3D12Error.h`의 `Throw
 `TextureSet`은 이 리소스의 SRV descriptor 묶음이며 D3D11/12의 동일 크기
 `Texture2DArray`가 아니다. 인스턴스마다 texture index와 UV transform을 바꿀 수
 있다. `MakeCoverUvTransform`은 비율이 다른 표면을 빈 공간 없이 중앙 crop한다.
+CPU가 만든 RGBA8 픽셀은 `CreatePixelImage`/`ReleaseImage`로 같은 이미지 handle이 되며, 놓은 칸은 프레임 링을
+지난 뒤에만 다시 쓴다([Visual2DRendererLifecycle](Visual2DRendererLifecycle.md#픽셀-이미지)).
 
 ## 8. Visual2D·Sprite·위젯·곡면
 
