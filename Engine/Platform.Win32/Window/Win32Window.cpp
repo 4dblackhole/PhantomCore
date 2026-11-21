@@ -351,6 +351,14 @@ LRESULT Win32Window::WindowProcedure(
         RefreshDisplayRate();
         break;
 
+    case WM_SYSCOMMAND:
+        // Alt or F10 alone would enter the modal window-menu loop, which stops the game loop until the
+        // menu is dismissed; games keep Alt as a modifier (for example Alt+wheel). Alt+Space, which names
+        // a key in lParam, still opens the system menu.
+        if ((wParam & 0xFFF0) == SC_KEYMENU && lParam == 0)
+            return 0;
+        break;
+
     case WM_SETCURSOR:
         if (mouseCaptured_ && LOWORD(lParam) == HTCLIENT)
         {
