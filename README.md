@@ -93,6 +93,9 @@ submodule 내부의 `Engine/SDK/PhantomCore.vcxproj`만 참조하며 엔진의 �
 실행 중 창 크기 변경과 모니터 해상도 조회는 EngineServices의 비소유
 [IWindowControl 서비스](Docs/WindowControl.md)를 사용합니다. 게임별 저장 정책은 Client가 소유합니다.
 
+Render 호출 빈도는 모니터 실제 주사율의 1배·2배·무제한 가운데 고릅니다(`EngineConfig::renderRateMode`,
+실행 중에는 `EngineServices::renderRateControl`). 계약은 [EngineOverview](Docs/EngineOverview.md)의 시간·입력·렌더 스케줄에 있습니다.
+
 오디오 재생과 외부 파형 분석은 공통 `DecodeAudioPcm` 시간축을 사용할 수 있습니다. MP3 패딩 처리와 메모리 비용은 [AudioPlayback](Docs/AudioPlayback.md#공통-pcm-시간축)을 참고합니다.
 
 고정 속도 PCM 음정 유지와 원본 좌표 탐색은 [AudioPlayback](Docs/AudioPlayback.md)의 PrepareTimeStretch를 참고합니다.

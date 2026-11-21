@@ -106,7 +106,7 @@ Client wWinMain
    → AudioSystem과 선택한 backend 생성
    → EngineServices의 비소유 참조를 Client에 전달
    → Client Initialize
-   → Update는 가능한 한 자주, Render는 주사율 deadline에만 실행
+   → Update는 가능한 한 자주, Render는 렌더 속도 모드의 deadline에만 실행
    → renderer.WaitForGpu()
    → Client Shutdown
    → AudioSystem Shutdown
@@ -178,8 +178,17 @@ Client(YOUMU) 쪽 구조 그림은 Client 저장소 `Docs/Architecture/Overview.
 ## 5. 시간·입력·렌더 스케줄
 
 - `Update`는 `Sleep`이나 VSync 대기 없이 가능한 한 자주 호출된다.
-- `Render`는 모니터 명목 주사율 또는 Client가 설정한 render deadline에 도달할
-  때만 호출된다.
+- `Render`는 `RenderSchedule`(`Engine/Core/App/RenderSchedule.h`)의 마감에 도달할 때만 호출된다. 기준 속도는 창이
+  있는 모니터의 주사율이고 Client가 `EngineConfig::renderRateOverrideHz`로 바꿀 수 있다. `RenderRateMode`가 그 기준의
+  1배(`Display`), 2배(`DisplayDouble`), 무제한(`Unlimited`: Update 한 번마다 Render 한 번)을 고른다.
+- 렌더 속도 모드의 시작 값은 `EngineConfig::renderRateMode`이고, 실행 중에는 `EngineServices::renderRateControl`
+  (`IRenderRateControl`, Run 소유)로 바꾼다. 게임 루프 스레드에서 호출하며 다음 루프부터 적용된다.
+- 모니터 주사율은 `QueryDisplayConfig`가 주는 분수 값(예: 59.94 Hz, 143.98 Hz)을 쓴다. 정수로 잘린 명목 값으로
+  렌더하면 화면 갱신과 약 1 Hz 어긋나 1초쯤마다 한 프레임이 겹치거나 빠진다. 분수 값을 얻지 못하면 명목 값을 쓴다.
+- 마감보다 한 간격 넘게 늦으면 밀린 프레임을 몰아서 그리지 않고 마감을 지금부터 다시 잡는다.
+- 입력 이벤트의 QPC 시각은 루프가 창 메시지를 처리할 때 정해진다. 제한 모드에서는 Update만 도는 루프가 메시지를
+  촘촘히 처리하지만, `Unlimited`에서는 모든 루프에 Render가 들어가므로 입력 시각의 오차가 프레임 한 장의 시간까지
+  늘 수 있다. 판정 정밀도가 중요한 Client는 이 점을 사용자에게 알리거나 제한 모드를 기본으로 둔다.
 - 오디오 service update는 별도 deadline을 사용하며 렌더 속도를 제한하지 않는다.
 - 키보드·마우스의 기준 입력은 Win32 Raw Input이다.
 - Alt나 F10만 눌렀다 떼도 창 메뉴 루프(`SC_KEYMENU`)에 들어가지 않는다. 그 모달 루프는 Update를 멈추고

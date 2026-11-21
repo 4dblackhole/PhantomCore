@@ -22,10 +22,12 @@
     <ClCompile Include="CpuTestsMain.cpp"></ClCompile>
     <ClCompile Include="Collision\CollisionTests.cpp"><Filter>Collision</Filter></ClCompile>
     <ClCompile Include="App\InputStateTests.cpp"><Filter>App</Filter></ClCompile>
+    <ClCompile Include="App\RenderScheduleTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="Audio\AudioMixerClockTests.cpp"><Filter>Audio</Filter></ClCompile>
     <ClInclude Include="Audio\AudioMixerClockTests.h"><Filter>Audio</Filter></ClInclude>
     <ClInclude Include="Collision\CollisionTests.h"><Filter>Collision</Filter></ClInclude>
     <ClInclude Include="App\InputStateTests.h"><Filter>App</Filter></ClInclude>
+    <ClInclude Include="App\RenderScheduleTests.h"><Filter>App</Filter></ClInclude>
     <ClCompile Include="..\Engine\Core\System\Camera.cpp"><Filter>Engine\Core\System</Filter></ClCompile>
     <ClCompile Include="..\Engine\Core\System\TransformNode.cpp"><Filter>Engine\Core\System</Filter></ClCompile>
     <ClCompile Include="..\Engine\Core\Visual2D\Visual2DNode.cpp"><Filter>Engine\Core\Visual2D</Filter></ClCompile>

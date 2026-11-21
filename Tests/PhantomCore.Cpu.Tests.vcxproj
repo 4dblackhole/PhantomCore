@@ -64,10 +64,12 @@
     <ClCompile Include="Collision\Visual2DUpdateTests.cpp" />
     <ClInclude Include="Collision\Visual2DUpdateTests.h" />
     <ClCompile Include="App\InputStateTests.cpp" />
+    <ClCompile Include="App\RenderScheduleTests.cpp" />
     <ClCompile Include="Audio\AudioMixerClockTests.cpp" />
     <ClInclude Include="Audio\AudioMixerClockTests.h" />
     <ClInclude Include="Collision\CollisionTests.h" />
     <ClInclude Include="App\InputStateTests.h" />
+    <ClInclude Include="App\RenderScheduleTests.h" />
     <ClCompile Include="..\Engine\Core\System\Camera.cpp" />
     <ClCompile Include="..\Engine\Core\System\TransformNode.cpp" />
     <ClCompile Include="..\Engine\Core\Visual2D\Visual2DNode.cpp" />

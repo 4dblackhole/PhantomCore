@@ -36,6 +36,7 @@
     <CorePublicHeader Include="Engine\Core\Rendering\ImageReadback.h" />
     <CorePublicHeader Include="Engine\Core\Rendering\RenderContext.h" />
     <CorePublicHeader Include="Engine\Graphics.D3D12\Visual2D\Visual2DRendering.h" />
+    <CorePublicHeader Include="Engine\Core\App\RenderSchedule.h" />
     <CorePublicHeader Include="Engine\Core\Client\IGameClient.h" />
     <CorePublicHeader Include="Engine\Core\System\HighResolutionClock.h" />
     <CorePublicHeader Include="Engine\Core\System\Camera.h" />

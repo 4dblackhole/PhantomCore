@@ -1,5 +1,6 @@
 #pragma once
 
+#include "App/RenderSchedule.h"
 #include "Input/Input.h"
 #include "Mesh/MeshRendering.h"
 #include "Rendering/RenderContext.h"
@@ -46,7 +47,10 @@ struct EngineConfig
     AudioBackendFactory audioBackendFactory{};
     AudioClipBackendFactory audioClipBackendFactory{};
     double audioUpdateRateHz{500.0};
+    // Base render rate in Hz; zero or less uses the display refresh rate.
     double renderRateOverrideHz{};
+    // Frames per base-rate period, or one frame per Update (Unlimited).
+    RenderRateMode renderRateMode{RenderRateMode::Display};
     double maximumUpdateDeltaSeconds{0.1};
 
     // Hidden runs also suppress modal fatal-error dialogs; errors remain logged.
@@ -66,6 +70,7 @@ struct EngineServices
     std::uint32_t windowWidth{};
     std::uint32_t windowHeight{};
     IWindowControl *windowControl{}; // Nullable in offscreen/test contexts.
+    IRenderRateControl *renderRateControl{}; // Nullable in offscreen/test contexts.
 };
 
 // One Update invocation. deltaSeconds is QPC-derived and clamped by

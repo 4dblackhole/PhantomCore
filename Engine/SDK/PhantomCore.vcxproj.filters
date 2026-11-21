@@ -131,6 +131,7 @@
     <ClInclude Include="..\Core\Client\IGameClient.h"><Filter>Core\Client</Filter></ClInclude>
     <ClInclude Include="..\Core\Client\SceneGameClient.h"><Filter>Core\Client</Filter></ClInclude>
     <ClInclude Include="..\Core\App\Engine.h"><Filter>Core\App</Filter></ClInclude>
+    <ClInclude Include="..\Core\App\RenderSchedule.h"><Filter>Core\App</Filter></ClInclude>
     <ClInclude Include="..\Core\System\Camera.h"><Filter>Core\System</Filter></ClInclude>
     <ClInclude Include="..\Core\System\HighResolutionClock.h"><Filter>Core\System</Filter></ClInclude>
     <ClInclude Include="..\Core\System\MeshInstance.h"><Filter>Core\System</Filter></ClInclude>

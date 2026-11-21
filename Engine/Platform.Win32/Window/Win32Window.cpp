@@ -3,9 +3,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cwchar>
 #include <hidusage.h>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 
 namespace PhantomCore
@@ -40,6 +43,66 @@ namespace
         }
 
         return key;
+    }
+
+    // The exact refresh rate of the display mode shown on a GDI device
+    // ("\.\DISPLAY1"), or zero when it cannot be read. DEVMODE carries
+    // only a whole number (59 for a 59.94 Hz mode); rendering at that
+    // number makes the frame deadline drift across the scan about once a
+    // second, which shows as a periodic repeated frame.
+    double ExactRefreshRate(const wchar_t* gdiDeviceName) noexcept
+    {
+        try
+        {
+            UINT32 pathCount = 0;
+            UINT32 modeCount = 0;
+            if (GetDisplayConfigBufferSizes(
+                    QDC_ONLY_ACTIVE_PATHS,
+                    &pathCount,
+                    &modeCount) != ERROR_SUCCESS)
+            {
+                return 0.0;
+            }
+            std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+            std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+            if (QueryDisplayConfig(
+                    QDC_ONLY_ACTIVE_PATHS,
+                    &pathCount,
+                    paths.data(),
+                    &modeCount,
+                    modes.data(),
+                    nullptr) != ERROR_SUCCESS)
+            {
+                return 0.0;
+            }
+            paths.resize(pathCount);
+            for (const DISPLAYCONFIG_PATH_INFO& path : paths)
+            {
+                DISPLAYCONFIG_SOURCE_DEVICE_NAME source{};
+                source.header.type =
+                    DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+                source.header.size = sizeof(source);
+                source.header.adapterId = path.sourceInfo.adapterId;
+                source.header.id = path.sourceInfo.id;
+                if (DisplayConfigGetDeviceInfo(&source.header) != ERROR_SUCCESS ||
+                    std::wcscmp(source.viewGdiDeviceName, gdiDeviceName) != 0)
+                {
+                    continue;
+                }
+                const DISPLAYCONFIG_RATIONAL rate =
+                    path.targetInfo.refreshRate;
+                if (rate.Numerator == 0 || rate.Denominator == 0)
+                {
+                    return 0.0;
+                }
+                return static_cast<double>(rate.Numerator) /
+                    static_cast<double>(rate.Denominator);
+            }
+        }
+        catch (...)
+        {
+        }
+        return 0.0;
     }
 }
 
@@ -347,6 +410,11 @@ LRESULT Win32Window::WindowProcedure(
         return 0;
 
     case WM_DISPLAYCHANGE:
+        // The same monitor may now run a mode with the same whole-number rate.
+        rateMonitor_ = nullptr;
+        RefreshDisplayRate();
+        break;
+
     case WM_WINDOWPOSCHANGED:
         RefreshDisplayRate();
         break;
@@ -611,16 +679,35 @@ void Win32Window::RefreshDisplayRate() noexcept
     DEVMODEW displayMode{};
     displayMode.dmSize = sizeof(displayMode);
 
-    double newRate = 60.0;
-    if (GetMonitorInfoW(monitor, &monitorInfo) &&
+    const bool hasMode =
+        GetMonitorInfoW(monitor, &monitorInfo) &&
         EnumDisplaySettingsExW(
             monitorInfo.szDevice,
             ENUM_CURRENT_SETTINGS,
             &displayMode,
-            0) &&
-        displayMode.dmDisplayFrequency > 1)
+            0);
+    const DWORD nominalRate = hasMode ? displayMode.dmDisplayFrequency : 0;
+
+    // Window moves arrive here often. The exact rate is queried again only
+    // when the monitor or its mode changed.
+    if (monitor == rateMonitor_ && nominalRate == nominalRateHz_)
     {
-        newRate = static_cast<double>(displayMode.dmDisplayFrequency);
+        return;
+    }
+    rateMonitor_ = monitor;
+    nominalRateHz_ = nominalRate;
+
+    double newRate = 60.0;
+    if (nominalRate > 1)
+    {
+        newRate = static_cast<double>(nominalRate);
+        const double exactRate = ExactRefreshRate(monitorInfo.szDevice);
+        // Trust the exact value only when it agrees with the mode Windows
+        // reports for this monitor.
+        if (std::abs(exactRate - newRate) < 1.0)
+        {
+            newRate = exactRate;
+        }
     }
 
     if (newRate != refreshRateHz_)

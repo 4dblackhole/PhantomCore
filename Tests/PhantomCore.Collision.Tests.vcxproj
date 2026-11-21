@@ -74,9 +74,11 @@
     <ClInclude Include="Audio\AudioMixerClockTests.h" />
     <ClInclude Include="Audio\AudioClockSnapshotTests.h" />
     <ClCompile Include="App\InputStateTests.cpp" />
+    <ClCompile Include="App\RenderScheduleTests.cpp" />
     <ClCompile Include="App\TextureLifetimeTests.cpp" />
     <ClCompile Include="App\TextureAssetTests.cpp" />
     <ClInclude Include="App\InputStateTests.h" />
+    <ClInclude Include="App\RenderScheduleTests.h" />
     <ClInclude Include="App\TextureLifetimeTests.h" />
     <ClInclude Include="App\TextureAssetTests.h" />
     <ClCompile Include="App\HeadlessRunTests.cpp" />
