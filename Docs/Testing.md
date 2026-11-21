@@ -41,6 +41,7 @@ foreach ($configuration in 'Debug', 'Release') {
 | `--visual2d-pixels` | Canvas의 사각형·이미지·글자 합성 순서와 깊이, 월드 패널 |
 | `--image-readback` | 완료 프레임의 RGBA 읽기와 취소 |
 | `--draw-statistics` | 성능 표본의 프레임당 draw 수 |
+| `--render-rate` | 실행 중 렌더 속도 모드 전환: 기준 속도의 1배·2배에서 Render 횟수, 무제한에서 Update마다 Render |
 | `--scene-manager` | 지연 전환, 보존 정책과 종료 순서 |
 | `--window-control` | 창 크기 변경과 해상도 조회 |
 | `--audio-clock` | 기본 출력에서 스냅샷 400개의 흔들림: 날 DSP clock 짝짓기와 `CaptureClockSnapshot` 비교 |

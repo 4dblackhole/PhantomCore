@@ -26,7 +26,8 @@
 - Client에 공개하는 헤더와 선언 순서는 `Engine/SDK/PublicHeaders.props` 한 곳에 적고 MSBuild와
   `Engine/SDK/GenerateCoreHeader.ps1`이 함께 씁니다. 생성된 `Engine/SDK/PhantomCore.h`를 손으로 고치지 않습니다.
 - RAII와 `Microsoft::WRL::ComPtr`를 우선합니다. API가 소유를 명시하지 않은 raw pointer는 소유하지 않는 포인터입니다.
-- 제한 없는 Update 루프, QPC 입력 시각, 렌더 마감, 독립 오디오 갱신 마감, 프레임 자원 fence 모델을 유지합니다.
+- 제한 없는 Update 루프, QPC 입력 시각, 렌더 마감(`RenderSchedule`: 실제 주사율의 1배·2배·무제한), 독립 오디오 갱신 마감,
+  프레임 자원 fence 모델을 유지합니다.
 - Raw Input은 Win32 Virtual-Key 값을 그대로 씁니다. 엔진 키 enum을 추가하지 않습니다.
 - `SceneManager`가 Scene 팩토리와 수명 정책을 소유합니다. `RegisterScene`으로 등록하고 지연된 `ChangeScene`으로 전환하며,
   Scene이 자기 자신을 지우게 하지 않습니다.
