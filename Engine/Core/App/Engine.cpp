@@ -361,7 +361,8 @@ static int RunClient(std::unique_ptr<IGameClient> client,
                     config.windowWidth,
                     config.windowHeight,
                     config.showWindow,
-                    config.windowMode},
+                    config.windowMode,
+                    config.windowPosition},
                 input);
 
             renderer.Initialize(

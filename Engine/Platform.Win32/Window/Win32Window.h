@@ -6,6 +6,7 @@
 #include <Windows.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 
@@ -18,6 +19,7 @@ struct WindowConfig
     std::uint32_t clientHeight{720};
     bool visible{true};
     WindowMode mode{WindowMode::Windowed};
+    std::optional<WindowPosition> position{};
 };
 
 struct WindowSize
@@ -45,6 +47,10 @@ public:
     [[nodiscard]] bool SetClientSize(WindowResolution size, std::string &error) override;
     [[nodiscard]] WindowMode Mode() const noexcept override;
     [[nodiscard]] bool SetMode(WindowMode mode, std::string &error) override;
+    [[nodiscard]] WindowResolution MonitorSize() const noexcept override;
+    [[nodiscard]] WindowPosition Position() const noexcept override;
+    [[nodiscard]] bool SetPosition(std::optional<WindowPosition> position, std::string &error) override;
+    [[nodiscard]] bool TakeUserMove(WindowPosition &position) noexcept override;
     [[nodiscard]] std::unique_ptr<ITextInput> CreateTextInput() override;
 
     [[nodiscard]] HWND Handle() const noexcept;
@@ -84,6 +90,10 @@ private:
     // Black window behind a Borderless picture that is smaller than its monitor.
     HWND backdrop_{};
     WindowMode mode_{WindowMode::Windowed};
+    // Client-area position the Client or a finished drag asked for; empty
+    // uses the default placement of the mode.
+    std::optional<WindowPosition> placement_{};
+    bool userMoved_{};
     InputState* input_{};
     std::uint32_t clientWidth_{};
     std::uint32_t clientHeight_{};

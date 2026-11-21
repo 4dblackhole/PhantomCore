@@ -43,7 +43,7 @@ foreach ($configuration in 'Debug', 'Release') {
 | `--draw-statistics` | 성능 표본의 프레임당 draw 수 |
 | `--render-rate` | 실행 중 렌더 속도 모드 전환: 기준 속도의 1배·2배에서 Render 횟수, 무제한에서 Update마다 Render |
 | `--scene-manager` | 지연 전환, 보존 정책과 종료 순서 |
-| `--window-control` | 창 크기 변경, 창 모드(테두리·가운데 배치·모니터 채움), 해상도 조회 |
+| `--window-control` | 창 크기 변경, 창 모드(테두리·가운데 배치·모니터 채움), 창 위치(지정·되돌림·끌어 옮김), 해상도 조회 |
 | `--audio-clock` | 기본 출력에서 스냅샷 400개의 흔들림: 날 DSP clock 짝짓기와 `CaptureClockSnapshot` 비교 |
 | `--headless-error` | 숨김 실행의 Update 예외 정리 |
 | `--audio-pcm [경로]` | 공통 PCM 디코딩과 고정 속도 변환 |

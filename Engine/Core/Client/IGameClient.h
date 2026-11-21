@@ -38,6 +38,8 @@ struct EngineConfig
     std::uint32_t windowWidth{1280};
     std::uint32_t windowHeight{720};
     WindowMode windowMode{WindowMode::Windowed};
+    // Client-area position on the monitor; empty uses the mode's default placement.
+    std::optional<WindowPosition> windowPosition{};
     ClearColor clearColor{
         240.0F / 255.0F,
         248.0F / 255.0F,
