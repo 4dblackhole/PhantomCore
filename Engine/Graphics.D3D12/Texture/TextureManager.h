@@ -54,6 +54,7 @@ public:
 protected:
     TextureSet() = default;
     void AppendInfo(TextureInfo info);
+    void ReplaceInfo(std::size_t index, TextureInfo info);
 
 private:
     std::vector<TextureInfo> textureInfo_;
@@ -102,6 +103,17 @@ public:
     // Append into the same descriptor table while retaining existing slots.
     [[nodiscard]] TextureSetHandle AppendTexture(
         const TextureSetHandle& textureSet, const std::filesystem::path& path);
+    // Pixel textures: tightly packed RGBA8 rows, top row first, exactly width * height * 4 bytes.
+    // The pixels are copied. Like files, they must be created on the render thread; a wrong size
+    // throws std::invalid_argument before any upload is recorded.
+    [[nodiscard]] TextureSetHandle CreateTextureSet(
+        std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8);
+    [[nodiscard]] TextureSetHandle AppendTexture(const TextureSetHandle& textureSet,
+        std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8);
+    // Puts new pixels in slot index of a set. The caller guarantees that no submitted frame still
+    // samples that slot (Visual2D retires released image slots through its frame ring first).
+    void ReplaceTexture(const TextureSetHandle& textureSet, std::size_t index,
+        std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8);
     [[nodiscard]] RenderTargetTextureHandle CreateRenderTargetTexture(
         std::uint32_t width, std::uint32_t height);
 

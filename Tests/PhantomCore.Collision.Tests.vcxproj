@@ -89,6 +89,8 @@
     <ClInclude Include="App\SceneManagerTests.h" />
     <ClCompile Include="App\Visual2DPixelTests.cpp" />
     <ClInclude Include="App\Visual2DPixelTests.h" />
+    <ClCompile Include="App\PixelImageTests.cpp" />
+    <ClInclude Include="App\PixelImageTests.h" />
     <ClInclude Include="App\ImageReadbackTests.h" />
     <ClInclude Include="App\HeadlessRunTests.h" />
     <ClInclude Include="App\TextRenderingTests.h" />

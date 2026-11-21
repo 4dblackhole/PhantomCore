@@ -11,10 +11,14 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <span>
 
 
 namespace PhantomCore
 {
+// Pixel images alive at once in one renderer; their texture slots are reused after release.
+inline constexpr std::size_t MaxPixelImages = 128;
+
 class Visual2DRenderSystem
 {
 public:
@@ -41,6 +45,25 @@ public:
     // ratios when scaling to a game-specific target width or height.
     [[nodiscard]] virtual Size GetImageSize(
         ImageHandle image) const noexcept = 0;
+
+    // Creates an image from CPU pixels: tightly packed RGBA8 rows, top row first, exactly
+    // width * height * 4 bytes (copied). Use it like a file image in sprites and draw packets.
+    // Call on the engine thread (Initialize, Update or Render). It lives until ReleaseImage or
+    // renderer shutdown. Throws std::invalid_argument for an empty size or a wrong byte count and
+    // std::length_error while MaxPixelImages slots are alive or still waiting for their frames
+    // (see ReleaseImage). A backend without textures (a test fake) returns an empty handle;
+    // draw nothing or fall back on that.
+    [[nodiscard]] virtual ImageHandle CreatePixelImage(
+        std::uint32_t, std::uint32_t, std::span<const std::uint8_t>)
+    {
+        return {};
+    }
+    // Releases an image made by CreatePixelImage; file images and unknown handles are ignored.
+    // Frames already submitted keep sampling it, so its slot is reused only after the frame ring
+    // has passed them. Packets that still name it after release draw nothing.
+    virtual void ReleaseImage(ImageHandle) noexcept
+    {
+    }
 
     // Renders a centered, Y-up Canvas at pixel size. screenOrigin remains
     // the Canvas panel's top-left point in Win32 screen pixels. A larger

@@ -218,6 +218,20 @@ Size ScreenVisual2DManager::GetImageSize(
     return rendering_ == nullptr ? Size{} : rendering_->GetImageSize(image);
 }
 
+ImageHandle ScreenVisual2DManager::CreatePixelImage(
+    const std::uint32_t width, const std::uint32_t height, const std::span<const std::uint8_t> rgba8)
+{
+    if (rendering_ == nullptr)
+        throw std::logic_error("Pixel images require an initialized Visual2D manager.");
+    return rendering_->CreatePixelImage(width, height, rgba8);
+}
+
+void ScreenVisual2DManager::ReleaseImage(const ImageHandle image) noexcept
+{
+    if (rendering_ != nullptr)
+        rendering_->ReleaseImage(image);
+}
+
 void ScreenVisual2DManager::Update(const double elapsedSeconds)
 {
     for (auto& [id, entry] : canvases_)

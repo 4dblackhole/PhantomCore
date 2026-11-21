@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 
 
@@ -100,6 +101,10 @@ public:
     // the GPU texture while this manager owns the game-facing registry.
     [[nodiscard]] ImageHandle RegisterImage(const std::filesystem::path& path);
     [[nodiscard]] Size GetImageSize(ImageHandle image) const noexcept;
+    // Pixel images through the renderer (see Visual2DRenderSystem::CreatePixelImage).
+    [[nodiscard]] ImageHandle CreatePixelImage(std::uint32_t width, std::uint32_t height,
+                                               std::span<const std::uint8_t> rgba8);
+    void ReleaseImage(ImageHandle image) noexcept;
 
     void Update(double elapsedSeconds);
     void Render(const RenderContext& context);

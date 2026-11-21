@@ -19,6 +19,7 @@
 #include <cstring>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -82,6 +83,15 @@ namespace
         {
             AppendInfo(info);
             resources.push_back(std::move(resource));
+        }
+
+        void Replace(
+            const std::size_t index,
+            const TextureInfo info,
+            ComPtr<ID3D12Resource> resource)
+        {
+            ReplaceInfo(index, info);
+            resources.at(index) = std::move(resource);
         }
 
         std::vector<ComPtr<ID3D12Resource>> resources;
@@ -184,6 +194,13 @@ struct TextureManager::Impl final
     [[nodiscard]] RenderTargetTextureHandle CreateRenderTargetTexture(
         std::uint32_t width,
         std::uint32_t height);
+    // Uploads RGBA8 pixels into a new set, the next slot of a set, or an existing slot.
+    [[nodiscard]] TextureSetHandle UploadPixels(
+        const TextureSetHandle& textureSet,
+        std::optional<std::size_t> replacedIndex,
+        std::uint32_t width,
+        std::uint32_t height,
+        std::span<const std::uint8_t> rgba8);
 
     [[nodiscard]] ID3D12DescriptorHeap* DescriptorHeap() const noexcept;
     [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptorStart(
@@ -298,6 +315,11 @@ TextureSet::~TextureSet() = default;
 void TextureSet::AppendInfo(const TextureInfo info)
 {
     textureInfo_.push_back(info);
+}
+
+void TextureSet::ReplaceInfo(const std::size_t index, const TextureInfo info)
+{
+    textureInfo_.at(index) = info;
 }
 
 std::size_t TextureSet::Size() const noexcept
@@ -670,6 +692,71 @@ TextureSetHandle TextureManager::Impl::AppendTexture(
     return textureSet;
 }
 
+TextureSetHandle TextureManager::Impl::UploadPixels(
+    const TextureSetHandle& textureSet,
+    const std::optional<std::size_t> replacedIndex,
+    const std::uint32_t width,
+    const std::uint32_t height,
+    const std::span<const std::uint8_t> rgba8)
+{
+    RequireOwnerThread();
+    if (!initialized_ || device_ == nullptr || commandQueue_ == nullptr)
+    {
+        throw std::logic_error(
+            "TextureManager must be initialized before uploading pixels.");
+    }
+    const std::uint64_t byteCount = static_cast<std::uint64_t>(width) * height * 4;
+    if (width == 0 || height == 0 || rgba8.size() != byteCount)
+    {
+        throw std::invalid_argument(
+            "A pixel texture needs a positive size and exactly width * height * 4 RGBA8 bytes.");
+    }
+    DecodedImage image{width, height, std::vector<std::byte>(rgba8.size())};
+    std::memcpy(image.pixels.data(), rgba8.data(), rgba8.size());
+
+    // A null set starts a new descriptor block; otherwise the slot is the next one or the replaced one.
+    std::shared_ptr<D3D12TextureSet> target;
+    D3D12_CPU_DESCRIPTOR_HANDLE blockStart{};
+    std::size_t index = 0;
+    if (textureSet == nullptr)
+    {
+        target = std::make_shared<D3D12TextureSet>();
+        blockStart = InitializeDescriptorBlock(*target);
+    }
+    else
+    {
+        target = RequireOwnedTextureSet(textureSet);
+        blockStart = target->cpuDescriptorStart;
+        index = replacedIndex.value_or(target->Size());
+        if (replacedIndex && *replacedIndex >= target->Size())
+            throw std::out_of_range("The replaced texture slot does not exist.");
+        if (index >= MaxTexturesPerSet)
+            throw std::length_error("A texture descriptor table cannot contain more than 64 images.");
+    }
+
+    BeginUploadCommands();
+    std::vector<ComPtr<ID3D12Resource>> uploadBuffers;
+    uploadBuffers.reserve(1);
+    try
+    {
+        RecordTextureUpload(image, index, blockStart, *target, uploadBuffers);
+        D3D12Detail::ThrowIfFailed(
+            uploadCommandList_->Close(),
+            "Close pixel texture upload command list");
+    }
+    catch (...)
+    {
+        uploadCommandList_->Close();
+        throw;
+    }
+
+    TextureSetHandle handle = target;
+    ExecuteUpload(std::move(uploadBuffers), handle);
+    if (textureSet == nullptr)
+        RegisterTextureSet(target);
+    return handle;
+}
+
 RenderTargetTextureHandle TextureManager::Impl::CreateRenderTargetTexture(
     const std::uint32_t width,
     const std::uint32_t height)
@@ -1005,9 +1092,12 @@ void TextureManager::Impl::RecordTextureUpload(
             static_cast<std::uint32_t>(descriptorIndex),
             descriptorSize_));
 
-    RequireTextureSet(textureSet).Append(
-        TextureInfo{image.width, image.height},
-        std::move(texture));
+    // A slot below the set's size is a replacement; the slot at its end is an append.
+    auto& target = RequireTextureSet(textureSet);
+    if (descriptorIndex < target.Size())
+        target.Replace(descriptorIndex, TextureInfo{image.width, image.height}, std::move(texture));
+    else
+        target.Append(TextureInfo{image.width, image.height}, std::move(texture));
     uploadBuffers.push_back(std::move(uploadBuffer));
 }
 
@@ -1166,6 +1256,28 @@ TextureSetHandle TextureManager::AppendTexture(
     const TextureSetHandle& textureSet, const std::filesystem::path& path)
 {
     return implementation_->AppendTexture(textureSet, path);
+}
+
+TextureSetHandle TextureManager::CreateTextureSet(
+    const std::uint32_t width, const std::uint32_t height, const std::span<const std::uint8_t> rgba8)
+{
+    return implementation_->UploadPixels({}, std::nullopt, width, height, rgba8);
+}
+
+TextureSetHandle TextureManager::AppendTexture(const TextureSetHandle& textureSet,
+    const std::uint32_t width, const std::uint32_t height, const std::span<const std::uint8_t> rgba8)
+{
+    if (textureSet == nullptr)
+        throw std::invalid_argument("Appending a texture requires an existing set.");
+    return implementation_->UploadPixels(textureSet, std::nullopt, width, height, rgba8);
+}
+
+void TextureManager::ReplaceTexture(const TextureSetHandle& textureSet, const std::size_t index,
+    const std::uint32_t width, const std::uint32_t height, const std::span<const std::uint8_t> rgba8)
+{
+    if (textureSet == nullptr)
+        throw std::invalid_argument("Replacing a texture requires an existing set.");
+    static_cast<void>(implementation_->UploadPixels(textureSet, index, width, height, rgba8));
 }
 
 RenderTargetTextureHandle TextureManager::CreateRenderTargetTexture(
