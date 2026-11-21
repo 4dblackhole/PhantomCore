@@ -53,6 +53,15 @@ namespace
         return rectangle.bottom - rectangle.top;
     }
 
+    // The value brought into [low, high], or low when the range is empty.
+    [[nodiscard]] LONG Clamped(
+        const LONG value,
+        const LONG low,
+        const LONG high) noexcept
+    {
+        return std::max(low, std::min(value, high));
+    }
+
     // Top-left that centres an extent inside [low, high), never before low.
     [[nodiscard]] LONG Centered(
         const LONG low,
@@ -253,7 +262,9 @@ void Win32Window::Initialize(const WindowConfig& config, InputState& input)
     RefreshDisplayRate();
 
     // The window was created framed at the default position. Place it for
-    // the requested mode, or without a frame when its size covers the monitor.
+    // the requested mode and position, or without a frame when its size
+    // covers the monitor.
+    placement_ = config.position;
     std::string placementError;
     if (!Place({config.clientWidth, config.clientHeight}, config.mode, placementError))
     {
@@ -354,11 +365,59 @@ bool Win32Window::SetMode(const WindowMode mode, std::string &error)
     return Place(ClientSize(), mode, error);
 }
 
+WindowResolution Win32Window::MonitorSize() const noexcept
+{
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof(monitor);
+    if (!window_ || !GetMonitorInfoW(MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST), &monitor))
+        return {};
+    return {static_cast<std::uint32_t>(Width(monitor.rcMonitor)), static_cast<std::uint32_t>(Height(monitor.rcMonitor))};
+}
+
+WindowPosition Win32Window::Position() const noexcept
+{
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof(monitor);
+    POINT origin{};
+    const bool measured = window_ && ClientToScreen(window_, &origin) &&
+                          GetMonitorInfoW(MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST), &monitor);
+    if (!measured)
+        return {};
+    return {origin.x - monitor.rcMonitor.left, origin.y - monitor.rcMonitor.top};
+}
+
+bool Win32Window::SetPosition(const std::optional<WindowPosition> position, std::string &error)
+{
+    error.clear();
+    if (!window_)
+    {
+        error = "The window is closed.";
+        return false;
+    }
+    const auto previous = placement_;
+    placement_ = position;
+    if (Place(ClientSize(), mode_, error))
+        return true;
+    placement_ = previous;
+    return false;
+}
+
+bool Win32Window::TakeUserMove(WindowPosition &position) noexcept
+{
+    if (!userMoved_)
+        return false;
+    userMoved_ = false;
+    position = Position();
+    return true;
+}
+
 // Gives the window the frame and position its mode asks for:
 // - a client size that covers the monitor, in either mode: no frame, at the monitor's top-left;
-// - Borderless: no frame, centred on the monitor;
-// - Windowed: framed. It stays where it is while it fits the work area and is centred there otherwise,
-//   so the title bar never ends up off screen.
+// - a remembered position (SetPosition, a finished drag): the client area goes there, brought inside
+//   the monitor (no frame) or the work area (framed) when it does not fit;
+// - otherwise Borderless: no frame, centred on the monitor;
+// - otherwise Windowed: framed. It stays where it is while it fits the work area and is centred there
+//   otherwise, so the title bar never ends up off screen.
 bool Win32Window::Place(const WindowResolution size, const WindowMode mode, std::string &error)
 {
     MONITORINFO monitor{};
@@ -399,6 +458,14 @@ bool Win32Window::Place(const WindowResolution size, const WindowMode mode, std:
         const bool keepPosition = hasPosition && fitsAcross && fitsDown;
         left = keepPosition ? current.left : Centered(work.left, work.right, Width(outer));
         top = keepPosition ? current.top : Centered(work.top, work.bottom, Height(outer));
+    }
+    if (placement_ && !coversMonitor)
+    {
+        // outer.left and outer.top are the frame's offsets from the client
+        // origin: zero without a frame, negative with one.
+        const RECT &bounds = framed ? work : screen;
+        left = Clamped(screen.left + placement_->x + outer.left, bounds.left, bounds.right - Width(outer));
+        top = Clamped(screen.top + placement_->y + outer.top, bounds.top, bounds.bottom - Height(outer));
     }
 
     // The mode is published before the move so the size and position
@@ -619,6 +686,16 @@ LRESULT Win32Window::WindowProcedure(
         // Keeps the backdrop behind the game window when it is raised,
         // minimized or restored.
         UpdateBackdrop();
+        break;
+
+    case WM_EXITSIZEMOVE:
+        // The user dropped the framed window somewhere: remember it so later
+        // size and mode changes keep it, and let the Client save it.
+        if (mode_ == WindowMode::Windowed && !IsZoomed(window_))
+        {
+            placement_ = Position();
+            userMoved_ = true;
+        }
         break;
 
     case WM_SYSCOMMAND:

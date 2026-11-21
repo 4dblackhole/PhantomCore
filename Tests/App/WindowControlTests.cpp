@@ -86,6 +86,7 @@ namespace
                     Check(modes[i] != modes[j], "Deduplicate refresh rates.");
             Check(window_->SetClientSize({960, 540}, error) && error.empty(), "Native resize accepted.");
             TestWindowModes();
+            TestWindowPosition();
             Check(!report_.resized, "OnResize is deferred outside initialization.");
         }
         bool Update(const UpdateContext &context) override
@@ -204,6 +205,63 @@ namespace
             Check(onScreen && window_->ClientSize() == WindowResolution{960, 540},
                   "The framed window returns inside the work area.");
         }
+        // Runs on the hidden, framed 960x540 window and leaves it that way with no remembered position.
+        void TestWindowPosition()
+        {
+            HWND native = FindWindowW(L"PhantomCore.D3D12.Window", nullptr);
+            MONITORINFO monitor{};
+            monitor.cbSize = sizeof(monitor);
+            Check(GetMonitorInfoW(MonitorFromWindow(native, MONITOR_DEFAULTTONEAREST), &monitor) != FALSE,
+                  "Read the test monitor.");
+            const RECT screen = monitor.rcMonitor;
+            const RECT work = monitor.rcWork;
+            const auto screenWidth = static_cast<std::int32_t>(screen.right - screen.left);
+            const auto screenHeight = static_cast<std::int32_t>(screen.bottom - screen.top);
+            const auto outer = [native]
+            {
+                RECT rectangle{};
+                GetWindowRect(native, &rectangle);
+                return rectangle;
+            };
+            std::string error;
+            Check(window_->MonitorSize() == WindowResolution{static_cast<std::uint32_t>(screenWidth),
+                                                             static_cast<std::uint32_t>(screenHeight)},
+                  "The monitor size is the size of the window's monitor.");
+
+            Check(window_->SetMode(WindowMode::Borderless, error), "Borderless mode accepted.");
+            Check(window_->SetPosition(WindowPosition{100, 50}, error) && window_->Position() == WindowPosition{100, 50},
+                  "Borderless places the picture at the requested position.");
+            Check(outer().left == screen.left + 100 && outer().top == screen.top + 50,
+                  "The position is measured from the monitor's top-left corner.");
+            Check(window_->SetPosition(WindowPosition{-500, 100000}, error) &&
+                      window_->Position() == WindowPosition{0, screenHeight - 540},
+                  "A position outside the monitor is brought back inside it.");
+            Check(window_->SetPosition(std::nullopt, error) &&
+                      window_->Position() == WindowPosition{(screenWidth - 960) / 2, (screenHeight - 540) / 2},
+                  "Forgetting the position centres the picture again.");
+
+            Check(window_->SetPosition(WindowPosition{100, 50}, error) && window_->SetMode(WindowMode::Windowed, error),
+                  "Windowed mode accepted with a remembered position.");
+            const RECT framedOuter = outer();
+            const bool insideWork = framedOuter.left >= work.left && framedOuter.top >= work.top;
+            Check(insideWork && framedOuter.right <= work.right && framedOuter.bottom <= work.bottom,
+                  "A framed window with a remembered position stays inside the work area.");
+            Check(window_->SetPosition(WindowPosition{-10000, -10000}, error) && outer().left >= work.left &&
+                      outer().top >= work.top,
+                  "A framed window is not moved above or left of the work area.");
+
+            WindowPosition moved{};
+            Check(!window_->TakeUserMove(moved), "No user move is reported before one happens.");
+            SetWindowPos(native, nullptr, work.left + 40, work.top + 30, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            SendMessageW(native, WM_EXITSIZEMOVE, 0, 0);
+            Check(window_->TakeUserMove(moved) && moved == window_->Position(),
+                  "A finished drag reports where the window ended up.");
+            Check(!window_->TakeUserMove(moved), "A user move is reported once.");
+            Check(window_->SetClientSize({800, 450}, error) && window_->Position() == moved,
+                  "A size change keeps the position the user dragged to.");
+            Check(window_->SetClientSize({960, 540}, error) && window_->SetPosition(std::nullopt, error),
+                  "The window returns to 960x540 with no remembered position.");
+        }
         ResizeReport &report_;
         IWindowControl *window_{};
     };
@@ -214,6 +272,6 @@ int TestWindowControl()
     const auto result = Run(std::make_unique<ResizeClient>(report));
     if (result != 0 || !report.resized || !report.rendered || !report.shutdown)
         return 1;
-    std::cout << "Native Unicode input/IME lifecycle, window resize, window modes, display modes and renderer notification passed.\n";
+    std::cout << "Native Unicode input/IME lifecycle, window resize, window modes and position, display modes and renderer notification passed.\n";
     return 0;
 }
