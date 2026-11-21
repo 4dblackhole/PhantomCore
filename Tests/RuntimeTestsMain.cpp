@@ -9,6 +9,7 @@
 #include "App/TextRenderingTests.h"
 #include "App/WindowControlTests.h"
 #include "App/InputStateTests.h"
+#include "App/RenderScheduleTests.h"
 #include "App/TextureLifetimeTests.h"
 #include "App/TextureAssetTests.h"
 #include "Collision/CollisionTests.h"
@@ -31,6 +32,8 @@ int main(int argc, char** argv)
         return TestWindowControl();
     if (argc == 2 && std::string_view(argv[1]) == "--draw-statistics")
         return TestDrawStatistics();
+    if (argc == 2 && std::string_view(argv[1]) == "--render-rate")
+        return TestRenderRateModes();
     if (argc == 2 && std::string_view(argv[1]) == "--headless-error")
         return TestHeadlessRunError();
     if (argc == 2 && std::string_view(argv[1]) == "--text-rendering")
@@ -46,6 +49,7 @@ int main(int argc, char** argv)
     const int cpuResult = TestCollisionAndVisual2D();
     const int audioResult = TestManagedPlayback();
     const int audioClockResult = TestAudioMixerClockEstimator();
+    const int renderScheduleResult = TestRenderSchedule();
     const bool failed = cpuResult != 0 || audioResult != 0;
-    return failed || audioClockResult != 0 ? 1 : 0;
+    return failed || audioClockResult != 0 || renderScheduleResult != 0 ? 1 : 0;
 }

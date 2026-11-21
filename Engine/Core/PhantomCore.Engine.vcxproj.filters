@@ -26,6 +26,9 @@
     <ClInclude Include="App\Engine.h">
       <Filter>App</Filter>
     </ClInclude>
+    <ClInclude Include="App\RenderSchedule.h">
+      <Filter>App</Filter>
+    </ClInclude>
     <ClInclude Include="Client\IGameClient.h">
       <Filter>Client</Filter>
     </ClInclude>

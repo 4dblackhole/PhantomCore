@@ -108,6 +108,7 @@
     <ClInclude Include="..\Core\Client\IGameClient.h" />
     <ClInclude Include="..\Core\Client\SceneGameClient.h" />
     <ClInclude Include="..\Core\App\Engine.h" />
+    <ClInclude Include="..\Core\App\RenderSchedule.h" />
     <ClInclude Include="..\Core\System\Camera.h" />
     <ClInclude Include="..\Core\System\HighResolutionClock.h" />
     <ClInclude Include="..\Core\System\MeshInstance.h" />

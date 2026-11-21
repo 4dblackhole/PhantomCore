@@ -88,18 +88,42 @@ namespace
         }
     }
 
+    // The Client's requested mode. The loop copies it into the schedule at
+    // the start of the next iteration, where the current time is known.
+    class RenderRateService final : public IRenderRateControl
+    {
+    public:
+        explicit RenderRateService(const RenderRateMode mode) noexcept
+            : mode_(mode)
+        {
+        }
+
+        [[nodiscard]] RenderRateMode Mode() const noexcept override
+        {
+            return mode_;
+        }
+
+        void SetMode(const RenderRateMode mode) noexcept override
+        {
+            mode_ = mode;
+        }
+
+    private:
+        RenderRateMode mode_;
+    };
+
     struct MainLoopState final
     {
         MainLoopState(
             const EngineConfig& config,
             const double refreshRateHz)
-            : renderInterval(
-                  1.0 / ValidRate(
-                      config.renderRateOverrideHz,
-                      refreshRateHz)),
-              audioInterval(
+            : audioInterval(
                   1.0 / ValidRate(config.audioUpdateRateHz, 500.0))
         {
+            schedule.SetBaseRate(
+                ValidRate(config.renderRateOverrideHz, refreshRateHz),
+                0.0);
+            schedule.SetMode(config.renderRateMode, 0.0);
         }
 
         HighResolutionClock clock;
@@ -112,8 +136,7 @@ namespace
         std::uint64_t peakDrawCallsSinceStatisticsReport{};
         double statisticsReportStartSeconds{};
         PerformanceStatistics performance{};
-        double renderInterval{};
-        double nextRenderTime{};
+        RenderSchedule schedule;
         double audioInterval{};
         double nextAudioUpdateTime{};
     };
@@ -123,6 +146,7 @@ namespace
         D3D12Renderer& renderer,
         IGameClient& client,
         const EngineConfig& config,
+        const IRenderRateControl& renderRate,
         MainLoopState& state)
     {
         WindowSize newSize{};
@@ -136,10 +160,11 @@ namespace
         if (window.ConsumeRefreshRateChange(newRefreshRate) &&
             config.renderRateOverrideHz <= 1.0)
         {
-            state.renderInterval =
-                1.0 / ValidRate(newRefreshRate, 60.0);
-            state.nextRenderTime = state.totalSeconds;
+            state.schedule.SetBaseRate(
+                ValidRate(newRefreshRate, 60.0),
+                state.totalSeconds);
         }
+        state.schedule.SetMode(renderRate.Mode(), state.totalSeconds);
     }
 
     [[nodiscard]] bool UpdateClient(
@@ -162,7 +187,8 @@ namespace
             state.performance};
 
         // Update is intentionally unthrottled. Rendering and FMOD use
-        // independent deadlines and never sleep this loop.
+        // independent deadlines and never sleep this loop. In the
+        // Unlimited render mode every Update is followed by one Render.
         const bool keepRunning = client.Update(updateContext);
         ++state.updatesSinceStatisticsReport;
         return keepRunning;
@@ -192,7 +218,7 @@ namespace
         MainLoopState& state)
     {
         if (window.IsMinimized() ||
-            state.totalSeconds < state.nextRenderTime)
+            !state.schedule.IsDue(state.totalSeconds))
         {
             return true;
         }
@@ -210,10 +236,7 @@ namespace
         state.drawCallsSinceStatisticsReport += drawCalls;
         state.peakDrawCallsSinceStatisticsReport =
             std::max(state.peakDrawCallsSinceStatisticsReport, drawCalls);
-        AdvanceDeadline(
-            state.nextRenderTime,
-            state.renderInterval,
-            state.totalSeconds);
+        state.schedule.MarkRendered(state.totalSeconds);
 
         return config.autoExitAfterRenderedFrames == 0 ||
             state.renderedFrames < config.autoExitAfterRenderedFrames;
@@ -259,7 +282,8 @@ namespace
         Win32Window& window,
         D3D12Renderer& renderer,
         AudioSystem& audioSystem,
-        const EngineConfig& config)
+        const EngineConfig& config,
+        const IRenderRateControl& renderRate)
     {
         MainLoopState state(config, window.RefreshRateHz());
         bool running = true;
@@ -269,7 +293,13 @@ namespace
             // queued Raw Input message before the Client update.
             const double rawDeltaSeconds =
                 state.clock.Tick(state.totalSeconds);
-            HandleWindowChanges(window, renderer, client, config, state);
+            HandleWindowChanges(
+                window,
+                renderer,
+                client,
+                config,
+                renderRate,
+                state);
             running = UpdateClient(
                 client,
                 input,
@@ -316,6 +346,7 @@ static int RunClient(std::unique_ptr<IGameClient> client,
         AudioSystem audioSystem;
         InputState input;
         Win32Window window;
+        RenderRateService renderRate(config.renderRateMode);
         bool clientInitialized = false;
 
         // Keep failure cleanup inside the subsystem scope. Entering the
@@ -361,7 +392,8 @@ static int RunClient(std::unique_ptr<IGameClient> client,
                                           audioSystem,
                                           window.ClientWidth(),
                                           window.ClientHeight(),
-                                          &window};
+                                          &window,
+                                          &renderRate};
             // Client resource creation uses the high-level mesh/material
             // service; root signatures and PSOs remain owned by Graphics.
             client->Initialize(services);
@@ -373,7 +405,8 @@ static int RunClient(std::unique_ptr<IGameClient> client,
                 window,
                 renderer,
                 audioSystem,
-                config);
+                config,
+                renderRate);
 
             // Client scenes own D3D12 resources. First ensure no submitted
             // frame refers to them, then release Client resources while

@@ -84,6 +84,9 @@ private:
     bool mouseCaptured_{};
     bool refreshRateChanged_{};
     double refreshRateHz_{60.0};
+    // Monitor and whole-number rate the exact rate was last read for.
+    HMONITOR rateMonitor_{};
+    DWORD nominalRateHz_{};
 };
 
 } // namespace PhantomCore

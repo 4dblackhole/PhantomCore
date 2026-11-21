@@ -1,5 +1,7 @@
 #include "HeadlessRunTests.h"
 #include "PhantomCore.h"
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -92,6 +94,118 @@ namespace
         Visual2DCanvas canvas_{{64, 64}};
     };
 } // namespace
+
+namespace
+{
+    constexpr double RenderRateBaseHz = 100.0;
+    constexpr double RenderRatePhaseSeconds = 0.5;
+    constexpr RenderRateMode RenderRatePhases[]{RenderRateMode::Display, RenderRateMode::DisplayDouble,
+                                                RenderRateMode::Unlimited};
+    constexpr std::size_t RenderRatePhaseCount = sizeof(RenderRatePhases) / sizeof(RenderRatePhases[0]);
+
+    struct RenderRateCounts
+    {
+        bool hadControl{};
+        std::uint64_t updates[RenderRatePhaseCount]{};
+        std::uint64_t renders[RenderRatePhaseCount]{};
+    };
+
+    // Runs each render rate mode for half a second on a 100 Hz base rate,
+    // switching through the engine service, and counts Update and Render
+    // calls per mode.
+    class RenderRateClient final : public IGameClient
+    {
+      public:
+        explicit RenderRateClient(RenderRateCounts &counts) : counts_(counts)
+        {
+        }
+        EngineConfig GetEngineConfig() const override
+        {
+            EngineConfig config;
+            config.showWindow = false;
+            config.windowWidth = 64;
+            config.windowHeight = 64;
+            config.renderRateOverrideHz = RenderRateBaseHz;
+            config.audio.preferredBackend = AudioOutputBackend::NoSound;
+            return config;
+        }
+        void Initialize(const EngineServices &services) override
+        {
+            control_ = services.renderRateControl;
+            counts_.hadControl = control_ != nullptr;
+        }
+        bool Update(const UpdateContext &context) override
+        {
+            if (!control_)
+                return false;
+            if (!started_)
+            {
+                started_ = true;
+                startSeconds_ = context.totalSeconds;
+            }
+            const auto phase =
+                static_cast<std::size_t>((context.totalSeconds - startSeconds_) / RenderRatePhaseSeconds);
+            if (phase >= RenderRatePhaseCount)
+                return false;
+            // The new mode applies from the next loop iteration, so the
+            // first Render of a phase can still belong to the previous mode.
+            control_->SetMode(RenderRatePhases[phase]);
+            phase_ = phase;
+            ++counts_.updates[phase];
+            return true;
+        }
+        void Render(const RenderContext &) override
+        {
+            ++counts_.renders[phase_];
+        }
+        void OnResize(std::uint32_t, std::uint32_t) override
+        {
+        }
+        void Shutdown() noexcept override
+        {
+        }
+
+      private:
+        RenderRateCounts &counts_;
+        IRenderRateControl *control_{};
+        bool started_{};
+        double startSeconds_{};
+        std::size_t phase_{};
+    };
+
+    bool InRange(const std::uint64_t value, const std::uint64_t low, const std::uint64_t high)
+    {
+        return value >= low && value <= high;
+    }
+} // namespace
+
+int TestRenderRateModes()
+{
+    RenderRateCounts counts;
+    if (Run(std::make_unique<RenderRateClient>(counts)) != EXIT_SUCCESS || !counts.hadControl)
+    {
+        std::cerr << "Run must provide the render rate control and finish the mode sequence.\n";
+        return EXIT_FAILURE;
+    }
+    // Upper bounds are the exact frame budget of half a second plus the
+    // frames at the phase edges; lower bounds leave room for a busy PC.
+    const auto budget = static_cast<std::uint64_t>(RenderRateBaseHz * RenderRatePhaseSeconds);
+    const bool displayOk = InRange(counts.renders[0], budget / 2, budget + 2);
+    const bool doubleOk = InRange(counts.renders[1], budget + budget / 5, budget * 2 + 2);
+    const bool unlimitedOk = InRange(counts.renders[2] + 2, counts.updates[2], counts.updates[2] + 4);
+    const bool limitedBelowUpdates = counts.renders[0] < counts.updates[0] && counts.renders[1] < counts.updates[1];
+    const bool limitedOk = displayOk && doubleOk && limitedBelowUpdates;
+    if (!limitedOk || !unlimitedOk)
+    {
+        std::cerr << "Render rate modes rendered " << counts.renders[0] << " / " << counts.renders[1] << " / "
+                  << counts.renders[2] << " frames for " << counts.updates[0] << " / " << counts.updates[1] << " / "
+                  << counts.updates[2] << " updates (x1 / x2 / unlimited at 100 Hz, half a second each).\n";
+        return EXIT_FAILURE;
+    }
+    std::cout << "Render rate modes rendered " << counts.renders[0] << " / " << counts.renders[1] << " / "
+              << counts.renders[2] << " frames (x1 / x2 / unlimited at 100 Hz, half a second each).\n";
+    return EXIT_SUCCESS;
+}
 
 int TestDrawStatistics()
 {
