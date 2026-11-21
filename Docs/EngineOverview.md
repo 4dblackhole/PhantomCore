@@ -182,6 +182,8 @@ Client(YOUMU) 쪽 구조 그림은 Client 저장소 `Docs/Architecture/Overview.
   때만 호출된다.
 - 오디오 service update는 별도 deadline을 사용하며 렌더 속도를 제한하지 않는다.
 - 키보드·마우스의 기준 입력은 Win32 Raw Input이다.
+- Alt나 F10만 눌렀다 떼도 창 메뉴 루프(`SC_KEYMENU`)에 들어가지 않는다. 그 모달 루프는 Update를 멈추고
+  게임은 Alt를 조합 키(예: Alt+휠)로 쓰기 때문이다. Alt+Space의 시스템 메뉴는 그대로 열린다.
 - `InputState`는 한 Update의 이벤트를 순서대로 보존하고 다음 Update에서 버퍼를
   재사용한다. 256개는 초기 예약량이며 상한이 아니다. 저장 메모리 부족은 Win32
   callback 밖에서 오류로 보고하여 불완전한 입력을 Client에 전달하지 않는다.
