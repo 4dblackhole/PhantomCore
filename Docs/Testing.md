@@ -47,7 +47,7 @@ foreach ($configuration in 'Debug', 'Release') {
 | `--window-control` | 창 크기 변경, 창 모드(테두리·가운데 배치·모니터 채움), 창 위치(지정·되돌림·끌어 옮김), 해상도 조회 |
 | `--audio-clock` | 기본 출력에서 스냅샷 400개의 흔들림: 날 DSP clock 짝짓기와 `CaptureClockSnapshot` 비교 |
 | `--headless-error` | 숨김 실행의 Update 예외 정리 |
-| `--audio-pcm [경로]` | 공통 PCM 디코딩과 고정 속도 변환, 비동기 Clip 로딩 취소(Ready가 되지 않음·Voice 없음·같은 파일 다시 열기·완료와 겹친 취소·retire 해제) |
+| `--audio-pcm [경로]` | 공통 PCM 디코딩과 고정 속도 변환, Media Foundation WAV 반복 디코드(같은 샘플·핸들 증가 없음), 비동기 Clip 로딩 취소(Ready가 되지 않음·Voice 없음·같은 파일 다시 열기·완료와 겹친 취소·retire 해제) |
 
 이 프로젝트와 전체 솔루션의 빌드에는 FMOD SDK가 필요합니다. CPU CI 통과는 실제
 GPU·오디오 실행의 검증을 대신하지 않습니다.
