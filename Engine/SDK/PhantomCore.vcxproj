@@ -94,6 +94,7 @@
     <ClInclude Include="..\Graphics.D3D12\Renderer\RenderFrameContext.h" />
     <ClInclude Include="..\Core\Rendering\ImageReadback.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h" />
+    <ClInclude Include="..\Graphics.D3D12\Renderer\GraphicsDeviceDiagnostics.h" />
     <ClInclude Include="..\Graphics.D3D12\Mesh\MeshRendering.h" />
     <ClInclude Include="..\Graphics.D3D12\Texture\D3D12TextureRendering.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameResources.h" />
@@ -109,6 +110,7 @@
     <ClInclude Include="..\Core\Client\SceneGameClient.h" />
     <ClInclude Include="..\Core\App\Engine.h" />
     <ClInclude Include="..\Core\App\RenderSchedule.h" />
+    <ClInclude Include="..\Core\Diagnostics\EngineDiagnostics.h" />
     <ClInclude Include="..\Core\System\Camera.h" />
     <ClInclude Include="..\Core\System\HighResolutionClock.h" />
     <ClInclude Include="..\Core\System\MeshInstance.h" />
@@ -149,6 +151,7 @@
     <ClCompile Include="..\Core\Visual2D\Visual2DWidgets.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Renderer\D3D12Renderer.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.cpp" />
+    <ClCompile Include="..\Graphics.D3D12\Renderer\GraphicsDeviceDiagnostics.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Mesh\MeshRendering.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Texture\TextureManager.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Text\TextRendering.cpp" />

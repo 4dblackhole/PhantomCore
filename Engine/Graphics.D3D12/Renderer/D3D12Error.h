@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Diagnostics/EngineDiagnostics.h"
+
 #include <Windows.h>
 
 #include <cstddef>
@@ -26,14 +28,30 @@ namespace D3D12Detail
         return text;
     }
 
+    // The results a call returns once the device was removed, hung or reset.
+    [[nodiscard]] inline bool IsDeviceLoss(const HRESULT result) noexcept
+    {
+        switch (result)
+        {
+        case DXGI_ERROR_DEVICE_REMOVED:
+        case DXGI_ERROR_DEVICE_HUNG:
+        case DXGI_ERROR_DEVICE_RESET:
+        case DXGI_ERROR_DRIVER_INTERNAL_ERROR:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    // operation is a string literal: a lost device keeps the pointer.
     inline void ThrowIfFailed(const HRESULT result, const char* operation)
     {
-        if (FAILED(result))
-        {
-            throw std::runtime_error(
-                std::string(operation) + " failed with HRESULT " +
-                FormatHResult(result) + ".");
-        }
+        if (!FAILED(result))
+            return;
+        std::string message = std::string(operation) + " failed with HRESULT " + FormatHResult(result) + ".";
+        if (IsDeviceLoss(result))
+            throw GraphicsDeviceLostError(operation, static_cast<std::uint32_t>(result), message);
+        throw std::runtime_error(message);
     }
 }
 

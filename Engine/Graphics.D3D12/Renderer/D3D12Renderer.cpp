@@ -3,6 +3,7 @@
 #include "Text/D3D12TextRendering.h"
 #include "Renderer/FrameImageReadbackQueue.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/GraphicsDeviceDiagnostics.h"
 
 #include "Mesh/MeshRendering.h"
 #include "Text/TextRendering.h"
@@ -107,11 +108,14 @@ D3D12Renderer::~D3D12Renderer()
 void D3D12Renderer::Initialize(
     const HWND window,
     const std::uint32_t width,
-    const std::uint32_t height)
+    const std::uint32_t height,
+    const bool deviceRemovedData)
 {
     window_ = window;
     width_ = width;
     height_ = height;
+    // DRED only watches devices created after it was switched on.
+    deviceRemovedData_ = deviceRemovedData && D3D12Detail::EnableDeviceRemovedExtendedData();
 
     // The creation order follows D3D12 dependencies: device first,
     // command queue/fences next, then a swap chain that uses that queue.
@@ -363,6 +367,63 @@ void D3D12Renderer::WaitForGpu()
         imageReadbacks_->CompleteAll();
 }
 
+std::vector<std::string> D3D12Renderer::StartupRecord() const
+{
+    std::vector<std::string> lines;
+    if (adapter_ == nullptr)
+        return lines;
+    lines.push_back("graphics adapter: " + D3D12Detail::DescribeAdapter(*adapter_.Get()));
+    lines.push_back(
+        "swap chain: " + std::to_string(width_) + "x" + std::to_string(height_) + ", " +
+        std::to_string(D3D12Detail::FrameCount) + " buffers, tearing " +
+        (tearingSupported_ ? "allowed" : "not supported"));
+    lines.push_back(std::string("device removed data: ") + (deviceRemovedData_ ? "on" : "off"));
+    return lines;
+}
+
+GraphicsMemoryInfo D3D12Renderer::MemoryInfo() const noexcept
+{
+    Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter;
+    if (adapter_ == nullptr || FAILED(adapter_.As(&adapter)))
+        return {};
+    return D3D12Detail::QueryGraphicsMemory(adapter.Get());
+}
+
+std::optional<GraphicsDeviceLossReport> D3D12Renderer::DeviceLossReport(
+    const char* operation,
+    const std::uint32_t resultCode) const
+{
+    if (device_ == nullptr)
+        return std::nullopt;
+    const HRESULT reason = device_->GetDeviceRemovedReason();
+    // A failed call that named the loss is reported even if the device gives no reason.
+    if (reason == S_OK && operation == nullptr)
+        return std::nullopt;
+
+    GraphicsDeviceLossReport report;
+    report.operation = operation != nullptr ? operation : "";
+    report.resultCode = resultCode;
+    report.removedReason = static_cast<std::uint32_t>(reason);
+    report.removedReasonName = D3D12Detail::DeviceRemovedReasonName(reason);
+    report.renderIndex = nextRenderIndex_ - 1;
+    report.width = width_;
+    report.height = height_;
+    report.lastFrameDrawCalls = lastFrameDrawCalls_;
+    report.memory = MemoryInfo();
+    report.extendedDataEnabled = deviceRemovedData_;
+    if (deviceRemovedData_)
+        report.extendedData = D3D12Detail::ReadDeviceRemovedExtendedData(*device_.Get());
+    return report;
+}
+
+void D3D12Renderer::RemoveDeviceForDiagnosticsTest()
+{
+    Microsoft::WRL::ComPtr<ID3D12Device5> device;
+    if (device_ == nullptr || FAILED(device_.As(&device)))
+        throw std::runtime_error("This Windows version cannot remove the D3D12 device on request.");
+    device->RemoveDevice();
+}
+
 ID3D12Device* D3D12Renderer::Device() const noexcept
 {
     return device_.Get();
@@ -427,10 +488,10 @@ void D3D12Renderer::CreateDeviceAndFactory()
         tearingSupported_ = allowTearing == TRUE;
     }
 
-    const auto adapter = SelectAdapter(*factory_.Get());
+    adapter_ = SelectAdapter(*factory_.Get());
     ThrowIfFailed(
         D3D12CreateDevice(
-            adapter.Get(),
+            adapter_.Get(),
             D3D_FEATURE_LEVEL_11_0,
             IID_PPV_ARGS(device_.ReleaseAndGetAddressOf())),
         "D3D12CreateDevice");
@@ -448,6 +509,8 @@ void D3D12Renderer::CreateCommandObjects()
             &queueDescription,
             IID_PPV_ARGS(commandQueue_.ReleaseAndGetAddressOf())),
         "ID3D12Device::CreateCommandQueue");
+    // The names appear in the device-removed data and in graphics debuggers.
+    static_cast<void>(commandQueue_->SetName(L"Main queue"));
 
     for (auto& allocator : commandAllocators_)
     {
@@ -469,6 +532,7 @@ void D3D12Renderer::CreateCommandObjects()
     ThrowIfFailed(
         commandList_->Close(),
         "ID3D12GraphicsCommandList::Close");
+    static_cast<void>(commandList_->SetName(L"Frame"));
 
     ThrowIfFailed(
         device_->CreateFence(

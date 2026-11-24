@@ -1,6 +1,7 @@
 #pragma once
 
 #include "App/RenderSchedule.h"
+#include "Diagnostics/EngineDiagnostics.h"
 #include "Input/Input.h"
 #include "Mesh/MeshRendering.h"
 #include "Rendering/RenderContext.h"
@@ -26,6 +27,15 @@ struct PerformanceStatistics final
     // primitives that share a pipeline and texture page into one draw.
     std::uint64_t drawCallsPerFrame{};
     std::uint64_t peakDrawCallsPerFrame{};
+    // The longest single pass of the main loop in the interval: message pump,
+    // Update, audio service and a Render when one was due. A stall shows here
+    // even when the per-second counts still look healthy.
+    double longestLoopSeconds{};
+    // Graphics memory of this process at the end of the interval, against the
+    // budget Windows currently gives it. Both are zero when the adapter
+    // cannot be asked.
+    std::uint64_t graphicsMemoryUsageBytes{};
+    std::uint64_t graphicsMemoryBudgetBytes{};
     std::uint64_t measurementIndex{};
     bool hasMeasurement{};
 };
@@ -59,6 +69,9 @@ struct EngineConfig
     // Hidden runs also suppress modal fatal-error dialogs; errors remain logged.
     bool showWindow{true};
     std::uint64_t autoExitAfterRenderedFrames{};
+
+    // Where engine records, a lost graphics device and the fatal error go.
+    EngineDiagnosticsConfig diagnostics{};
 };
 
 // Non-owning services created by Run. They remain valid from Initialize

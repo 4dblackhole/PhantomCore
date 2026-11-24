@@ -28,6 +28,7 @@
     </ClInclude>
     <ClInclude Include="App\RenderSchedule.h">
       <Filter>App</Filter>
+    <ClInclude Include="Diagnostics\EngineDiagnostics.h"><Filter>Diagnostics</Filter></ClInclude>
     </ClInclude>
     <ClInclude Include="Client\IGameClient.h">
       <Filter>Client</Filter>
@@ -100,6 +101,7 @@
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Math" />
+    <Filter Include="Diagnostics" />
     <ClInclude Include="..\Math\Math.h"><Filter>Math</Filter></ClInclude>
     <ClInclude Include="..\Math\DirectXMathBridge.h"><Filter>Math</Filter></ClInclude>
     <ClCompile Include="..\Math\Math.cpp"><Filter>Math</Filter></ClCompile>
