@@ -93,6 +93,19 @@ namespace
         }
         ~FmodPcmClip() override { cancellation_.request_stop(); }
 
+        // Only the worker stage (decoding, then time stretch) can stop early. Once the native sound exists the
+        // clip finishes opening as usual; a decoded result that LoadState has not published yet is discarded.
+        bool CancelLoading() noexcept override
+        {
+            if (cancelled_)
+                return true;
+            if (clip_ || !failure_.empty())
+                return false;
+            cancelled_ = true;
+            cancellation_.request_stop();
+            return true;
+        }
+
         bool PrepareTimeStretch(double rate, std::string &error) override
         {
             if (!std::isfinite(rate) || rate < 0.5 || rate > 2.0)
@@ -123,6 +136,12 @@ namespace
                 {
                     error.clear();
                     return AudioClipLoadState::Loading;
+                }
+                if (cancelled_)
+                {
+                    DiscardCancelledWork();
+                    error = failure_;
+                    return AudioClipLoadState::Failed;
                 }
                 try
                 {
@@ -190,6 +209,21 @@ namespace
         }
 
     private:
+        // The stopped worker either threw its cancellation error or finished just before the request; neither
+        // result is published.
+        void DiscardCancelledWork() const
+        {
+            try
+            {
+                static_cast<void>(pending_.get());
+            }
+            catch (...)
+            {
+            }
+            pcm_ = {};
+            failure_ = "PCM source loading was cancelled.";
+        }
+
         void OpenPcm() const
         {
             FMOD_CREATESOUNDEXINFO info{};
@@ -217,6 +251,7 @@ namespace
         std::uint64_t generation_{};
         AudioLoadMode mode_;
         std::stop_source cancellation_;
+        bool cancelled_{};
         double stretchRate_{1.0};
         mutable bool converting_{};
         mutable std::uint64_t sourceDuration_{};

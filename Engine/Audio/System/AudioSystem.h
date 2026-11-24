@@ -70,6 +70,8 @@ public:
         errorMessage.clear();
         return AudioClipLoadState::Ready;
     }
+    // See AudioClip::CancelLoading. Backends without cancellable loading work have nothing to stop.
+    virtual bool CancelLoading() noexcept { return false; }
     [[nodiscard]] virtual std::unique_ptr<IAudioVoiceBackend> Play(
         const AudioPlaybackSettings& settings,
         IAudioBusBackend* bus,
@@ -96,6 +98,13 @@ public:
     // Async streams may only be played after Ready. Releasing Loading or
     // Playing streams can wait for native I/O or the mixer to finish.
     [[nodiscard]] AudioClipLoadState LoadState(std::string& errorMessage) const;
+    // Stops the decoding or time-stretch work of an async clip the caller no longer wants, before its native
+    // sound is opened. A cancelled clip never becomes Ready: LoadState stays Loading until the worker has
+    // stopped (it checks between PCM blocks), then reports Failed, so polling or RetireClip releases it
+    // without waiting for the whole file. Returns true when the load is cancelled (again on repeated calls),
+    // false when the native sound already exists, the clip failed, or the backend has no such work.
+    // Call on the Client thread, like LoadState.
+    bool CancelLoading() noexcept;
     [[nodiscard]] bool Play(std::string& errorMessage);
     // Async source seeks may return a preparing, inaudible voice. Retain it
     // and poll PreparationState before scheduling/unpausing. The playback

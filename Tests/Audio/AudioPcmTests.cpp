@@ -56,6 +56,22 @@ namespace
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
         }
     }
+    // Polls until the clip fails; a cancelled clip must never pass through Ready on the way.
+    void WaitFailed(AudioSystem& audio, AudioClip& clip, std::string& error)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+        while (true)
+        {
+            audio.Update();
+            const auto state = clip.LoadState(error);
+            Require(state == AudioClipLoadState::Loading || state == AudioClipLoadState::Failed,
+                    "A cancelled clip never becomes Ready or Playing.");
+            if (state == AudioClipLoadState::Failed)
+                return;
+            Require(std::chrono::steady_clock::now() < deadline, "Cancelled clip loading did not stop.");
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        }
+    }
     void WaitVoice(AudioSystem& audio, AudioVoice& voice)
     {
         std::string error;
@@ -114,6 +130,68 @@ namespace
         catch (const std::runtime_error &) { cancelled = true; }
         Require(cancelled, "Cancelled stretch never publishes partial PCM.");
     }
+    // CancelLoading: a clip dropped while it loads stops its worker, fails instead of becoming Ready, has no
+    // duration or voice, and is released once retired. The same file loads normally again, cancelling a Ready
+    // clip changes nothing, and a worker that finished before the cancel still has its result discarded.
+    void VerifyCancellation(AudioSystem& audio, const std::filesystem::path& path, std::uint64_t expectedDuration)
+    {
+        std::string error;
+        const auto started = std::chrono::steady_clock::now();
+        auto cancelled = audio.LoadSound(path, AudioLoadMode::StreamAsyncAccurate, error);
+        Require(cancelled != nullptr, error);
+        Require(cancelled->CancelLoading(), "A loading clip accepts cancellation.");
+        Require(cancelled->CancelLoading(), "Repeated cancellation reports the cancelled load again.");
+        auto again = audio.LoadSound(path, AudioLoadMode::StreamAsyncAccurate, error);
+        Require(again != nullptr, error);
+        WaitFailed(audio, *cancelled, error);
+        const auto cancelledAfter = std::chrono::steady_clock::now() - started;
+        Require(error.find("cancelled") != std::string::npos, "A cancelled clip reports the cancellation: " + error);
+        std::uint64_t duration{};
+        Require(!cancelled->GetDurationMicroseconds(duration, error), "A cancelled clip has no duration.");
+        AudioPlaybackSettings settings;
+        settings.startPaused = true;
+        Require(cancelled->Play(settings, nullptr, error) == nullptr, "A cancelled clip never gets a voice.");
+        const bool stillCancelled = cancelled->CancelLoading();
+        Require(stillCancelled && cancelled->LoadState(error) == AudioClipLoadState::Failed,
+                "Cancelling a failed cancelled clip reports the cancellation and leaves it failed.");
+
+        // The same file requested again decodes on its own worker to the full source.
+        WaitReady(audio, *again);
+        const auto fullLoad = std::chrono::steady_clock::now() - started;
+        Require(again->GetDurationMicroseconds(duration, error) && duration == expectedDuration,
+                "A file loads completely after an earlier load of it was cancelled.");
+        // A long source (the optional --audio-pcm path) shows that the worker stopped early, not at the end.
+        if (fullLoad > std::chrono::milliseconds{300})
+            Require(cancelledAfter < fullLoad / 2, "Cancellation stops decoding before the whole file is read.");
+        Require(!again->CancelLoading(), "A Ready clip has nothing left to cancel.");
+        Require(again->LoadState(error) == AudioClipLoadState::Ready, "Cancelling a Ready clip leaves it Ready.");
+        auto voice = again->Play(settings, nullptr, error);
+        Require(voice != nullptr, error);
+        WaitVoice(audio, *voice);
+        Require(voice->Stop(error), error);
+        voice.reset();
+        again.reset();
+
+        // The worker may finish before the cancel arrives; its unpublished PCM is still discarded.
+        auto finished = audio.LoadSound(path, AudioLoadMode::StreamAsyncAccurate, error);
+        Require(finished != nullptr, error);
+        std::this_thread::sleep_for(std::chrono::milliseconds{200});
+        Require(finished->CancelLoading(), "A decoded but unpublished clip can still be cancelled.");
+        WaitFailed(audio, *finished, error);
+
+        // Retired cancelled clips are released by Update: the mixer restarts once no clip is alive.
+        audio.RetireClip(std::move(cancelled));
+        audio.RetireClip(std::move(finished));
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+        while (true)
+        {
+            audio.Update();
+            if (audio.SetDspBufferSize(audio.DspBufferLength(), audio.DspBufferCount(), error))
+                break;
+            Require(std::chrono::steady_clock::now() < deadline, "Retired cancelled clips are released: " + error);
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        }
+    }
     void VerifyPlayback(const std::filesystem::path& path, const PcmProbe& pcm)
     {
 
@@ -168,6 +246,8 @@ namespace
             Require(clip->Play(settings, nullptr, error) == nullptr,
                     "The normalized PCM end position is rejected before allocating a voice.");
         }
+        VerifyCancellation(audio, path, static_cast<std::uint64_t>(std::llround(
+                                            static_cast<long double>(pcm.frames) * 1'000'000 / pcm.rate)));
         // Cancellation/shutdown must not leave a decoder referencing the device.
         auto cancelled = audio.LoadSound(path, AudioLoadMode::StreamAsyncAccurate, error);
         audio.RetireClip(std::move(cancelled));
@@ -212,7 +292,7 @@ int TestAudioPcm(const char* source)
                       << " frames=" << pcm.frames << " first_attack_ms="
                       << static_cast<double>(pcm.attackFrame) * 1000 / pcm.rate << '\n';
         }
-        std::cout << "PCM decoding, exact duration, async loading, seek/restart and cancellation passed.\n";
+        std::cout << "PCM decoding, exact duration, async loading, load cancellation, seek/restart and cancellation passed.\n";
         return 0;
     }
     catch (const std::exception& error)
