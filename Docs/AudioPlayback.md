@@ -109,6 +109,16 @@ Ready/Playing이 된 후 `AudioVoice::SetDelay(startDspClock, endDspClock, error
 
 UI 소유자가 취소/정지한 Clip은 `AudioSystem::RetireClip(shared_ptr)`로 소유권을 넘길 수 있다.
 AudioSystem::Update는 Ready/Failed가 된 Clip을 해제하며 Loading/Playing은 유지한다.
+
+더 필요 없는 비동기 Clip은 유지·retire하기 전에 `AudioClip::CancelLoading()`을 부른다.
+worker 단계(디코딩, 이어서 고정 속도 변환)의 정지를 요청하며, worker는 PCM 블록 사이에서 멈춘다.
+취소된 Clip은 Ready가 되지 않는다. worker가 멈출 때까지 LoadState는 Loading이고 그 뒤 Failed이므로
+polling이나 RetireClip이 곡 전체 디코딩을 기다리지 않고 해제한다. 취소된 Clip은 native sound를 열지 않으므로
+Voice를 만들지 않는다. worker가 이미 끝났어도 LoadState가 결과를 게시하기 전이면 그 PCM을 버리고 Failed로 끝낸다.
+native sound를 연 뒤(LoadState가 한 번 결과를 게시한 뒤)와 Failed인 Clip은 취소할 것이 없어 false를 돌려주고 그대로다.
+같은 파일을 다시 요청하면 새 Clip이 자기 worker로 처음부터 디코딩한다. 취소는 반복해 불러도 true를 돌려준다.
+Clip을 그냥 해제해도 소멸자가 정지를 요청하지만 worker가 멈출 때까지 기다리므로, Client thread에서는
+CancelLoading 뒤 polling·retire로 놓는다.
 Voice를 먼저 정지해야 하며 API/Update는 같은 Client thread에서 호출한다.
 시스템 종료에서는 backend 작업을 먼저 종료하고 남은 retire 목록을 해제한다.
 이는 다른 Clip/Voice의 소유권이나 SceneGameClient 공통 재생을 바꾸지 않는다.

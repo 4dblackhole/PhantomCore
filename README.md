@@ -19,6 +19,7 @@ Visual2D 텍스트와 ComboBox는 renderer 기본 글꼴, 시스템 family 또�
 `SceneGameClient::AudioPlayback()`은 Scene 사이에서 공유하는 재생 관리자를 제공한다.
 사용법과 Clip·Voice 수명은 [AudioPlayback.md](Docs/AudioPlayback.md)에 있다.
 `StreamAsync`는 파일 열기를 비동기로 요청하고 `AudioClip::LoadState`로 준비 상태를 조회한다.
+더 필요 없는 로딩은 `AudioClip::CancelLoading`으로 디코딩을 멈추고 Failed로 끝낸다.
 Voice의 `PreparationState`는 재생/위치 변경의 비동기 준비를 진행한다. 음악 재개는
 paused Voice의 준비 완료 후 clock을 예약하며 종료된 샘플은 관리자가 같은 ID로 교체한다.
 `SampleAsync`도 준비 상태를 확인한 뒤 재생한다. Visual2D의 `PrepareImages`는 CPU 이미지
