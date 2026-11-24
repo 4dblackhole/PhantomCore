@@ -209,6 +209,12 @@ MP3는 고정한 dr_mp3의 고수준 API로 Info/Xing 프레임과 LAME 지연/�
 형식별 고정 ms를 더하지 않습니다. AAC 등 기존 Windows 코덱의 메타데이터 처리는
 설치된 디코더에 따르며 모든 파일의 gapless 정보를 추정 복원한다고 보장하지 않습니다.
 
+Media Foundation은 첫 디코드가 켠 뒤 프로세스가 끝날 때까지 켜 둡니다.
+
+- 정적 객체가 `MFStartup` 참조 하나를 들고, 프로세스 종료(정적 소멸) 때 다중 스레드 아파트 안에서 `MFShutdown`으로 돌려줍니다.
+- 디코드마다 완전히 켜고 끄면 작업 큐의 스레드 풀 핸들이 매번 남기 때문입니다.
+- 각 디코드도 자기 참조를 따로 잡으므로, 종료 중에 아직 돌던 디코드가 끊기지 않습니다.
+
 FMOD clip factory는 압축 파일을 다시 디코딩하지 않습니다. 공통 PCM을 소유하고
 FMOD OPENRAW/OPENMEMORY로 전달합니다. Stream 계열도 PCM은 메모리에 먼저
 준비되며 raw-memory 스트림과 PCM 소유권은 clip이 유지합니다. Async 계열은 worker에서
