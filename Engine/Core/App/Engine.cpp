@@ -67,12 +67,102 @@ namespace
         return rate > 1.0 ? rate : fallback;
     }
 
-    void ReportFatalError(const std::exception &error, bool showDialog) noexcept
+    void Record(IEngineDiagnosticSink* sink, const std::string& line) noexcept
+    {
+        if (sink != nullptr)
+            sink->OnEngineRecord(line);
+    }
+
+    [[nodiscard]] const char* Name(const WindowMode mode) noexcept
+    {
+        switch (mode)
+        {
+        case WindowMode::Windowed:
+            return "Windowed";
+        case WindowMode::Borderless:
+            return "Borderless";
+        }
+        return "unknown";
+    }
+
+    [[nodiscard]] const char* Name(const RenderRateMode mode) noexcept
+    {
+        switch (mode)
+        {
+        case RenderRateMode::Display:
+            return "Display";
+        case RenderRateMode::DisplayDouble:
+            return "DisplayDouble";
+        case RenderRateMode::Unlimited:
+            return "Unlimited";
+        }
+        return "unknown";
+    }
+
+    [[nodiscard]] std::string Size(const std::uint32_t width, const std::uint32_t height)
+    {
+        return std::to_string(width) + "x" + std::to_string(height);
+    }
+
+    [[nodiscard]] std::string Hertz(const double rate)
+    {
+        return std::to_string(static_cast<std::uint64_t>(std::max(rate, 0.0) + 0.5)) + " Hz";
+    }
+
+    // What the run starts with. Later changes are recorded one line each.
+    void RecordStart(
+        IEngineDiagnosticSink* sink,
+        const D3D12Renderer& renderer,
+        const Win32Window& window,
+        const RenderRateMode renderRate)
+    {
+        if (sink == nullptr)
+            return;
+        for (const std::string& line : renderer.StartupRecord())
+            sink->OnEngineRecord(line);
+        Record(sink, std::string("window: ") + Size(window.ClientWidth(), window.ClientHeight()) + " " +
+            Name(window.Mode()) + ", display " + Hertz(window.RefreshRateHz()) + ", render rate " + Name(renderRate));
+    }
+
+    // Called from a handler, while the renderer still exists: a lost device is
+    // described before anything is released. The exception that revealed the
+    // loss continues afterwards and ends the run as a fatal error.
+    void ReportDeviceLoss(const D3D12Renderer& renderer, IEngineDiagnosticSink* sink) noexcept
+    {
+        if (sink == nullptr)
+            return;
+        try
+        {
+            const char* operation = nullptr;
+            std::uint32_t resultCode = 0;
+            try
+            {
+                throw;
+            }
+            catch (const GraphicsDeviceLostError& lost)
+            {
+                operation = lost.Operation();
+                resultCode = lost.ResultCode();
+            }
+            catch (...)
+            {
+            }
+            if (const auto report = renderer.DeviceLossReport(operation, resultCode))
+                sink->OnGraphicsDeviceLost(*report);
+        }
+        catch (...)
+        {
+        }
+    }
+
+    void ReportFatalError(const std::exception &error, bool showDialog, IEngineDiagnosticSink* sink) noexcept
     {
         OutputDebugStringA("PhantomCore fatal error: ");
         OutputDebugStringA(error.what());
         OutputDebugStringA("\n");
-        if (showDialog)
+        const bool handled =
+            sink != nullptr && sink->OnFatalError(error.what()) == FatalErrorPresentation::Handled;
+        if (showDialog && !handled)
             MessageBoxA(nullptr, error.what(), "PhantomCore fatal error", MB_OK | MB_ICONERROR);
     }
 
@@ -117,7 +207,11 @@ namespace
         MainLoopState(
             const EngineConfig& config,
             const double refreshRateHz)
-            : audioInterval(
+            : diagnosticSink(config.diagnostics.sink),
+              recordedRefreshRate(Hertz(refreshRateHz)),
+              recordedWindowMode(config.windowMode),
+              recordedRenderRate(config.renderRateMode),
+              audioInterval(
                   1.0 / ValidRate(config.audioUpdateRateHz, 500.0))
         {
             schedule.SetBaseRate(
@@ -134,12 +228,38 @@ namespace
         std::uint64_t rendersSinceStatisticsReport{};
         std::uint64_t drawCallsSinceStatisticsReport{};
         std::uint64_t peakDrawCallsSinceStatisticsReport{};
+        double longestLoopSinceStatisticsReport{};
         double statisticsReportStartSeconds{};
         PerformanceStatistics performance{};
+        // Diagnostics: the last values recorded, so only a change adds a line.
+        IEngineDiagnosticSink* diagnosticSink{};
+        std::string recordedRefreshRate;
+        WindowMode recordedWindowMode{};
+        RenderRateMode recordedRenderRate{};
+        bool deviceRemovedForTest{};
         RenderSchedule schedule;
         double audioInterval{};
         double nextAudioUpdateTime{};
     };
+
+    void RecordModeChanges(
+        const Win32Window& window,
+        const IRenderRateControl& renderRate,
+        MainLoopState& state)
+    {
+        if (state.diagnosticSink == nullptr)
+            return;
+        if (window.Mode() != state.recordedWindowMode)
+        {
+            state.recordedWindowMode = window.Mode();
+            Record(state.diagnosticSink, std::string("window mode: ") + Name(state.recordedWindowMode));
+        }
+        if (renderRate.Mode() != state.recordedRenderRate)
+        {
+            state.recordedRenderRate = renderRate.Mode();
+            Record(state.diagnosticSink, std::string("render rate: ") + Name(state.recordedRenderRate));
+        }
+    }
 
     void HandleWindowChanges(
         Win32Window& window,
@@ -152,19 +272,29 @@ namespace
         WindowSize newSize{};
         if (window.ConsumeResize(newSize))
         {
+            Record(state.diagnosticSink, "window size: " + Size(newSize.width, newSize.height));
             renderer.Resize(newSize.width, newSize.height);
             client.OnResize(newSize.width, newSize.height);
         }
 
         double newRefreshRate = 0.0;
-        if (window.ConsumeRefreshRateChange(newRefreshRate) &&
-            config.renderRateOverrideHz <= 1.0)
+        if (window.ConsumeRefreshRateChange(newRefreshRate))
         {
-            state.schedule.SetBaseRate(
-                ValidRate(newRefreshRate, 60.0),
-                state.totalSeconds);
+            // The window reports its rate once at start; only a new value is news.
+            if (std::string rate = Hertz(newRefreshRate); rate != state.recordedRefreshRate)
+            {
+                Record(state.diagnosticSink, "display: " + rate);
+                state.recordedRefreshRate = std::move(rate);
+            }
+            if (config.renderRateOverrideHz <= 1.0)
+            {
+                state.schedule.SetBaseRate(
+                    ValidRate(newRefreshRate, 60.0),
+                    state.totalSeconds);
+            }
         }
         state.schedule.SetMode(renderRate.Mode(), state.totalSeconds);
+        RecordModeChanges(window, renderRate, state);
     }
 
     [[nodiscard]] bool UpdateClient(
@@ -242,7 +372,20 @@ namespace
             state.renderedFrames < config.autoExitAfterRenderedFrames;
     }
 
-    void RefreshPerformanceStatistics(MainLoopState& state)
+    // Test hook of EngineDiagnosticsConfig: loses the device once, on purpose.
+    void RemoveDeviceIfRequested(
+        D3D12Renderer& renderer,
+        const EngineConfig& config,
+        MainLoopState& state)
+    {
+        const std::uint64_t after = config.diagnostics.removeGraphicsDeviceAfterRenderedFrames;
+        if (after == 0 || state.deviceRemovedForTest || state.renderedFrames < after)
+            return;
+        state.deviceRemovedForTest = true;
+        renderer.RemoveDeviceForDiagnosticsTest();
+    }
+
+    void RefreshPerformanceStatistics(const D3D12Renderer& renderer, MainLoopState& state)
     {
         const double elapsedSeconds =
             state.totalSeconds - state.statisticsReportStartSeconds;
@@ -267,12 +410,17 @@ namespace
                 : (state.drawCallsSinceStatisticsReport + state.rendersSinceStatisticsReport / 2) /
                       state.rendersSinceStatisticsReport;
         state.performance.peakDrawCallsPerFrame = state.peakDrawCallsSinceStatisticsReport;
+        state.performance.longestLoopSeconds = state.longestLoopSinceStatisticsReport;
+        const GraphicsMemoryInfo memory = renderer.MemoryInfo();
+        state.performance.graphicsMemoryUsageBytes = memory.usageBytes;
+        state.performance.graphicsMemoryBudgetBytes = memory.budgetBytes;
         ++state.performance.measurementIndex;
         state.performance.hasMeasurement = true;
         state.updatesSinceStatisticsReport = 0;
         state.rendersSinceStatisticsReport = 0;
         state.drawCallsSinceStatisticsReport = 0;
         state.peakDrawCallsSinceStatisticsReport = 0;
+        state.longestLoopSinceStatisticsReport = 0.0;
         state.statisticsReportStartSeconds = state.totalSeconds;
     }
 
@@ -293,6 +441,9 @@ namespace
             // queued Raw Input message before the Client update.
             const double rawDeltaSeconds =
                 state.clock.Tick(state.totalSeconds);
+            // The time since the previous Tick is the length of the previous pass.
+            state.longestLoopSinceStatisticsReport =
+                std::max(state.longestLoopSinceStatisticsReport, rawDeltaSeconds);
             HandleWindowChanges(
                 window,
                 renderer,
@@ -316,8 +467,9 @@ namespace
                     renderer,
                     config,
                     state);
+                RemoveDeviceIfRequested(renderer, config, state);
             }
-            RefreshPerformanceStatistics(state);
+            RefreshPerformanceStatistics(renderer, state);
         }
     }
 }
@@ -331,10 +483,12 @@ static int RunClient(std::unique_ptr<IGameClient> client,
     }
 
     bool showErrorDialog = true;
+    IEngineDiagnosticSink* diagnosticSink = nullptr;
     try
     {
         EngineConfig config = client->GetEngineConfig();
         showErrorDialog = config.showWindow;
+        diagnosticSink = config.diagnostics.sink;
         // The Win32 main thread owns the message pump and must remain an
         // STA so COM-based ASIO drivers can be created by FMOD.
         ComApartment comApartment(
@@ -368,7 +522,9 @@ static int RunClient(std::unique_ptr<IGameClient> client,
             renderer.Initialize(
                 window.Handle(),
                 window.ClientWidth(),
-                window.ClientHeight());
+                window.ClientHeight(),
+                config.diagnostics.graphicsDeviceRemovedData);
+            RecordStart(diagnosticSink, renderer, window, config.renderRateMode);
 
             if (diagnosticsQueue != nullptr)
             {
@@ -421,6 +577,7 @@ static int RunClient(std::unique_ptr<IGameClient> client,
         }
         catch (...)
         {
+            ReportDeviceLoss(renderer, diagnosticSink);
             if (clientInitialized)
             {
                 // Preserve the original failure if the device cannot wait.
@@ -441,7 +598,7 @@ static int RunClient(std::unique_ptr<IGameClient> client,
     }
     catch (const std::exception& exception)
     {
-        ReportFatalError(exception, showErrorDialog);
+        ReportFatalError(exception, showErrorDialog, diagnosticSink);
         return EXIT_FAILURE;
     }
 }

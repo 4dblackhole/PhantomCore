@@ -16,6 +16,7 @@
     <ClInclude Include="App\TextureLifetimeTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\TextureAssetTests.h"><Filter>App</Filter></ClInclude>
     <ClCompile Include="App\HeadlessRunTests.cpp"><Filter>App</Filter></ClCompile>
+    <ClCompile Include="App\DeviceLossTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="App\TextRenderingTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="App\TextPixelTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="App\ImageReadbackTests.cpp"><Filter>App</Filter></ClCompile>
@@ -29,6 +30,7 @@
     <ClInclude Include="App\FileImageTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\ImageReadbackTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\HeadlessRunTests.h"><Filter>App</Filter></ClInclude>
+    <ClInclude Include="App\DeviceLossTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\TextRenderingTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\TextPixelTests.h"><Filter>App</Filter></ClInclude>
     <ClCompile Include="Collision\CollisionTests.cpp">

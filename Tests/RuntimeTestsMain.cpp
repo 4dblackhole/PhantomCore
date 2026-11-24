@@ -2,6 +2,7 @@
 #include "Audio/AudioMixerClockTests.h"
 #include "Audio/AudioPcmTests.h"
 #include "App/HeadlessRunTests.h"
+#include "App/DeviceLossTests.h"
 #include "App/ImageReadbackTests.h"
 #include "App/SceneManagerTests.h"
 #include "App/Visual2DPixelTests.h"
@@ -38,6 +39,8 @@ int main(int argc, char** argv)
         return TestRenderRateModes();
     if (argc == 2 && std::string_view(argv[1]) == "--headless-error")
         return TestHeadlessRunError();
+    if (argc == 2 && std::string_view(argv[1]) == "--device-loss")
+        return TestDeviceLoss();
     if (argc == 2 && std::string_view(argv[1]) == "--text-rendering")
         return TestTextRendering();
     if (argc == 2 && std::string_view(argv[1]) == "--text-pixels")

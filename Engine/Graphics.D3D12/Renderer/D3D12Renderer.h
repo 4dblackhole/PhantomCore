@@ -2,6 +2,7 @@
 
 // Renderer feature: D3D12 device, frame resources, and presentation.
 
+#include "Diagnostics/EngineDiagnostics.h"
 #include "Renderer/RenderFrameContext.h"
 #include "Renderer/FrameResources.h"
 
@@ -14,6 +15,9 @@
 #include <cstdint>
 #include <future>
 #include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 
 namespace PhantomCore
@@ -36,10 +40,13 @@ public:
     D3D12Renderer(const D3D12Renderer&) = delete;
     D3D12Renderer& operator=(const D3D12Renderer&) = delete;
 
+    // deviceRemovedData asks for DRED breadcrumbs and page-fault tracking.
+    // It must be decided before the device exists.
     void Initialize(
         HWND window,
         std::uint32_t width,
-        std::uint32_t height);
+        std::uint32_t height,
+        bool deviceRemovedData = false);
     void Resize(std::uint32_t width, std::uint32_t height);
 
     // Opens a command list, transitions/clears the current back buffer,
@@ -51,6 +58,17 @@ public:
     void WaitForGpu();
     // Draw calls recorded by the most recently completed BeginFrame/EndFrame.
     [[nodiscard]] std::uint32_t LastFrameDrawCalls() const noexcept { return lastFrameDrawCalls_; }
+
+    // Diagnostics. StartupRecord describes the adapter, its driver and the
+    // swap chain, one fact per line. DeviceLossReport is empty while the
+    // device works; operation and resultCode name the call that failed, when
+    // one is known. RemoveDeviceForDiagnosticsTest loses the device on purpose.
+    [[nodiscard]] std::vector<std::string> StartupRecord() const;
+    [[nodiscard]] GraphicsMemoryInfo MemoryInfo() const noexcept;
+    [[nodiscard]] std::optional<GraphicsDeviceLossReport> DeviceLossReport(
+        const char* operation,
+        std::uint32_t resultCode) const;
+    void RemoveDeviceForDiagnosticsTest();
 
     [[nodiscard]] ID3D12Device* Device() const noexcept;
     [[nodiscard]] MeshRenderSystem& MeshRendering() const noexcept;
@@ -77,6 +95,7 @@ private:
     std::uint64_t nextRenderIndex_{1};
     std::uint32_t rtvDescriptorSize_{};
     bool tearingSupported_{};
+    bool deviceRemovedData_{};
     bool frameOpen_{};
     std::uint32_t lastFrameDrawCalls_{};
 
@@ -87,6 +106,8 @@ private:
     RenderFrameContext frameContext_;
 
     Microsoft::WRL::ComPtr<IDXGIFactory6> factory_;
+    // Kept for the diagnostics: its description and the memory queries.
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter_;
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;

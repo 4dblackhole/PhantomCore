@@ -60,6 +60,7 @@
   <ItemGroup>
     <ClInclude Include="Renderer\D3D12Renderer.h" />
     <ClInclude Include="Renderer\FrameImageReadbackQueue.h" />
+    <ClInclude Include="Renderer\GraphicsDeviceDiagnostics.h" />
     <ClInclude Include="Mesh\MeshRendering.h" />
     <ClInclude Include="Texture\TextureManager.h" />
     <ClInclude Include="Text\TextRendering.h" />
@@ -70,6 +71,7 @@
   <ItemGroup>
     <ClCompile Include="Renderer\D3D12Renderer.cpp" />
     <ClCompile Include="Renderer\FrameImageReadbackQueue.cpp" />
+    <ClCompile Include="Renderer\GraphicsDeviceDiagnostics.cpp" />
     <ClCompile Include="Mesh\MeshRendering.cpp" />
     <ClCompile Include="Texture\TextureManager.cpp" />
     <ClCompile Include="Text\TextRendering.cpp" />

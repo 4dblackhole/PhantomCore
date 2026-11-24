@@ -39,8 +39,10 @@ TextStyle/TextVisualComponent는 1~999 굵기를 지원하며 글꼴 배치·글
 Scene 대신 매 프레임 제출한다. 월드·곡면 Canvas는 명시적 pass로 유지한다.
 `RenderContext::ReadImage()`로 완료된 화면 프레임을 RGBA 이미지로 읽을 수 있다.
 [프레임 이미지 읽기](Docs/ImageReadback.md)
-`UpdateContext::performance`는 FPS/UPS와 프레임당 draw 수를 1초마다 제공한다.
+`UpdateContext::performance`는 FPS/UPS, 프레임당 draw 수, 가장 긴 루프 시간과 그래픽 메모리를 1초마다 제공한다.
 [성능 통계](Docs/PerformanceStatistics.md)
+`EngineConfig::diagnostics`의 받는 쪽은 시작 기록, 그래픽 장치 끊김 보고서와 치명적 오류를 받는다. 엔진은 파일을 만들지 않는다.
+[엔진 진단 기록](Docs/EngineDiagnostics.md)
 
 처음 사용하는 개발자나 새 작업 세션은
 [Docs/EngineOverview.md](Docs/EngineOverview.md)부터 읽는다. 주요 기능, 코드 위치,

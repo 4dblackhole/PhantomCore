@@ -964,6 +964,8 @@ void TextureManager::Impl::BeginUploadCommands()
         D3D12Detail::ThrowIfFailed(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, uploadAllocator_.Get(), nullptr,
                                                  IID_PPV_ARGS(uploadCommandList_.ReleaseAndGetAddressOf())),
                       "Create texture upload list");
+        // Named for the device-removed data, which lists command lists by name.
+        static_cast<void>(uploadCommandList_->SetName(L"Texture upload"));
     }
     else
     {
