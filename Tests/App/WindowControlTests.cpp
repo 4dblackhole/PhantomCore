@@ -225,8 +225,23 @@ namespace
                   "A windowed size that covers the monitor has no frame.");
             Check(outer().left == screen.left && outer().top == screen.top && window_->ClientSize() == full,
                   "A monitor-sized picture fills the monitor.");
+            // A window alone on its monitor would be shown without the compositor and could tear;
+            // the one-pixel child in its corner keeps it composed.
+            const auto pinShown = [native]
+            {
+                const HWND pin = FindWindowExW(native, nullptr, L"PhantomCore.D3D12.CompositionPin", nullptr);
+                return pin != nullptr && (GetWindowLongPtrW(pin, GWL_STYLE) & WS_VISIBLE) != 0;
+            };
+            const HWND pin = FindWindowExW(native, nullptr, L"PhantomCore.D3D12.CompositionPin", nullptr);
+            RECT pinRectangle{};
+            Check(pinShown() && GetWindowRect(pin, &pinRectangle) != FALSE,
+                  "A monitor-sized window shows its composition pin.");
+            const bool onePixel = pinRectangle.right - pinRectangle.left == 1 && pinRectangle.bottom - pinRectangle.top == 1;
+            Check(onePixel && pinRectangle.right == screen.right && pinRectangle.bottom == screen.bottom,
+                  "The composition pin is the bottom-right pixel.");
             Check(window_->SetClientSize({960, 540}, error) && framed(),
                   "A smaller windowed size gets its frame back.");
+            Check(!pinShown(), "A window smaller than its monitor hides the composition pin.");
             const RECT restored = outer();
             const bool onScreen = restored.left >= monitor.rcWork.left && restored.top >= monitor.rcWork.top;
             Check(onScreen && window_->ClientSize() == WindowResolution{960, 540},

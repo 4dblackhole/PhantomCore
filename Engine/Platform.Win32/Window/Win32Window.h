@@ -84,11 +84,14 @@ private:
     void RefreshDisplayRate() noexcept;
     [[nodiscard]] bool Place(WindowResolution size, WindowMode mode, std::string &error);
     void UpdateBackdrop() noexcept;
+    void UpdateCompositionPin(bool coversMonitor) noexcept;
 
     HINSTANCE instance_{};
     HWND window_{};
     // Black window behind a Borderless picture that is smaller than its monitor.
     HWND backdrop_{};
+    // One-pixel child that keeps a monitor-sized window composed (no tearing).
+    HWND compositionPin_{};
     WindowMode mode_{WindowMode::Windowed};
     // Client-area position the Client or a finished drag asked for; empty
     // uses the default placement of the mode.
