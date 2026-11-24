@@ -61,9 +61,15 @@ namespace
             constexpr auto maximum = static_cast<std::uint32_t>(std::numeric_limits<int>::max());
             if (bounds.width > maximum || bounds.height > maximum)
                 throw std::out_of_range("Text input bounds exceed native window coordinates.");
+            // Callers place the control on every Update. Each SetWindowPos is a system call that also
+            // notifies the compositor, so an unchanged position must not reach the window at all.
+            if (placed_ && SameBounds(bounds_, bounds))
+                return;
             if (!SetWindowPos(window_, nullptr, bounds.x, bounds.y, static_cast<int>(bounds.width),
                               static_cast<int>(bounds.height), SWP_NOACTIVATE | SWP_NOZORDER))
                 throw std::runtime_error("Failed to position text input.");
+            bounds_ = bounds;
+            placed_ = true;
         }
         void SetFont(std::wstring_view family, std::uint32_t pixelHeight) override
         {
@@ -203,7 +209,16 @@ namespace
                 InvalidateRect(window, nullptr, TRUE);
             return result;
         }
+        [[nodiscard]] static bool SameBounds(const TextInputBounds &left, const TextInputBounds &right) noexcept
+        {
+            const bool sameOrigin = left.x == right.x && left.y == right.y;
+            const bool sameSize = left.width == right.width && left.height == right.height;
+            return sameOrigin && sameSize;
+        }
         HWND parent_{}, window_{};
+        // The bounds last given to the window; valid once placed_ is set.
+        TextInputBounds bounds_{};
+        bool placed_{};
         HFONT font_{};
         HBRUSH brush_{};
         std::wstring fontFamily_;
