@@ -700,9 +700,11 @@ LRESULT Win32Window::WindowProcedure(
 
     case WM_SYSCOMMAND:
         // Alt or F10 alone would enter the modal window-menu loop, which stops the game loop until the
-        // menu is dismissed; games keep Alt as a modifier (for example Alt+wheel). Alt+Space, which names
-        // a key in lParam, still opens the system menu.
-        if ((wParam & 0xFFF0) == SC_KEYMENU && lParam == 0)
+        // menu is dismissed; games keep Alt as a modifier (for example Alt+wheel, Alt with -/+). Alt with
+        // another character key names it in lParam, and default processing then looks for a menu mnemonic
+        // and beeps when there is none. Only Alt+Space still opens the system menu. Alt+F4 (SC_CLOSE) and
+        // Alt+Tab (the shell) do not come through here.
+        if ((wParam & 0xFFF0) == SC_KEYMENU && lParam != VK_SPACE)
             return 0;
         break;
 
