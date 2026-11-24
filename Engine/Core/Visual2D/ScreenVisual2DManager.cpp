@@ -228,6 +228,9 @@ ImageHandle ScreenVisual2DManager::CreatePixelImage(
 
 void ScreenVisual2DManager::ReleaseImage(const ImageHandle image) noexcept
 {
+    // A released file image is loaded again (a new handle) by its path's next RegisterImage.
+    if (image)
+        std::erase_if(images_, [image](const auto& entry) { return entry.second.value == image.value; });
     if (rendering_ != nullptr)
         rendering_->ReleaseImage(image);
 }

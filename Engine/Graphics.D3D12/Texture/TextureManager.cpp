@@ -201,6 +201,11 @@ struct TextureManager::Impl final
         std::uint32_t width,
         std::uint32_t height,
         std::span<const std::uint8_t> rgba8);
+    // Decodes an image file (or takes its prepared pixels) into an existing slot.
+    void ReplaceTexture(
+        const TextureSetHandle& textureSet,
+        std::size_t index,
+        const std::filesystem::path& path);
 
     [[nodiscard]] ID3D12DescriptorHeap* DescriptorHeap() const noexcept;
     [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptorStart(
@@ -242,6 +247,11 @@ struct TextureManager::Impl final
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>&
             uploadBuffers);
     void ExecuteUpload(std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> buffers, TextureSetHandle target);
+    // Uploads decoded pixels into a new set (null), the next slot of a set, or the replaced slot.
+    [[nodiscard]] TextureSetHandle UploadImage(
+        const TextureSetHandle& textureSet,
+        std::optional<std::size_t> replacedIndex,
+        const DecodedImage& image);
     struct PendingUpload
     {
         std::uint64_t fence{};
@@ -713,7 +723,35 @@ TextureSetHandle TextureManager::Impl::UploadPixels(
     }
     DecodedImage image{width, height, std::vector<std::byte>(rgba8.size())};
     std::memcpy(image.pixels.data(), rgba8.data(), rgba8.size());
+    return UploadImage(textureSet, replacedIndex, image);
+}
 
+void TextureManager::Impl::ReplaceTexture(
+    const TextureSetHandle& textureSet,
+    const std::size_t index,
+    const std::filesystem::path& path)
+{
+    RequireOwnerThread();
+    if (!initialized_ || device_ == nullptr || commandQueue_ == nullptr)
+    {
+        throw std::logic_error(
+            "TextureManager must be initialized before replacing a texture.");
+    }
+    if (textureSet == nullptr || path.empty())
+    {
+        throw std::invalid_argument(
+            "Replacing a texture requires an existing set and path.");
+    }
+    // Decode first, as for appended files, so a bad file leaves the slot and the upload list untouched.
+    const DecodedImage image = TakePreparedImage(path);
+    static_cast<void>(UploadImage(textureSet, index, image));
+}
+
+TextureSetHandle TextureManager::Impl::UploadImage(
+    const TextureSetHandle& textureSet,
+    const std::optional<std::size_t> replacedIndex,
+    const DecodedImage& image)
+{
     // A null set starts a new descriptor block; otherwise the slot is the next one or the replaced one.
     std::shared_ptr<D3D12TextureSet> target;
     D3D12_CPU_DESCRIPTOR_HANDLE blockStart{};
@@ -1278,6 +1316,12 @@ void TextureManager::ReplaceTexture(const TextureSetHandle& textureSet, const st
     if (textureSet == nullptr)
         throw std::invalid_argument("Replacing a texture requires an existing set.");
     static_cast<void>(implementation_->UploadPixels(textureSet, index, width, height, rgba8));
+}
+
+void TextureManager::ReplaceTexture(const TextureSetHandle& textureSet, const std::size_t index,
+    const std::filesystem::path& path)
+{
+    implementation_->ReplaceTexture(textureSet, index, path);
 }
 
 RenderTargetTextureHandle TextureManager::CreateRenderTargetTexture(

@@ -29,6 +29,7 @@ public:
 
     // Loads a PNG/WIC-supported image once and returns an opaque handle
     // that can be assigned to a SpriteVisualComponent or widget style.
+    // The same path returns the same handle until ReleaseImage releases it.
     [[nodiscard]] virtual ImageHandle LoadImageFile(
         const std::filesystem::path& path) = 0;
     // Start/poll CPU decoding without waiting. On true, inspect error;
@@ -58,9 +59,10 @@ public:
     {
         return {};
     }
-    // Releases an image made by CreatePixelImage; file images and unknown handles are ignored.
+    // Releases an image made by CreatePixelImage or LoadImageFile; unknown handles are ignored.
     // Frames already submitted keep sampling it, so its slot is reused only after the frame ring
-    // has passed them. Packets that still name it after release draw nothing.
+    // has passed them (a pixel slot by a pixel image, a file slot by the next file load). Packets
+    // that still name it after release draw nothing. A released file path loads again as a new handle.
     virtual void ReleaseImage(ImageHandle) noexcept
     {
     }

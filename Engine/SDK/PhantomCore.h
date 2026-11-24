@@ -2320,13 +2320,17 @@ public:
         Point screenOrigin,
         std::uint32_t zOrder) noexcept;
 
-    // Paths are cached for this Client lifetime. The backend still owns
-    // the GPU texture while this manager owns the game-facing registry.
+    // Paths are cached until ReleaseImage or the end of this Client lifetime: every RegisterImage of
+    // one path returns the same handle. The backend still owns the GPU texture while this manager owns
+    // the game-facing registry.
     [[nodiscard]] ImageHandle RegisterImage(const std::filesystem::path& path);
     [[nodiscard]] Size GetImageSize(ImageHandle image) const noexcept;
     // Pixel images through the renderer (see Visual2DRenderSystem::CreatePixelImage).
     [[nodiscard]] ImageHandle CreatePixelImage(std::uint32_t width, std::uint32_t height,
                                                std::span<const std::uint8_t> rgba8);
+    // Releases a pixel image or a registered file image (see Visual2DRenderSystem::ReleaseImage). A file
+    // image is shared by every holder of its handle, so release it only when none of them draws it any
+    // more; its path then registers again as a new image.
     void ReleaseImage(ImageHandle image) noexcept;
 
     void Update(double elapsedSeconds);
@@ -3148,6 +3152,9 @@ public:
     // samples that slot (Visual2D retires released image slots through its frame ring first).
     void ReplaceTexture(const TextureSetHandle& textureSet, std::size_t index,
         std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8);
+    // The same for an image file, decoded like LoadTextureSet (prepared pixels are used when present).
+    // A file that cannot be decoded throws before the slot changes.
+    void ReplaceTexture(const TextureSetHandle& textureSet, std::size_t index, const std::filesystem::path& path);
     [[nodiscard]] RenderTargetTextureHandle CreateRenderTargetTexture(
         std::uint32_t width, std::uint32_t height);
 
@@ -3481,6 +3488,7 @@ public:
 
     // Loads a PNG/WIC-supported image once and returns an opaque handle
     // that can be assigned to a SpriteVisualComponent or widget style.
+    // The same path returns the same handle until ReleaseImage releases it.
     [[nodiscard]] virtual ImageHandle LoadImageFile(
         const std::filesystem::path& path) = 0;
     // Start/poll CPU decoding without waiting. On true, inspect error;
@@ -3510,9 +3518,10 @@ public:
     {
         return {};
     }
-    // Releases an image made by CreatePixelImage; file images and unknown handles are ignored.
+    // Releases an image made by CreatePixelImage or LoadImageFile; unknown handles are ignored.
     // Frames already submitted keep sampling it, so its slot is reused only after the frame ring
-    // has passed them. Packets that still name it after release draw nothing.
+    // has passed them (a pixel slot by a pixel image, a file slot by the next file load). Packets
+    // that still name it after release draw nothing. A released file path loads again as a new handle.
     virtual void ReleaseImage(ImageHandle) noexcept
     {
     }
