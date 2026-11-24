@@ -49,6 +49,8 @@ foreach ($configuration in 'Debug', 'Release') {
 | `--audio-clock` | 기본 출력에서 스냅샷 400개의 흔들림: 날 DSP clock 짝짓기와 `CaptureClockSnapshot` 비교 |
 | `--headless-error` | 숨김 실행의 Update 예외 정리 |
 | `--device-loss` | 진단 받는 쪽의 시작 기록과 성능 표본, 일부러 제거한 그래픽 장치의 보고서(실패한 호출·제거 사유·프레임), 보고서 → Client 종료 → 치명적 오류 순서, 장치 제거 추가 정보(DRED) 켬·끔 |
+| `--main-loop-watch` | 메인 루프 멈춤 감시: 계속 도는 루프와 창 메시지 루프로 붙잡힌 루프는 알리지 않음, 멈춘 Update는 멈춤 한 번·풀림 한 번, 감시 스레드에서 알림 |
+| `--crash-dump` | 크래시 덤프: 자식 프로세스의 구조적 예외·스택 넘침·`std::terminate`·순수 가상 호출·잘못된 인자마다 덤프 파일과 관찰자 통지, 요청한 덤프와 보관 개수 한도. 임시 폴더 사용 |
 | `--audio-pcm [경로]` | 공통 PCM 디코딩과 고정 속도 변환, Media Foundation WAV 반복 디코드(같은 샘플·핸들 증가 없음), 비동기 Clip 로딩 취소(Ready가 되지 않음·Voice 없음·같은 파일 다시 열기·완료와 겹친 취소·retire 해제) |
 
 이 프로젝트와 전체 솔루션의 빌드에는 FMOD SDK가 필요합니다. CPU CI 통과는 실제

@@ -3,7 +3,8 @@
 게임이 꺼졌을 때 무슨 일이 있었는지 알 수 있도록, `Run`이 아는 사실을 Client에 넘겨줍니다.
 엔진은 무엇을 기록할지만 정합니다. 파일을 만들거나 창을 띄우지 않으며, 어디에 남길지는 Client가 정합니다.
 
-선언은 `Engine/Core/Diagnostics/EngineDiagnostics.h`에 있고 `PhantomCore.h`에 포함됩니다.
+선언은 `Engine/Core/Diagnostics/EngineDiagnostics.h`(받는 쪽)와 `Engine/Platform.Win32/System/CrashDump.h`(덤프)에 있고
+`PhantomCore.h`에 포함됩니다.
 
 ## 연결
 
@@ -17,6 +18,8 @@ public:
     void OnEngineRecord(std::string_view line) noexcept override;
     void OnGraphicsDeviceLost(const PhantomCore::GraphicsDeviceLossReport& report) noexcept override;
     PhantomCore::FatalErrorPresentation OnFatalError(std::string_view message) noexcept override;
+    void OnMainLoopStalled(const PhantomCore::MainLoopStallReport& report) noexcept override;
+    void OnMainLoopResumed(double stalledSeconds) noexcept override;
 };
 
 PhantomCore::EngineConfig MyGame::GetEngineConfig() const
@@ -27,7 +30,8 @@ PhantomCore::EngineConfig MyGame::GetEngineConfig() const
 }
 ```
 
-세 함수는 모두 `Run`을 부른 스레드에서 불립니다. 예외를 던지면 안 되고 빨리 돌아와야 합니다.
+어느 함수도 예외를 던지면 안 됩니다. 앞의 세 함수는 `Run`을 부른 스레드에서 불리고 빨리 돌아와야 합니다.
+멈춤을 알리는 두 함수는 엔진의 감시 스레드에서 불립니다. 멈춘 것이 바로 `Run`을 부른 스레드이기 때문입니다.
 
 ## 무엇이 언제 오는가
 
@@ -36,6 +40,8 @@ PhantomCore::EngineConfig MyGame::GetEngineConfig() const
 | `OnEngineRecord` | 그래픽 장치를 만든 직후, 그 뒤로는 값이 바뀔 때마다 | 줄바꿈 없는 ASCII 한 줄 |
 | `OnGraphicsDeviceLost` | 그래픽 장치가 끊긴 것을 알았을 때 한 번. 엔진이 아무것도 해제하기 전 | `GraphicsDeviceLossReport` |
 | `OnFatalError` | 실행을 끝내는 예외마다 한 번. Client `Shutdown`과 엔진 서비스 해제가 끝난 뒤 | 예외 문구 |
+| `OnMainLoopStalled` | 메인 루프가 정한 시간 동안 한 바퀴도 끝내지 못했을 때, 멈춤마다 한 번(감시 스레드) | `MainLoopStallReport` |
+| `OnMainLoopResumed` | 알린 멈춤이 풀렸을 때(감시 스레드) | 멈춰 있던 시간 |
 
 시작 때 오는 줄은 다음과 같습니다.
 
@@ -93,11 +99,82 @@ command list Frame on queue Main queue: completed 41 of 57 operations; DrawInsta
 알리는 창을 직접 띄울 때 씁니다. `EngineDialog`를 돌려주면 지금까지처럼 엔진이 문구만 담은 창을 띄웁니다.
 숨김 실행(`showWindow=false`)에서는 어느 쪽이든 엔진 창이 없습니다.
 
+## 메인 루프 멈춤 감시
+
+`EngineConfig::diagnostics.mainLoopStallSeconds`에 0보다 큰 값을 넣으면 엔진이 메인 루프를 지켜봅니다.
+루프는 한 바퀴마다 숫자 하나를 올리고, 감시 스레드가 0.25초마다 그 숫자를 봅니다. 정한 시간 동안 그대로면 `OnMainLoopStalled`를 부릅니다.
+이때 Client가 덤프를 쓰면(아래 `CrashDumpService::WriteNow`) 메인 스레드가 어디에서 기다리는지 남습니다.
+
+다음은 멈춤으로 보지 않습니다.
+
+- **창 자신의 루프**: 창을 끌거나 크기를 바꾸는 동안, 메뉴, 모달 대화 상자. 이때는 메인 루프가 돌지 않아도 창이 메시지에 답합니다.
+  감시 스레드는 알리기 전에 창에 빈 메시지를 보내 보고, 답이 오면 알리지 않습니다.
+- **디버거**: 디버거가 붙어 있으면 알리지 않습니다(중단점).
+- **PC 절전**: 시계가 아니라 본 횟수로 재므로, 절전에서 돌아온 뒤 없던 멈춤이 생기지 않습니다.
+- **루프 밖**: 감시는 메인 루프가 도는 동안에만 합니다. Client `Initialize`·`Shutdown`과 오류 창은 대상이 아닙니다.
+
+정한 시간보다 긴 동기 작업(예: 한 번의 Update 안에서 하는 긴 로딩)은 멈춤으로 알립니다. 그런 작업보다 넉넉히 큰 값을 쓰십시오.
+창 메시지에 답하면서 멈춘 경우(예: 메시지를 처리하며 기다리는 COM 호출)는 잡지 못합니다.
+
+평소 비용은 루프 한 바퀴마다 정수 하나를 쓰는 것뿐입니다. 받는 쪽이 없거나 값이 0이면 스레드도 만들지 않습니다.
+
+## 크래시 덤프
+
+`CrashDumpService`가 살아 있는 동안 프로세스가 죽으면 `<폴더>/<접두사>-YYYYMMDD-HHMMSS-<사유>.dmp`를 남깁니다.
+엔진 실행(`Run`)과 무관하게 쓸 수 있으므로 Client는 `wWinMain` 맨 앞에서 만듭니다.
+
+```cpp
+int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
+{
+    PhantomCore::CrashDumpService dumps(PhantomCore::ExecutableDirectory() / L"Crash", L"mygame", 5, &observer);
+    return PhantomCore::Run(std::make_unique<MyGame>());
+}
+```
+
+| 사유(파일 이름) | 언제 |
+| --- | --- |
+| `crash` | 처리되지 않은 구조적 예외: 접근 위반, 스택 넘침 등 |
+| `terminate` | `std::terminate`: 아무도 잡지 않은 C++ 예외, `noexcept` 함수 밖으로 나간 예외 |
+| `purecall` | 순수 가상 함수 호출 |
+| `invalid-parameter` | C 런타임이 인자를 거부함 |
+| `requested` 또는 준 이름 | `WriteNow`로 요청한 덤프. 프로세스는 계속 돕니다 |
+
+- 덤프에는 모든 스레드의 호출 스택과 로드된 모듈이 들어가고 힙은 들어가지 않습니다. 스레드와 모듈 수에 따라 수십 KB에서 수 MB입니다.
+- 프로세스 안에서만 처리합니다. 시스템 설정(오류 보고, 레지스트리)을 읽거나 바꾸지 않고, 파일은 PC 밖으로 나가지 않습니다.
+  덤프를 쓴 뒤에는 Windows가 서비스가 없을 때와 같은 방식으로 프로세스를 끝냅니다.
+- 죽는 스레드는 미리 만들어 둔 덤프 스레드에 일을 넘기기만 합니다. 그래서 스택 넘침이나 잠금을 쥔 채 죽은 경우에도 쓸 수 있습니다.
+  덤프 라이브러리(`dbghelp.dll`, 시스템 폴더의 것)는 생성자에서 미리 로드합니다. Client는 import library를 추가하지 않습니다.
+- 생성자는 폴더를 만들고 같은 접두사의 오래된 덤프를 `keepNewest`개만 남깁니다. `WriteNow` 뒤에도 같은 한도를 지킵니다.
+- 서비스는 프로세스에 하나만 둘 수 있습니다.
+- `ICrashDumpObserver::OnCrashDump`는 덤프 시도 뒤 덤프 스레드에서 불립니다. 크래시 뒤에는 프로세스가 손상된 상태이므로
+  미리 연 핸들과 고정 버퍼만 쓰고, 할당하거나 다른 스레드가 쥘 수 있는 잠금을 잡지 않습니다.
+- 덤프에는 실행 파일과 모듈의 전체 경로가 들어 있습니다. 사용자 폴더 아래에 설치했다면 사용자 이름이 보입니다.
+
+잡지 못하는 경우도 있습니다. 런타임이 처리기를 거치지 않고 프로세스를 바로 끝내는 실패(`__fastfail`, 스택 버퍼 검사 실패),
+덤프 스레드 자신의 고장, 그리고 죽은 스레드가 힙 잠금을 쥐고 있어 덤프 쓰기가 20초 안에 끝나지 않는 경우입니다.
+
+### 덤프 읽기
+
+덤프의 호출 스택을 함수 이름으로 보려면 그 빌드의 실행 파일과 PDB가 필요합니다. Client는 배포한 빌드마다 둘을 함께 보관합니다
+(배포 폴더에 넣을 필요는 없습니다). Visual Studio에서 `.dmp`를 열거나 다음처럼 봅니다.
+
+```powershell
+cdb -z mygame-20261125-061530-crash.dmp -y <PDB가 있는 폴더> -c ".ecxr; k; q"
+```
+
+요청한 덤프(`WriteNow`)에는 예외 정보가 없으므로 `.ecxr` 대신 `~*k`로 모든 스레드를 봅니다. 메인 스레드는 보통 0번입니다.
+
 ## 일부러 끊어 보기
 
 `EngineConfig::diagnostics.removeGraphicsDeviceAfterRenderedFrames`에 0이 아닌 값을 넣으면 그만큼 렌더한 뒤 엔진이 장치를 일부러
 제거합니다(`ID3D12Device5::RemoveDevice`). 위 경로 전체를 Release 빌드에서도 그대로 시험할 수 있습니다.
 Client는 이 값을 숨은 실행 인자에만 연결하고, 사용자의 설정 파일에는 두지 않습니다.
+
+멈춤과 크래시는 엔진 설정 없이 Client 코드로 일으킬 수 있습니다(Update에서 오래 자기, 예외 던지기).
+`PhantomCore.Collision.Tests --main-loop-watch`는 Update 하나를 1.7초 붙잡아 멈춤이 한 번, 풀림이 한 번 오는지와,
+같은 시간 동안 창 메시지 루프를 돌리면 오지 않는지를 봅니다. `--crash-dump`는 자식 프로세스를 다섯 가지 방법으로 죽이고
+(구조적 예외, 스택 넘침, `std::terminate`, 순수 가상 호출, 잘못된 인자) 덤프 파일과 관찰자 통지를 확인하며,
+요청한 덤프 세 개 가운데 두 개만 남는지도 봅니다. 임시 폴더에서 돌리고 끝나면 지웁니다.
 
 `PhantomCore.Collision.Tests --device-loss`가 이 값으로 숨긴 엔진을 세 번 돌려 확인합니다.
 
