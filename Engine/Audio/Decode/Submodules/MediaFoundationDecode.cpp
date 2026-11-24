@@ -22,6 +22,36 @@ namespace
         if (FAILED(result))
             throw std::runtime_error("PCM decoding failed (Media Foundation): " + std::to_string(result));
     }
+    // Media Foundation counts MFStartup calls: the call that starts it from zero creates its work queues, and the
+    // last MFShutdown tears them down, leaving thread pool handles behind each time. One reference taken after the
+    // first decode's own and held until process exit turns every later decode's pair into a count change.
+    class MediaPlatformReference
+    {
+    public:
+        // Best effort: without the held reference decoding still works, starting and stopping per decode.
+        static void Hold() noexcept
+        {
+            static const MediaPlatformReference reference;
+        }
+        // Runs at process exit (static destruction, after the engine's main-thread apartment has ended and its
+        // decode workers have finished). Like each decode's own MFShutdown, it runs inside the multithreaded
+        // apartment.
+        ~MediaPlatformReference()
+        {
+            if (!held_)
+                return;
+            const auto com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+            MFShutdown();
+            if (SUCCEEDED(com))
+                CoUninitialize();
+        }
+        MediaPlatformReference(const MediaPlatformReference&) = delete;
+        MediaPlatformReference& operator=(const MediaPlatformReference&) = delete;
+
+    private:
+        MediaPlatformReference() noexcept : held_(SUCCEEDED(MFStartup(MF_VERSION))) {}
+        bool held_{};
+    };
     struct MediaRuntime
     {
         MediaRuntime()
@@ -37,6 +67,9 @@ namespace
                     CoUninitialize();
                 Check(media);
             }
+            // Each decode keeps its own reference as well, so one still running at process exit outlives the held
+            // reference's MFShutdown.
+            MediaPlatformReference::Hold();
         }
         ~MediaRuntime()
         {

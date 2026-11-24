@@ -1,5 +1,6 @@
 #include "PhantomCore.h"
 #include "AudioPcmTests.h"
+#include <Windows.h>
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -255,11 +256,75 @@ namespace
     }
 }
 
+namespace
+{
+    // A 16-bit PCM WAV written next to the test run; removed again when the check ends.
+    struct TemporaryWave
+    {
+        TemporaryWave(std::uint16_t channels, std::uint32_t rate, const std::vector<std::int16_t>& samples)
+            : path(std::filesystem::temp_directory_path() /
+                   ("PhantomCore-pcm-" + std::to_string(GetCurrentProcessId()) + ".wav"))
+        {
+            std::ofstream output(path, std::ios::binary);
+            const auto put32 = [&](std::uint32_t value) { output.write(reinterpret_cast<const char*>(&value), 4); };
+            const auto put16 = [&](std::uint16_t value) { output.write(reinterpret_cast<const char*>(&value), 2); };
+            const auto bytes = static_cast<std::uint32_t>(samples.size() * sizeof(std::int16_t));
+            output.write("RIFF", 4); put32(36 + bytes); output.write("WAVE", 4);
+            output.write("fmt ", 4); put32(16); put16(1); put16(channels); put32(rate);
+            put32(rate * channels * 2); put16(static_cast<std::uint16_t>(channels * 2)); put16(16);
+            output.write("data", 4); put32(bytes);
+            output.write(reinterpret_cast<const char*>(samples.data()), bytes);
+            Require(static_cast<bool>(output), "Could not write the temporary WAV file.");
+        }
+        ~TemporaryWave()
+        {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+        TemporaryWave(const TemporaryWave&) = delete;
+        TemporaryWave& operator=(const TemporaryWave&) = delete;
+        std::filesystem::path path;
+    };
+    DWORD ProcessHandles()
+    {
+        DWORD count{};
+        Require(GetProcessHandleCount(GetCurrentProcess(), &count) != 0, "GetProcessHandleCount failed.");
+        return count;
+    }
+    // A WAV is decoded by Media Foundation. Decoding it again and again returns the same samples and leaves no
+    // work-queue handles behind (each start/stop of Media Foundation used to keep thread pool handles).
+    void VerifyMediaFoundationRepeat()
+    {
+        constexpr std::uint16_t channels = 2;
+        constexpr std::uint32_t rate = 44100, frames = 4410;
+        std::vector<std::int16_t> written(static_cast<std::size_t>(frames) * channels);
+        for (std::size_t i = 0; i < written.size(); ++i)
+            written[i] = static_cast<std::int16_t>(static_cast<int>(i * 7919 % 65536) - 32768);
+        const TemporaryWave wave(channels, rate, written);
+        const auto first = Probe(wave.path);
+        Require(first.channels == channels && first.rate == rate && first.frames == frames,
+                "Media Foundation returns the WAV's own format and length.");
+        for (std::size_t i = 0; i < written.size(); ++i)
+            Require(std::abs(first.samples[i] * 32768.0F - written[i]) <= 1.0F,
+                    "Media Foundation returns the WAV's samples.");
+        constexpr int repeats = 24;
+        const auto before = ProcessHandles();
+        for (int i = 0; i < repeats; ++i)
+            Require(Probe(wave.path).samples == first.samples,
+                    "Repeated Media Foundation decodes return identical samples.");
+        const auto after = ProcessHandles();
+        Require(after <= before + 4, "Repeated Media Foundation decodes leave no handles behind: " +
+                                         std::to_string(before) + " -> " + std::to_string(after) + " after " +
+                                         std::to_string(repeats) + " decodes.");
+    }
+}
+
 int TestAudioPcm(const char* source)
 {
     try
     {
         VerifyStretch();
+        VerifyMediaFoundationRepeat();
         const auto fixture = std::filesystem::path(__FILE__).parent_path() / "Fixtures/PaddedTone.mp3";
         auto pcm = Probe(fixture);
         Require(pcm.rate == 44100 && pcm.channels == 2 && pcm.frames == 44100,
