@@ -17,6 +17,7 @@ namespace
 {
     constexpr wchar_t WindowClassName[] = L"PhantomCore.D3D12.Window";
     constexpr wchar_t BackdropClassName[] = L"PhantomCore.D3D12.Backdrop";
+    constexpr wchar_t CompositionPinClassName[] = L"PhantomCore.D3D12.CompositionPin";
     constexpr DWORD FramedStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     // The system menu and minimize box keep Alt+F4 and taskbar minimize.
     constexpr DWORD FramelessStyle =
@@ -174,11 +175,14 @@ Win32Window::~Win32Window()
         DestroyWindow(backdrop_);
         backdrop_ = nullptr;
     }
+    // The pin was a child of the game window and went with it.
+    compositionPin_ = nullptr;
 
     if (instance_ != nullptr)
     {
         UnregisterClassW(WindowClassName, instance_);
         UnregisterClassW(BackdropClassName, instance_);
+        UnregisterClassW(CompositionPinClassName, instance_);
     }
 }
 
@@ -220,6 +224,19 @@ void Win32Window::Initialize(const WindowConfig& config, InputState& input)
         static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     backdropClass.lpszClassName = BackdropClassName;
     if (RegisterClassExW(&backdropClass) == 0 &&
+        GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+    {
+        throw MakeWin32Error("RegisterClassExW");
+    }
+
+    WNDCLASSEXW pinClass{};
+    pinClass.cbSize = sizeof(pinClass);
+    pinClass.lpfnWndProc = DefWindowProcW;
+    pinClass.hInstance = instance_;
+    pinClass.hbrBackground =
+        static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    pinClass.lpszClassName = CompositionPinClassName;
+    if (RegisterClassExW(&pinClass) == 0 &&
         GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
     {
         throw MakeWin32Error("RegisterClassExW");
@@ -484,7 +501,57 @@ bool Win32Window::Place(const WindowResolution size, const WindowMode mode, std:
         return false;
     }
     UpdateBackdrop();
+    UpdateCompositionPin(coversMonitor);
     return true;
+}
+
+// A window that covers its monitor alone is shown without the desktop
+// compositor, and then presents can tear. One visible child pixel in the
+// bottom-right corner keeps such a window composed like any other window, so
+// a monitor-sized picture never tears. The pixel is black, takes no input and
+// is hidden again when the window stops covering the monitor.
+void Win32Window::UpdateCompositionPin(const bool coversMonitor) noexcept
+{
+    if (window_ == nullptr)
+    {
+        return;
+    }
+    if (!coversMonitor)
+    {
+        if (compositionPin_ != nullptr)
+        {
+            ShowWindow(compositionPin_, SW_HIDE);
+        }
+        return;
+    }
+    RECT client{};
+    if (!GetClientRect(window_, &client))
+    {
+        return;
+    }
+    if (compositionPin_ == nullptr)
+    {
+        // Disabled, so pointer messages over the pixel go to the game window.
+        compositionPin_ = CreateWindowExW(
+            0,
+            CompositionPinClassName,
+            L"",
+            WS_CHILD | WS_DISABLED,
+            0,
+            0,
+            1,
+            1,
+            window_,
+            nullptr,
+            instance_,
+            nullptr);
+        if (compositionPin_ == nullptr)
+        {
+            return;
+        }
+    }
+    SetWindowPos(compositionPin_, HWND_TOP, client.right - 1, client.bottom - 1, 1, 1,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
 }
 
 // Shows the black backdrop directly behind a visible Borderless window that
@@ -727,6 +794,7 @@ LRESULT Win32Window::WindowProcedure(
             DestroyWindow(backdrop_);
             backdrop_ = nullptr;
         }
+        compositionPin_ = nullptr;
         window_ = nullptr;
         PostQuitMessage(0);
         return 0;
