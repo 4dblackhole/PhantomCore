@@ -65,6 +65,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 SDK 테스트의 `--headless-error`는 실제 D3D12/NoSound 실행 중 Update 예외를 주입해
 이 정리와 비차단 종료를 검증합니다. 기본 SDK 단위 테스트와 별도로 실행합니다.
 
+`EngineConfig::diagnostics`에 받는 쪽을 넣으면 `Run`이 시작 때의 그래픽 어댑터·창 상태와 그 뒤의 변경, 그래픽 장치 끊김 보고서,
+실행을 끝낸 예외 문구를 Client에 넘깁니다. 엔진은 파일을 만들지 않습니다. 계약은 [엔진 진단 기록](EngineDiagnostics.md)에 있습니다.
+
 `RunWithGraphicsDiagnostics`는 같은 엔진 실행과 정리를 수행한 뒤 GPU 오류와 손상 메시지를 `GraphicsDiagnostics` 값으로 제공합니다. 일반 Client는 기존 `Run` 진입점을 사용합니다. 진단 결과는 메시지의 심각도와 설명을 소유하므로 실행이 끝난 뒤에도 읽을 수 있습니다.
 
 `Collected`는 읽기에 성공한 상태이며 오류와 손상 메시지가 없으면 목록이 비어 있습니다. `Unavailable`은 backend의 진단 기능을 사용할 수 없음을 나타냅니다. `ReadFailed`는 메시지 읽기에 실패했음을 나타냅니다. 이 상태와 메시지는 엔진 종료 코드와 별도로 검사합니다. `--text-rendering`은 공개 진단 API로 이 검사를 수행합니다.
@@ -79,6 +82,7 @@ SDK 테스트의 `--headless-error`는 실제 D3D12/NoSound 실행 중 Update �
 | --- | --- | --- |
 | 애플리케이션 | `Engine/Core/App` | `Run`, subsystem 생성·메인 루프·종료 순서 |
 | Client 계약 | `Engine/Core/Client` | `IGameClient`, `SceneGameClient`, `EngineServices`, Update context |
+| 진단 | `Engine/Core/Diagnostics` | `IEngineDiagnosticSink`, 장치 끊김 보고서, DRED 선택; [엔진 진단 기록](EngineDiagnostics.md) |
 | 렌더 프레임 계약 | `Engine/Core/Rendering` | `RenderContext`, `ClearColor`, `RgbaImage`, 이미지 읽기 결과 |
 | Scene | `Engine/Core/Scene` | `GameScene`, `SceneManager`, factory, 지연 전환, 수명 정책 |
 | 수학 값·연산 | `Engine/Math` | `Float2/3/4`, `Float4x4`, 행렬·좌표 변환; [Math](Math.md) |
@@ -415,7 +419,8 @@ backend 프로젝트에 둔다.
 | [Collision.md](Collision.md) | 충돌 타입과 질의 계약을 사용할 때 |
 | [TextRendering.md](TextRendering.md) | 글꼴·글자·glyph atlas 수명을 다룰 때 |
 | [ImageReadback.md](ImageReadback.md) | 완료된 화면 프레임을 CPU 이미지로 읽을 때 |
-| [PerformanceStatistics.md](PerformanceStatistics.md) | FPS/UPS·draw 수 수집과 표시 책임을 구분할 때 |
+| [PerformanceStatistics.md](PerformanceStatistics.md) | FPS/UPS·draw 수·루프 시간·그래픽 메모리 수집과 표시 책임을 구분할 때 |
+| [EngineDiagnostics.md](EngineDiagnostics.md) | 크래시 기록을 남길 때: 엔진 기록, 그래픽 장치 끊김 보고서, 치명적 오류 |
 | [Visual2DArchitecture.md](Visual2DArchitecture.md) | Sprite·위젯·Canvas·입력 구조를 이해할 때 |
 | [Visual2DRendererLifecycle.md](Visual2DRendererLifecycle.md) | 엔진 소유 Visual2D renderer와 Scene 경계를 볼 때 |
 | [Visual2DPerformanceAndOwnership.md](Visual2DPerformanceAndOwnership.md) | BVH, 최소 Canvas, Z-Order와 GPU 소유권을 볼 때 |
