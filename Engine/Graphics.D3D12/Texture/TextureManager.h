@@ -114,6 +114,9 @@ public:
     // samples that slot (Visual2D retires released image slots through its frame ring first).
     void ReplaceTexture(const TextureSetHandle& textureSet, std::size_t index,
         std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba8);
+    // The same for an image file, decoded like LoadTextureSet (prepared pixels are used when present).
+    // A file that cannot be decoded throws before the slot changes.
+    void ReplaceTexture(const TextureSetHandle& textureSet, std::size_t index, const std::filesystem::path& path);
     [[nodiscard]] RenderTargetTextureHandle CreateRenderTargetTexture(
         std::uint32_t width, std::uint32_t height);
 

@@ -97,13 +97,17 @@ public:
         Point screenOrigin,
         std::uint32_t zOrder) noexcept;
 
-    // Paths are cached for this Client lifetime. The backend still owns
-    // the GPU texture while this manager owns the game-facing registry.
+    // Paths are cached until ReleaseImage or the end of this Client lifetime: every RegisterImage of
+    // one path returns the same handle. The backend still owns the GPU texture while this manager owns
+    // the game-facing registry.
     [[nodiscard]] ImageHandle RegisterImage(const std::filesystem::path& path);
     [[nodiscard]] Size GetImageSize(ImageHandle image) const noexcept;
     // Pixel images through the renderer (see Visual2DRenderSystem::CreatePixelImage).
     [[nodiscard]] ImageHandle CreatePixelImage(std::uint32_t width, std::uint32_t height,
                                                std::span<const std::uint8_t> rgba8);
+    // Releases a pixel image or a registered file image (see Visual2DRenderSystem::ReleaseImage). A file
+    // image is shared by every holder of its handle, so release it only when none of them draws it any
+    // more; its path then registers again as a new image.
     void ReleaseImage(ImageHandle image) noexcept;
 
     void Update(double elapsedSeconds);

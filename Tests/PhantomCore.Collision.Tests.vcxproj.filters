@@ -25,6 +25,8 @@
     <ClInclude Include="App\Visual2DPixelTests.h"><Filter>App</Filter></ClInclude>
     <ClCompile Include="App\PixelImageTests.cpp"><Filter>App</Filter></ClCompile>
     <ClInclude Include="App\PixelImageTests.h"><Filter>App</Filter></ClInclude>
+    <ClCompile Include="App\FileImageTests.cpp"><Filter>App</Filter></ClCompile>
+    <ClInclude Include="App\FileImageTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\ImageReadbackTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\HeadlessRunTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\TextRenderingTests.h"><Filter>App</Filter></ClInclude>

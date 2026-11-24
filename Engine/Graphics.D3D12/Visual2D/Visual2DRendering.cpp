@@ -157,8 +157,8 @@ struct D3D12Visual2DRenderer::Impl
         bool pixels{};
     };
 
-    // A released pixel image slot waits until every frame that could sample it has completed.
-    struct RetiredPixelSlot
+    // A released image slot (pixel or file) waits until every frame that could sample it has completed.
+    struct RetiredImageSlot
     {
         std::uint32_t pageIndex{};
         std::uint32_t textureIndex{};
@@ -386,6 +386,9 @@ struct D3D12Visual2DRenderer::Impl
         pixelImages.clear();
         freePixelSlots.clear();
         retiredPixelSlots.clear();
+        fileImageKeys.clear();
+        freeFileSlots.clear();
+        retiredFileSlots.clear();
         renderTargetsInFlight = {};
         nextImageHandle = 1;
         imageMesh.reset();
@@ -445,7 +448,17 @@ struct D3D12Visual2DRenderer::Impl
             return ImageHandle{existing->second};
         }
 
-        // File images fill their own pages; pixel pages may sit between them.
+        // File images fill their own pages; pixel pages may sit between them. A released file slot whose
+        // frames have completed is filled first, so loading and releasing keeps the descriptor blocks bounded.
+        ReclaimRetiredSlots(retiredFileSlots, freeFileSlots);
+        if (!freeFileSlots.empty())
+        {
+            const ImageResource resource = freeFileSlots.back();
+            meshRendering->Textures().ReplaceTexture(imagePages[resource.pageIndex].textures, resource.textureIndex,
+                                                     normalized);
+            freeFileSlots.pop_back();
+            return RememberFileImage(cacheKey, resource);
+        }
         const bool requiresNewPage = !fileImagePage ||
             imagePages[*fileImagePage].textures->Size() >= MaxTexturesPerSet;
         if (requiresNewPage)
@@ -464,16 +477,29 @@ struct D3D12Visual2DRenderer::Impl
                 normalized);
         }
 
-        const std::uint64_t handleValue = nextImageHandle++;
         const auto pageIndex = static_cast<std::uint32_t>(*fileImagePage);
+        return RememberFileImage(
+            cacheKey,
+            ImageResource{pageIndex, static_cast<std::uint32_t>(imagePages[pageIndex].textures->Size() - 1)});
+    }
+
+    [[nodiscard]] ImageHandle RememberFileImage(const std::wstring& cacheKey, const ImageResource resource)
+    {
+        const std::uint64_t handleValue = nextImageHandle++;
         imageHandlesByPath.emplace(cacheKey, handleValue);
-        imagesByHandle.emplace(
-            handleValue,
-            ImageResource{
-                pageIndex,
-                static_cast<std::uint32_t>(
-                    imagePages[pageIndex].textures->Size() - 1)});
+        imagesByHandle.emplace(handleValue, resource);
+        fileImageKeys.emplace(handleValue, cacheKey);
         return ImageHandle{handleValue};
+    }
+
+    // Slots released before the frame ring passed are free again.
+    void ReclaimRetiredSlots(std::deque<RetiredImageSlot>& retired, std::vector<ImageResource>& free)
+    {
+        while (!retired.empty() && retired.front().reusableAt <= screenRenderIndex)
+        {
+            free.push_back({retired.front().pageIndex, retired.front().textureIndex});
+            retired.pop_front();
+        }
     }
 
     [[nodiscard]] ImageHandle CreatePixelImage(
@@ -489,12 +515,7 @@ struct D3D12Visual2DRenderer::Impl
             throw std::invalid_argument(
                 "A pixel image needs a positive size and exactly width * height * 4 RGBA8 bytes.");
         }
-        // Slots released before the frame ring passed are free again.
-        while (!retiredPixelSlots.empty() && retiredPixelSlots.front().reusableAt <= screenRenderIndex)
-        {
-            freePixelSlots.push_back({retiredPixelSlots.front().pageIndex, retiredPixelSlots.front().textureIndex});
-            retiredPixelSlots.pop_front();
-        }
+        ReclaimRetiredSlots(retiredPixelSlots, freePixelSlots);
         TextureManager& textures = meshRendering->Textures();
         ImageResource resource{};
         if (!freePixelSlots.empty())
@@ -538,8 +559,24 @@ struct D3D12Visual2DRenderer::Impl
 
     void ReleaseImage(const ImageHandle image) noexcept
     {
-        if (!image || pixelImages.erase(image.value) == 0)
+        if (!image)
             return;
+        if (pixelImages.erase(image.value) != 0)
+        {
+            RetireSlot(image, retiredPixelSlots);
+            return;
+        }
+        const auto file = fileImageKeys.find(image.value);
+        if (file == fileImageKeys.end())
+            return;
+        // The path loads again (a new handle) after this.
+        imageHandlesByPath.erase(file->second);
+        fileImageKeys.erase(file);
+        RetireSlot(image, retiredFileSlots);
+    }
+
+    void RetireSlot(const ImageHandle image, std::deque<RetiredImageSlot>& retired) noexcept
+    {
         const auto found = imagesByHandle.find(image.value);
         if (found == imagesByHandle.end())
             return;
@@ -548,7 +585,7 @@ struct D3D12Visual2DRenderer::Impl
         imagesByHandle.erase(found);
         try
         {
-            retiredPixelSlots.push_back(
+            retired.push_back(
                 {resource.pageIndex, resource.textureIndex, screenRenderIndex + D3D12Detail::FrameCount + 1});
         }
         catch (...)
@@ -1122,7 +1159,12 @@ struct D3D12Visual2DRenderer::Impl
     std::optional<std::size_t> fileImagePage;
     std::unordered_set<std::uint64_t> pixelImages;
     std::vector<ImageResource> freePixelSlots;
-    std::deque<RetiredPixelSlot> retiredPixelSlots;
+    std::deque<RetiredImageSlot> retiredPixelSlots;
+    // File images: the cache key of each live one (to forget its path on release), and released slots of the
+    // file pages, which a later LoadImageFile fills before it appends.
+    std::unordered_map<std::uint64_t, std::wstring> fileImageKeys;
+    std::vector<ImageResource> freeFileSlots;
+    std::deque<RetiredImageSlot> retiredFileSlots;
     std::uint64_t nextImageHandle{1};
     FontHandle screenFont;
     std::unordered_map<std::wstring, FontHandle> screenFonts;
