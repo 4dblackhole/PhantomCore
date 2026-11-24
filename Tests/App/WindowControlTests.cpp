@@ -18,6 +18,32 @@ namespace
     {
         bool resized{}, rendered{}, shutdown{};
     };
+    // Counts the position requests the native edit receives while it is installed.
+    LONG_PTR previousEditProcedure{};
+    int editPositionRequests{};
+    LRESULT CALLBACK CountEditPositionRequests(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
+    {
+        if (message == WM_WINDOWPOSCHANGING)
+            ++editPositionRequests;
+        return CallWindowProcW(reinterpret_cast<WNDPROC>(previousEditProcedure), window, message, wParam, lParam);
+    }
+    // Views place their editors on every Update; only a changed position may reach the window.
+    void TestUnchangedBounds(HWND child, ITextInput &editor)
+    {
+        previousEditProcedure =
+            SetWindowLongPtrW(child, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&CountEditPositionRequests));
+        editPositionRequests = 0;
+        for (int repeat = 0; repeat < 100; ++repeat)
+            editor.SetBounds({24, 32, 320, 28});
+        const int unchanged = editPositionRequests;
+        editor.SetBounds({26, 32, 320, 28});
+        const int moved = editPositionRequests;
+        editor.SetBounds({24, 32, 320, 28});
+        const int restored = editPositionRequests;
+        SetWindowLongPtrW(child, GWLP_WNDPROC, previousEditProcedure);
+        Check(unchanged == 0, "Unchanged editor bounds do not reach the native window.");
+        Check(moved == 1 && restored == 2, "Each changed editor position moves the native window once.");
+    }
     void TestPlaceholder(HWND child, ITextInput &editor)
     {
         HDC dc = CreateCompatibleDC(nullptr);
@@ -132,6 +158,7 @@ namespace
                 throw std::runtime_error("Native edit control was not created.");
             }
             Check(IsWindowUnicode(child), "Native edit is Unicode.");
+            TestUnchangedBounds(child, *editor);
             TestPlaceholder(child, *editor);
             editor->SetText(L"Angel Dream");
             std::wstring text;
