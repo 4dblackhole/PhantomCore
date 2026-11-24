@@ -29,6 +29,7 @@
     <ClInclude Include="App\RenderSchedule.h">
       <Filter>App</Filter>
     <ClInclude Include="Diagnostics\EngineDiagnostics.h"><Filter>Diagnostics</Filter></ClInclude>
+    <ClInclude Include="App\MainLoopWatch.h"><Filter>App</Filter></ClInclude>
     </ClInclude>
     <ClInclude Include="Client\IGameClient.h">
       <Filter>Client</Filter>
@@ -65,6 +66,7 @@
     <ClCompile Include="App\Engine.cpp">
       <Filter>App</Filter>
     </ClCompile>
+    <ClCompile Include="App\MainLoopWatch.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="Client\IGameClient.cpp">
       <Filter>Client</Filter>
     </ClCompile>

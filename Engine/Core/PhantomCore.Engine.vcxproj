@@ -60,6 +60,7 @@
   <ItemGroup>
     <ClInclude Include="App\Engine.h" />
     <ClInclude Include="App\RenderSchedule.h" />
+    <ClInclude Include="App\MainLoopWatch.h" />
     <ClInclude Include="Diagnostics\EngineDiagnostics.h" />
     <ClInclude Include="Rendering\ImageReadback.h" />
     <ClInclude Include="Client\IGameClient.h" />
@@ -79,6 +80,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="App\Engine.cpp" />
+    <ClCompile Include="App\MainLoopWatch.cpp" />
     <ClCompile Include="Client\IGameClient.cpp" />
     <ClCompile Include="Client\SceneGameClient.cpp" />
     <ClCompile Include="Scene\GameScene.cpp" />

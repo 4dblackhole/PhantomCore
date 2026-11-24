@@ -67,6 +67,7 @@
     <ClInclude Include="..\Platform.Win32\Input\Input.h" />
     <ClInclude Include="..\Platform.Win32\System\ComApartment.h" />
     <ClInclude Include="..\Platform.Win32\System\RuntimePaths.h" />
+    <ClInclude Include="..\Platform.Win32\System\CrashDump.h" />
     <ClInclude Include="..\Platform.Win32\Window\Win32Window.h" />
     <ClInclude Include="..\Audio\System\AudioPlayback.h" />
     <ClInclude Include="..\Audio\System\AudioMixerClock.h" />
@@ -110,6 +111,7 @@
     <ClInclude Include="..\Core\Client\SceneGameClient.h" />
     <ClInclude Include="..\Core\App\Engine.h" />
     <ClInclude Include="..\Core\App\RenderSchedule.h" />
+    <ClInclude Include="..\Core\App\MainLoopWatch.h" />
     <ClInclude Include="..\Core\Diagnostics\EngineDiagnostics.h" />
     <ClInclude Include="..\Core\System\Camera.h" />
     <ClInclude Include="..\Core\System\HighResolutionClock.h" />
@@ -128,6 +130,7 @@
     <ClInclude Include="..\Platform.Win32\Input\Win32TextInput.h" />
     <ClCompile Include="..\Platform.Win32\System\ComApartment.cpp" />
     <ClCompile Include="..\Platform.Win32\System\RuntimePaths.cpp" />
+    <ClCompile Include="..\Platform.Win32\System\CrashDump.cpp" />
     <ClCompile Include="..\Platform.Win32\Window\Win32Window.cpp" />
     <ClCompile Include="..\Audio\System\AudioPlayback.cpp" />
     <ClCompile Include="..\Audio\System\AudioMixerClock.cpp" />
@@ -160,6 +163,7 @@
     <ClCompile Include="..\Core\Client\IGameClient.cpp" />
     <ClCompile Include="..\Core\Client\SceneGameClient.cpp" />
     <ClCompile Include="..\Core\App\Engine.cpp" />
+    <ClCompile Include="..\Core\App\MainLoopWatch.cpp" />
     <ClCompile Include="..\Core\System\Camera.cpp" />
     <ClCompile Include="..\Core\System\HighResolutionClock.cpp" />
     <ClCompile Include="..\Core\System\MeshInstance.cpp" />
