@@ -3,6 +3,8 @@
 #include "Audio/AudioPcmTests.h"
 #include "App/HeadlessRunTests.h"
 #include "App/DeviceLossTests.h"
+#include "App/CrashDumpTests.h"
+#include "App/MainLoopWatchTests.h"
 #include "App/ImageReadbackTests.h"
 #include "App/SceneManagerTests.h"
 #include "App/Visual2DPixelTests.h"
@@ -41,6 +43,12 @@ int main(int argc, char** argv)
         return TestHeadlessRunError();
     if (argc == 2 && std::string_view(argv[1]) == "--device-loss")
         return TestDeviceLoss();
+    if (argc == 2 && std::string_view(argv[1]) == "--main-loop-watch")
+        return TestMainLoopWatch();
+    if (argc == 2 && std::string_view(argv[1]) == "--crash-dump")
+        return TestCrashDump();
+    if (argc == 4 && std::string_view(argv[1]) == "--crash-dump-child")
+        return RunCrashDumpChild(argv[2], argv[3]);
     if (argc == 2 && std::string_view(argv[1]) == "--text-rendering")
         return TestTextRendering();
     if (argc == 2 && std::string_view(argv[1]) == "--text-pixels")

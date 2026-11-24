@@ -75,6 +75,16 @@ struct GraphicsDeviceLossReport
     std::vector<std::string> extendedData;
 };
 
+// The main loop has not finished a pass for stalledSeconds, and its thread
+// is not running a window loop of its own (moving or sizing the window, a
+// menu, a modal dialog). loopPasses counts the passes finished before that.
+struct MainLoopStallReport
+{
+    double stalledSeconds{};
+    std::uint32_t mainThreadId{};
+    std::uint64_t loopPasses{};
+};
+
 // Who tells the user about a fatal error.
 enum class FatalErrorPresentation : std::uint8_t
 {
@@ -82,8 +92,10 @@ enum class FatalErrorPresentation : std::uint8_t
     Handled,      // the Client presented the error itself
 };
 
-// Receives diagnostics from Run. Every call comes from the thread that called
-// Run and must return quickly; none may throw. The engine never owns the sink.
+// Receives diagnostics from Run. None of the calls may throw, and the engine
+// never owns the sink. The calls come from the thread that called Run and must
+// return quickly, except the two about a stalled main loop: that thread is the
+// one that is stuck, so they come from the engine's watch thread.
 class IEngineDiagnosticSink
 {
 public:
@@ -97,6 +109,12 @@ public:
     // Called once with the text of the exception that ends the run, after
     // the Client was shut down and the engine services were released.
     [[nodiscard]] virtual FatalErrorPresentation OnFatalError(std::string_view message) noexcept = 0;
+    // From the watch thread, once per stall, while the main loop is still
+    // stuck: the moment to write a dump of where it waits. Nothing the main
+    // thread owns may be touched without the Client's own synchronization.
+    virtual void OnMainLoopStalled(const MainLoopStallReport& report) noexcept = 0;
+    // From the watch thread, when a reported stall ended after all.
+    virtual void OnMainLoopResumed(double stalledSeconds) noexcept = 0;
 
 protected:
     ~IEngineDiagnosticSink() = default;
@@ -111,6 +129,11 @@ struct EngineDiagnosticsConfig
     // fault (D3D12 DRED). It costs a little on every draw, so it is off unless
     // a crash is being chased. It cannot change after the device exists.
     bool graphicsDeviceRemovedData{};
+    // A main loop pass that takes longer than this is reported as a stall.
+    // Zero or less does not watch. A value well above any honest pause (a
+    // synchronous load) keeps the report for real hangs. A debugger and the
+    // window's own loops (moving, sizing, menus, dialogs) are never reported.
+    double mainLoopStallSeconds{};
     // Test hook: removes the graphics device after this many rendered frames
     // so the loss path can be exercised on purpose. Zero never does.
     std::uint64_t removeGraphicsDeviceAfterRenderedFrames{};

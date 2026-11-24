@@ -1,4 +1,5 @@
 #include "App/Engine.h"
+#include "App/MainLoopWatch.h"
 #include "Renderer/D3D12Renderer.h"
 
 #include "System/ComApartment.h"
@@ -434,9 +435,11 @@ namespace
         const IRenderRateControl& renderRate)
     {
         MainLoopState state(config, window.RefreshRateHz());
+        MainLoopWatch watch(window.Handle(), config.diagnostics.mainLoopStallSeconds, config.diagnostics.sink);
         bool running = true;
         while (running && window.PumpMessages())
         {
+            watch.Beat();
             // PumpMessages resets transient state and dispatches every
             // queued Raw Input message before the Client update.
             const double rawDeltaSeconds =

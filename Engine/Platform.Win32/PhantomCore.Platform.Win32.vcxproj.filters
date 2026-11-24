@@ -18,6 +18,7 @@
     <ClInclude Include="System\RuntimePaths.h">
       <Filter>System</Filter>
     </ClInclude>
+    <ClInclude Include="System\CrashDump.h"><Filter>System</Filter></ClInclude>
     <ClInclude Include="System\ComApartment.h">
       <Filter>System</Filter>
     </ClInclude>
@@ -33,6 +34,7 @@
     <ClCompile Include="System\RuntimePaths.cpp">
       <Filter>System</Filter>
     </ClCompile>
+    <ClCompile Include="System\CrashDump.cpp"><Filter>System</Filter></ClCompile>
     <ClCompile Include="System\ComApartment.cpp">
       <Filter>System</Filter>
     </ClCompile>

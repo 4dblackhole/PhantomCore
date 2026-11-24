@@ -61,6 +61,7 @@
     <ClInclude Include="Input\Input.h" />
     <ClInclude Include="System\ComApartment.h" />
     <ClInclude Include="System\RuntimePaths.h" />
+    <ClInclude Include="System\CrashDump.h" />
     <ClInclude Include="Window\Win32Window.h" />
     <ClInclude Include="Window\WindowControl.h" />
   </ItemGroup>
@@ -71,6 +72,7 @@
     <ClInclude Include="Input\Win32TextInput.h" />
     <ClCompile Include="System\ComApartment.cpp" />
     <ClCompile Include="System\RuntimePaths.cpp" />
+    <ClCompile Include="System\CrashDump.cpp" />
     <ClCompile Include="Window\Win32Window.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

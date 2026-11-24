@@ -805,6 +805,88 @@ namespace PhantomCore
 } // namespace PhantomCore
 // ===== END Engine\Platform.Win32\System\RuntimePaths.h =====
 
+// ===== BEGIN Engine\Platform.Win32\System\CrashDump.h =====
+
+// Writes a minidump of this process when it crashes, and on request. The
+// dump holds every thread's call stack and the loaded modules, not the heap,
+// so it stays a few megabytes. It is written inside the process: no system
+// setting is read or changed and nothing leaves the PC.
+
+#include <cstdint>
+#include <filesystem>
+#include <string_view>
+
+namespace PhantomCore
+{
+enum class CrashDumpReason : std::uint8_t
+{
+    UnhandledException, // access violation, stack overflow, uncaught SEH
+    Terminate,          // std::terminate: an exception nobody caught, a noexcept that threw
+    PureVirtualCall,
+    InvalidParameter,   // the C runtime rejected an argument
+    Requested,          // WriteNow
+};
+
+// What the service did. dumpPath stays valid while the service lives.
+struct CrashDumpReport
+{
+    CrashDumpReason reason{};
+    // The structured exception, when there is one; zero otherwise.
+    std::uint32_t exceptionCode{};
+    std::uint64_t exceptionAddress{};
+    // The thread that crashed or asked.
+    std::uint32_t threadId{};
+    bool dumpWritten{};
+    const wchar_t* dumpPath{};
+};
+
+// Told after each dump attempt, on the service's own thread. After a crash the
+// process is damaged and about to end: use handles opened beforehand and
+// fixed buffers, do not allocate, do not take locks other threads may hold.
+class ICrashDumpObserver
+{
+public:
+    virtual void OnCrashDump(const CrashDumpReport& report) noexcept = 0;
+
+protected:
+    ~ICrashDumpObserver() = default;
+};
+
+// While one exists, a crash of this process leaves
+// <directory>/<filePrefix>-YYYYMMDD-HHMMSS-<reason>.dmp before Windows ends the
+// process as it always did. Only one service can exist at a time.
+//
+// The crashing thread only hands over to a thread the service started
+// beforehand, so a stack overflow or a crash inside a lock can still be
+// written. The library that writes dumps is loaded in the constructor.
+class CrashDumpService final
+{
+public:
+    // Creates the directory when it is missing and deletes the oldest dumps
+    // of this prefix beyond keepNewest. Throws std::runtime_error when the
+    // directory or the dump library cannot be used, std::logic_error when a
+    // service already exists. observer may be null and must outlive the
+    // service.
+    CrashDumpService(
+        const std::filesystem::path& directory,
+        std::wstring_view filePrefix,
+        std::uint32_t keepNewest,
+        ICrashDumpObserver* observer);
+    ~CrashDumpService();
+
+    CrashDumpService(const CrashDumpService&) = delete;
+    CrashDumpService& operator=(const CrashDumpService&) = delete;
+
+    // Writes a dump of the process as it is now, from any thread, and keeps
+    // running: for a stalled main loop, where the stacks say where it waits.
+    // suffix names the file (ASCII letters, digits and '-'); it replaces
+    // "requested" in the file name. False when the dump could not be written.
+    [[nodiscard]] bool WriteNow(std::string_view suffix = {}) noexcept;
+};
+
+} // namespace PhantomCore
+// ===== END Engine\Platform.Win32\System\CrashDump.h =====
+
 // ===== BEGIN Engine\Platform.Win32\Input\Input.h =====
 
 // Input feature: timestamped Win32 Raw Input state and events.
@@ -3749,6 +3831,16 @@ struct GraphicsDeviceLossReport
     std::vector<std::string> extendedData;
 };
 
+// The main loop has not finished a pass for stalledSeconds, and its thread
+// is not running a window loop of its own (moving or sizing the window, a
+// menu, a modal dialog). loopPasses counts the passes finished before that.
+struct MainLoopStallReport
+{
+    double stalledSeconds{};
+    std::uint32_t mainThreadId{};
+    std::uint64_t loopPasses{};
+};
+
 // Who tells the user about a fatal error.
 enum class FatalErrorPresentation : std::uint8_t
 {
@@ -3756,8 +3848,10 @@ enum class FatalErrorPresentation : std::uint8_t
     Handled,      // the Client presented the error itself
 };
 
-// Receives diagnostics from Run. Every call comes from the thread that called
-// Run and must return quickly; none may throw. The engine never owns the sink.
+// Receives diagnostics from Run. None of the calls may throw, and the engine
+// never owns the sink. The calls come from the thread that called Run and must
+// return quickly, except the two about a stalled main loop: that thread is the
+// one that is stuck, so they come from the engine's watch thread.
 class IEngineDiagnosticSink
 {
 public:
@@ -3771,6 +3865,12 @@ public:
     // Called once with the text of the exception that ends the run, after
     // the Client was shut down and the engine services were released.
     [[nodiscard]] virtual FatalErrorPresentation OnFatalError(std::string_view message) noexcept = 0;
+    // From the watch thread, once per stall, while the main loop is still
+    // stuck: the moment to write a dump of where it waits. Nothing the main
+    // thread owns may be touched without the Client's own synchronization.
+    virtual void OnMainLoopStalled(const MainLoopStallReport& report) noexcept = 0;
+    // From the watch thread, when a reported stall ended after all.
+    virtual void OnMainLoopResumed(double stalledSeconds) noexcept = 0;
 
 protected:
     ~IEngineDiagnosticSink() = default;
@@ -3785,6 +3885,11 @@ struct EngineDiagnosticsConfig
     // fault (D3D12 DRED). It costs a little on every draw, so it is off unless
     // a crash is being chased. It cannot change after the device exists.
     bool graphicsDeviceRemovedData{};
+    // A main loop pass that takes longer than this is reported as a stall.
+    // Zero or less does not watch. A value well above any honest pause (a
+    // synchronous load) keeps the report for real hangs. A debugger and the
+    // window's own loops (moving, sizing, menus, dialogs) are never reported.
+    double mainLoopStallSeconds{};
     // Test hook: removes the graphics device after this many rendered frames
     // so the loss path can be exercised on purpose. Zero never does.
     std::uint64_t removeGraphicsDeviceAfterRenderedFrames{};

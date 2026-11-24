@@ -82,7 +82,7 @@ SDK 테스트의 `--headless-error`는 실제 D3D12/NoSound 실행 중 Update �
 | --- | --- | --- |
 | 애플리케이션 | `Engine/Core/App` | `Run`, subsystem 생성·메인 루프·종료 순서 |
 | Client 계약 | `Engine/Core/Client` | `IGameClient`, `SceneGameClient`, `EngineServices`, Update context |
-| 진단 | `Engine/Core/Diagnostics` | `IEngineDiagnosticSink`, 장치 끊김 보고서, DRED 선택; [엔진 진단 기록](EngineDiagnostics.md) |
+| 진단 | `Engine/Core/Diagnostics`, `Engine/Platform.Win32/System` | `IEngineDiagnosticSink`, 장치 끊김 보고서, DRED 선택, 메인 루프 멈춤 감시, `CrashDumpService`; [엔진 진단 기록](EngineDiagnostics.md) |
 | 렌더 프레임 계약 | `Engine/Core/Rendering` | `RenderContext`, `ClearColor`, `RgbaImage`, 이미지 읽기 결과 |
 | Scene | `Engine/Core/Scene` | `GameScene`, `SceneManager`, factory, 지연 전환, 수명 정책 |
 | 수학 값·연산 | `Engine/Math` | `Float2/3/4`, `Float4x4`, 행렬·좌표 변환; [Math](Math.md) |
@@ -420,7 +420,7 @@ backend 프로젝트에 둔다.
 | [TextRendering.md](TextRendering.md) | 글꼴·글자·glyph atlas 수명을 다룰 때 |
 | [ImageReadback.md](ImageReadback.md) | 완료된 화면 프레임을 CPU 이미지로 읽을 때 |
 | [PerformanceStatistics.md](PerformanceStatistics.md) | FPS/UPS·draw 수·루프 시간·그래픽 메모리 수집과 표시 책임을 구분할 때 |
-| [EngineDiagnostics.md](EngineDiagnostics.md) | 크래시 기록을 남길 때: 엔진 기록, 그래픽 장치 끊김 보고서, 치명적 오류 |
+| [EngineDiagnostics.md](EngineDiagnostics.md) | 크래시 기록을 남길 때: 엔진 기록, 그래픽 장치 끊김 보고서, 치명적 오류, 멈춤 감시, 크래시 덤프 |
 | [Visual2DArchitecture.md](Visual2DArchitecture.md) | Sprite·위젯·Canvas·입력 구조를 이해할 때 |
 | [Visual2DRendererLifecycle.md](Visual2DRendererLifecycle.md) | 엔진 소유 Visual2D renderer와 Scene 경계를 볼 때 |
 | [Visual2DPerformanceAndOwnership.md](Visual2DPerformanceAndOwnership.md) | BVH, 최소 Canvas, Z-Order와 GPU 소유권을 볼 때 |

@@ -83,6 +83,8 @@
     <ClInclude Include="App\TextureAssetTests.h" />
     <ClCompile Include="App\HeadlessRunTests.cpp" />
     <ClCompile Include="App\DeviceLossTests.cpp" />
+    <ClCompile Include="App\CrashDumpTests.cpp" />
+    <ClCompile Include="App\MainLoopWatchTests.cpp" />
     <ClCompile Include="App\TextRenderingTests.cpp" />
     <ClCompile Include="App\TextPixelTests.cpp" />
     <ClCompile Include="App\ImageReadbackTests.cpp" />
@@ -97,6 +99,8 @@
     <ClInclude Include="App\ImageReadbackTests.h" />
     <ClInclude Include="App\HeadlessRunTests.h" />
     <ClInclude Include="App\DeviceLossTests.h" />
+    <ClInclude Include="App\CrashDumpTests.h" />
+    <ClInclude Include="App\MainLoopWatchTests.h" />
     <ClInclude Include="App\TextRenderingTests.h" />
     <ClInclude Include="App\TextPixelTests.h" />
   </ItemGroup>

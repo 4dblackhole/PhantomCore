@@ -63,6 +63,12 @@ namespace
             }
             return FatalErrorPresentation::Handled;
         }
+        void OnMainLoopStalled(const MainLoopStallReport &) noexcept override
+        {
+        }
+        void OnMainLoopResumed(double) noexcept override
+        {
+        }
 
       private:
         RunLog &log_;
