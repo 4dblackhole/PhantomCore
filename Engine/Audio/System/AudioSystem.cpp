@@ -57,6 +57,11 @@ AudioClipLoadState AudioClip::LoadState(std::string& errorMessage) const
     return AudioClipLoadState::Failed;
 }
 
+bool AudioClip::CancelLoading() noexcept
+{
+    return implementation_ != nullptr && implementation_->CancelLoading();
+}
+
 bool AudioClip::GetDurationMicroseconds(std::uint64_t& duration, std::string& errorMessage) const
 {
     if (implementation_)
