@@ -189,6 +189,10 @@ namespace
         const bool timed = log.stalledSeconds >= StallSeconds && log.resumedSeconds >= log.stalledSeconds;
         if (!timed || log.reportedPasses == 0)
             return Fail("The stall report must carry how long the loop stood still and the passes before it.");
+        // The time the watch spent asking the window belongs to the stall. The stuck loop cannot answer, so
+        // the watch waits its full half second for it: the reported length is the limit plus that wait.
+        if (log.stalledSeconds < StallSeconds + 0.4)
+            return Fail("The length of a stall must not leave out the time spent asking the window.");
         const bool rightThread = log.reportedThreadId == log.loopThreadId && log.callerThreadId != log.loopThreadId;
         if (!rightThread)
             return Fail("The stall must name the loop thread and be reported from another thread.");
