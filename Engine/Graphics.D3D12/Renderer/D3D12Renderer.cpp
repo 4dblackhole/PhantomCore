@@ -540,6 +540,8 @@ std::optional<GraphicsDeviceLossReport> D3D12Renderer::DeviceLossReport(
 {
     if (device_ == nullptr)
         return std::nullopt;
+    // The messages of the frame that failed come before the loss report.
+    validationMessages_.Forward();
     const HRESULT reason = device_->GetDeviceRemovedReason();
     // A failed call that named the loss is reported even if the device gives no reason.
     if (reason == S_OK && operation == nullptr)

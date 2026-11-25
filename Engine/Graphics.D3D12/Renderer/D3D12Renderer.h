@@ -64,7 +64,8 @@ public:
     // Diagnostics. StartupRecord describes the adapter, its driver and the
     // swap chain, one fact per line. DeviceLossReport is empty while the
     // device works; operation and resultCode name the call that failed, when
-    // one is known. RemoveDeviceForDiagnosticsTest loses the device on purpose.
+    // one is known. With validation on it first sends the validation messages
+    // still queued. RemoveDeviceForDiagnosticsTest loses the device on purpose.
     [[nodiscard]] std::vector<std::string> StartupRecord() const;
     [[nodiscard]] GraphicsMemoryInfo MemoryInfo() const noexcept;
     [[nodiscard]] std::optional<GraphicsDeviceLossReport> DeviceLossReport(
@@ -120,7 +121,9 @@ private:
     // "default", "WARP", "index 1 (not found, default used)", ...
     std::string adapterRequest_;
     IEngineDiagnosticSink* sink_{};
-    D3D12Detail::ValidationMessageRelay validationMessages_;
+    // Mutable: DeviceLossReport sends what the queue still holds before the
+    // report, since the failed frame never reached EndFrame's forwarding.
+    mutable D3D12Detail::ValidationMessageRelay validationMessages_;
     HANDLE frameLatencyWait_{};
 
     DXGI_FORMAT renderTargetFormat_{DXGI_FORMAT_R8G8B8A8_UNORM};
