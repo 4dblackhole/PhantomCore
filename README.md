@@ -43,6 +43,7 @@ Scene 대신 매 프레임 제출한다. 월드·곡면 Canvas는 명시적 pass
 [성능 통계](Docs/PerformanceStatistics.md)
 `EngineConfig::diagnostics`의 받는 쪽은 시작 기록, 그래픽 장치 끊김 보고서, 치명적 오류와 메인 루프 멈춤을 받는다. 엔진은 파일을 만들지 않는다.
 `CrashDumpService`는 프로세스가 죽을 때와 요청할 때 미니덤프를 Client가 정한 폴더에 쓴다.
+시험 전용 `ThrownExceptionWatch`는 정상 실행이 C++ 예외를 던지지 않는지 테스트·smoke에서 센다.
 [엔진 진단 기록](Docs/EngineDiagnostics.md)
 
 처음 사용하는 개발자나 새 작업 세션은

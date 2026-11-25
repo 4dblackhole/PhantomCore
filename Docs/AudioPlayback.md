@@ -117,6 +117,9 @@ polling이나 RetireClip이 곡 전체 디코딩을 기다리지 않고 해제�
 Voice를 만들지 않는다. worker가 이미 끝났어도 LoadState가 결과를 게시하기 전이면 그 PCM을 버리고 Failed로 끝낸다.
 native sound를 연 뒤(LoadState가 한 번 결과를 게시한 뒤)와 Failed인 Clip은 취소할 것이 없어 false를 돌려주고 그대로다.
 같은 파일을 다시 요청하면 새 Clip이 자기 worker로 처음부터 디코딩한다. 취소는 반복해 불러도 true를 돌려준다.
+취소는 예상된 결과이므로 예외를 쓰지 않는다. 멈춘 worker는 PCM 없이 돌아오고, LoadState는 그것을 Failed와
+"PCM source loading was cancelled."로 알린다. worker·Client thread 어디서도 C++ 예외가 던져지지 않는다.
+디코딩 자체가 실패한 경우(깨진 파일 등)만 예외로 알려 Failed가 된다.
 Clip을 그냥 해제해도 소멸자가 정지를 요청하지만 worker가 멈출 때까지 기다리므로, Client thread에서는
 CancelLoading 뒤 polling·retire로 놓는다.
 Voice를 먼저 정지해야 하며 API/Update는 같은 Client thread에서 호출한다.
@@ -240,9 +243,11 @@ startPositionMicroseconds는 계속 원본 곡의 좌표입니다. 변환된 PCM
 받고 round(sourceFrames / rate)개의 프레임을 반환합니다. Signalsmith Stretch와
 Linear의 고정 MIT 소스를 사용하며, 입력 lookahead와 출력 latency를 보정합니다.
 의도된 앞부분 무음은 유지하며 에너지 임계값으로 정렬하지 않습니다. 취소는
-청크 사이에 확인하고 부분 결과를 반환하지 않습니다. 큰 변경 비율의 음질은
+청크 사이에 확인하고 부분 결과 대신 빈 `std::optional`을 반환합니다(예외 없음). 큰 변경 비율의 음질은
 원본에 따라 달라질 수 있습니다. 버전과 라이선스는
 Engine/Audio/ThirdParty/Signalsmith/UPSTREAM.md에 기록합니다.
 
 SDK `--audio-pcm` 검증은 0.5/1/1.5/2배속의 정확한 길이·440Hz 음정·스테레오
 일관성·transient 정렬·취소, 비동기 clip의 원본 길이와 원본 좌표 탐색을 검사합니다.
+취소 검사는 `ThrownExceptionWatch`로 디코딩·변환 취소, 완료와 겹친 취소, 로딩 중 해제, retire 해제 동안
+던져진 C++ 예외가 0개인지도 확인합니다.
