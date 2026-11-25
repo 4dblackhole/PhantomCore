@@ -9,6 +9,7 @@
 #include <chrono>
 #include <future>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <stop_token>
 #include <vector>
@@ -22,8 +23,12 @@ namespace
         std::uint32_t channels{}, rate{};
         std::vector<float> samples;
     };
+    // A worker's result: no PCM when the load was cancelled. Cancelling is an expected outcome, so it is a value
+    // and not an exception; real decoding failures still throw and fail the clip.
+    using SourceResult = std::optional<SourcePcm>;
+    constexpr const char* CancelledMessage = "PCM source loading was cancelled.";
 
-    SourcePcm ReadSource(const std::filesystem::path& path, const std::stop_token stop)
+    SourceResult ReadSource(const std::filesystem::path& path, const std::stop_token stop)
     {
         SourcePcm pcm;
         DecodeAudioPcm(path, stop, [&](const std::uint32_t channels, const std::uint32_t rate,
@@ -42,7 +47,7 @@ namespace
             pcm.samples.insert(pcm.samples.end(), samples.begin(), samples.end());
         });
         if (stop.stop_requested())
-            throw std::runtime_error("PCM source loading was cancelled.");
+            return std::nullopt;
         if (pcm.samples.empty())
             throw std::runtime_error("PCM source contains no audio frames.");
         return pcm;
@@ -145,7 +150,15 @@ namespace
                 }
                 try
                 {
-                    pcm_ = pending_.get();
+                    auto result = pending_.get();
+                    if (!result)
+                    {
+                        // Only CancelLoading and the destructor stop a worker; either way nothing is published.
+                        failure_ = CancelledMessage;
+                        error = failure_;
+                        return AudioClipLoadState::Failed;
+                    }
+                    pcm_ = std::move(*result);
                     if (!converting_)
                     {
                         sourceDuration_ = static_cast<std::uint64_t>(std::llround(
@@ -154,9 +167,13 @@ namespace
                         {
                             converting_ = true;
                             pending_ = std::async(std::launch::async,
-                                [pcm = std::move(pcm_), rate = stretchRate_, stop = cancellation_.get_token()]() mutable {
-                                    pcm.samples = TimeStretchPcm(pcm.samples, pcm.channels, pcm.rate, rate, stop);
-                                    return pcm;
+                                [pcm = std::move(pcm_), rate = stretchRate_, stop = cancellation_.get_token()]() mutable
+                                    -> SourceResult {
+                                    auto stretched = TimeStretchPcm(pcm.samples, pcm.channels, pcm.rate, rate, stop);
+                                    if (!stretched)
+                                        return std::nullopt;
+                                    pcm.samples = std::move(*stretched);
+                                    return std::move(pcm); // A captured copy is not moved implicitly.
                                 });
                             error.clear();
                             return AudioClipLoadState::Loading;
@@ -209,19 +226,13 @@ namespace
         }
 
     private:
-        // The stopped worker either threw its cancellation error or finished just before the request; neither
-        // result is published.
+        // The stopped worker returned no PCM, or finished (or failed) just before the request; nothing is published.
+        // The future is ready, so releasing it neither waits nor rethrows a failure it may hold.
         void DiscardCancelledWork() const
         {
-            try
-            {
-                static_cast<void>(pending_.get());
-            }
-            catch (...)
-            {
-            }
+            pending_ = {};
             pcm_ = {};
-            failure_ = "PCM source loading was cancelled.";
+            failure_ = CancelledMessage;
         }
 
         void OpenPcm() const
@@ -255,7 +266,7 @@ namespace
         double stretchRate_{1.0};
         mutable bool converting_{};
         mutable std::uint64_t sourceDuration_{};
-        mutable std::future<SourcePcm> pending_;
+        mutable std::future<SourceResult> pending_;
         mutable SourcePcm pcm_;
         mutable std::unique_ptr<FmodAudioClip> clip_;
         mutable std::string failure_;

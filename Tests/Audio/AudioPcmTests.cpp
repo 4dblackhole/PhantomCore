@@ -99,7 +99,9 @@ namespace
         }
         for (double speed : {0.5, 1.0, 1.5, 2.0})
         {
-            const auto output = TimeStretchPcm(tone, 2, rate, speed, {});
+            const auto stretched = TimeStretchPcm(tone, 2, rate, speed, {});
+            Require(stretched.has_value(), "An uncancelled stretch returns PCM.");
+            const auto &output = *stretched;
             const auto frames = output.size() / 2;
             Require(frames == static_cast<std::size_t>(std::llround(rate / speed)), "Stretch produces exact rounded duration.");
             std::size_t crossings{};
@@ -120,22 +122,27 @@ namespace
         for (std::size_t i = rate * 4 / 10; i < rate * 41 / 100; ++i) burst[i] = .8F;
         for (double speed : {0.5, 1.5, 2.0})
         {
-            const auto output = TimeStretchPcm(burst, 1, rate, speed, {});
+            const auto stretched = TimeStretchPcm(burst, 1, rate, speed, {});
+            Require(stretched.has_value(), "An uncancelled stretch returns PCM.");
+            const auto &output = *stretched;
             const auto peak = std::max_element(output.begin(), output.end());
             const double seconds = static_cast<double>(peak - output.begin()) / rate;
             Require(std::abs(seconds - .405 / speed) < .05, "Time stretch removes algorithm latency at transients.");
         }
+        // Cancelling is an expected outcome: no PCM and no exception.
         std::stop_source stop; stop.request_stop();
-        bool cancelled{};
-        try { static_cast<void>(TimeStretchPcm(tone, 2, rate, 1.5, stop.get_token())); }
-        catch (const std::runtime_error &) { cancelled = true; }
-        Require(cancelled, "Cancelled stretch never publishes partial PCM.");
+        const ThrownExceptionWatch watch;
+        Require(!TimeStretchPcm(tone, 2, rate, 1.5, stop.get_token()).has_value(),
+                "Cancelled stretch never publishes partial PCM.");
+        Require(watch.Count() == 0, "Cancelling a stretch throws no exception.");
     }
     // CancelLoading: a clip dropped while it loads stops its worker, fails instead of becoming Ready, has no
     // duration or voice, and is released once retired. The same file loads normally again, cancelling a Ready
     // clip changes nothing, and a worker that finished before the cancel still has its result discarded.
     void VerifyCancellation(AudioSystem& audio, const std::filesystem::path& path, std::uint64_t expectedDuration)
     {
+        // Cancelling, failing, dropping and releasing clips are expected outcomes and throw nothing anywhere.
+        const ThrownExceptionWatch watch;
         std::string error;
         const auto started = std::chrono::steady_clock::now();
         auto cancelled = audio.LoadSound(path, AudioLoadMode::StreamAsyncAccurate, error);
@@ -192,6 +199,13 @@ namespace
             Require(std::chrono::steady_clock::now() < deadline, "Retired cancelled clips are released: " + error);
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
         }
+
+        // A clip dropped while it still decodes stops its worker in its destructor.
+        auto dropped = audio.LoadSound(path, AudioLoadMode::StreamAsyncAccurate, error);
+        Require(dropped != nullptr, error);
+        dropped.reset();
+        Require(watch.Count() == 0, "Cancelled and dropped clips throw no exception (worker or caller): " +
+                                        std::string(watch.Count() ? watch.Records().front().what.data() : ""));
     }
     void VerifyPlayback(const std::filesystem::path& path, const PcmProbe& pcm)
     {

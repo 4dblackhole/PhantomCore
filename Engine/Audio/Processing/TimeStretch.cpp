@@ -35,14 +35,17 @@ namespace
         Channel operator[](int channel) const { return {samples + channel, channels}; }
     };
 }
-std::vector<float> TimeStretchPcm(const std::span<const float> source, const std::uint32_t channels,
-                                  const std::uint32_t sampleRate, const double rate, const std::stop_token stop)
+std::optional<std::vector<float>> TimeStretchPcm(const std::span<const float> source, const std::uint32_t channels,
+                                                 const std::uint32_t sampleRate, const double rate,
+                                                 const std::stop_token stop)
 {
     if (!channels || channels > 32 || !sampleRate || source.empty() || source.size() % channels ||
         !std::isfinite(rate) || rate < 0.5 || rate > 2.0)
         throw std::invalid_argument("Invalid PCM time-stretch parameters.");
-    if (stop.stop_requested()) throw std::runtime_error("PCM time-stretch cancelled.");
-    if (rate == 1.0) return {source.begin(), source.end()};
+    if (stop.stop_requested())
+        return std::nullopt;
+    if (rate == 1.0)
+        return std::vector<float>(source.begin(), source.end());
     const auto frames = source.size() / channels;
     const double outputFrames = std::round(static_cast<double>(frames) / rate);
     constexpr auto maximumSamples = std::numeric_limits<unsigned int>::max() / sizeof(float);
@@ -60,7 +63,8 @@ std::vector<float> TimeStretchPcm(const std::span<const float> source, const std
     std::size_t inputPosition = 0, outputPosition = 0;
     while (inputPosition < frames)
     {
-        if (stop.stop_requested()) throw std::runtime_error("PCM time-stretch cancelled.");
+        if (stop.stop_requested())
+            return std::nullopt;
         const auto nextInput = std::min(inputPosition + 512, frames);
         const auto nextOutput = nextInput == frames ? count : static_cast<std::size_t>(std::llround(nextInput / rate));
         stretch.process(Input{source, channels, lookahead + inputPosition}, static_cast<int>(nextInput - inputPosition),

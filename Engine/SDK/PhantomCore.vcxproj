@@ -68,6 +68,7 @@
     <ClInclude Include="..\Platform.Win32\System\ComApartment.h" />
     <ClInclude Include="..\Platform.Win32\System\RuntimePaths.h" />
     <ClInclude Include="..\Platform.Win32\System\CrashDump.h" />
+    <ClInclude Include="..\Platform.Win32\System\ThrownExceptionWatch.h" />
     <ClInclude Include="..\Platform.Win32\Window\Win32Window.h" />
     <ClInclude Include="..\Audio\System\AudioPlayback.h" />
     <ClInclude Include="..\Audio\System\AudioMixerClock.h" />
@@ -131,6 +132,7 @@
     <ClCompile Include="..\Platform.Win32\System\ComApartment.cpp" />
     <ClCompile Include="..\Platform.Win32\System\RuntimePaths.cpp" />
     <ClCompile Include="..\Platform.Win32\System\CrashDump.cpp" />
+    <ClCompile Include="..\Platform.Win32\System\ThrownExceptionWatch.cpp" />
     <ClCompile Include="..\Platform.Win32\Window\Win32Window.cpp" />
     <ClCompile Include="..\Audio\System\AudioPlayback.cpp" />
     <ClCompile Include="..\Audio\System\AudioMixerClock.cpp" />
