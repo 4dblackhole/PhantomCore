@@ -881,6 +881,7 @@ struct D3D12Visual2DRenderer::Impl
                 nullptr,
                 IID_PPV_ARGS(page.resource.ReleaseAndGetAddressOf())),
             operation);
+        D3D12Detail::SetDebugName(*page.resource.Get(), L"Visual2D upload page");
         D3D12Detail::ThrowIfFailed(
             page.resource->Map(
                 0,

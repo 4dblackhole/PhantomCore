@@ -3,6 +3,7 @@
 #include "Text/D3D12TextRendering.h"
 #include "Renderer/FrameImageReadbackQueue.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/D3D12ResourceDescriptions.h"
 #include "Renderer/GraphicsDeviceDiagnostics.h"
 
 #include "Mesh/MeshRendering.h"
@@ -11,6 +12,8 @@
 
 #include <d3d12sdklayers.h>
 
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -34,6 +37,90 @@ namespace
         return result;
     }
 
+    [[nodiscard]] bool CanCreateDevice(IDXGIAdapter1& adapter) noexcept
+    {
+        return SUCCEEDED(D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr));
+    }
+
+    [[nodiscard]] Microsoft::WRL::ComPtr<IDXGIAdapter1> WarpAdapter(IDXGIFactory6& factory)
+    {
+        Microsoft::WRL::ComPtr<IDXGIAdapter> warpAdapter;
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        ThrowIfFailed(
+            factory.EnumWarpAdapter(
+                IID_PPV_ARGS(warpAdapter.ReleaseAndGetAddressOf())),
+            "IDXGIFactory6::EnumWarpAdapter");
+        ThrowIfFailed(
+            warpAdapter.As(&adapter),
+            "Query WARP IDXGIAdapter1");
+        return adapter;
+    }
+
+    // ASCII letters compared without case; adapter names are ASCII in practice.
+    [[nodiscard]] bool NameContains(const wchar_t* name, const std::string& part)
+    {
+        std::string folded;
+        for (; *name != 0; ++name)
+        {
+            const bool ascii = *name < 128;
+            folded.push_back(ascii ? static_cast<char>(std::tolower(static_cast<int>(*name))) : '?');
+        }
+        std::string wanted;
+        for (const char character : part)
+            wanted.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
+        return !wanted.empty() && folded.find(wanted) != std::string::npos;
+    }
+
+    [[nodiscard]] Microsoft::WRL::ComPtr<IDXGIAdapter1> NamedAdapter(IDXGIFactory6& factory, const std::string& name)
+    {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        for (UINT index = 0; factory.EnumAdapters1(index, adapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++index)
+        {
+            DXGI_ADAPTER_DESC1 description{};
+            if (SUCCEEDED(adapter->GetDesc1(&description)) && NameContains(description.Description, name))
+                return adapter;
+        }
+        return nullptr;
+    }
+
+    // The adapter a GraphicsAdapterRequest names, or null when there is none.
+    [[nodiscard]] Microsoft::WRL::ComPtr<IDXGIAdapter1> RequestedAdapter(
+        IDXGIFactory6& factory,
+        const GraphicsDeviceDiagnosticsConfig& config)
+    {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        switch (config.adapter)
+        {
+        case GraphicsAdapterRequest::Warp:
+            return WarpAdapter(factory);
+        case GraphicsAdapterRequest::Index:
+            if (FAILED(factory.EnumAdapters1(config.adapterIndex, adapter.GetAddressOf())))
+                return nullptr;
+            return adapter;
+        case GraphicsAdapterRequest::Name:
+            return NamedAdapter(factory, config.adapterName);
+        case GraphicsAdapterRequest::Default:
+            break;
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] std::string DescribeRequest(const GraphicsDeviceDiagnosticsConfig& config)
+    {
+        switch (config.adapter)
+        {
+        case GraphicsAdapterRequest::Warp:
+            return "WARP";
+        case GraphicsAdapterRequest::Index:
+            return "index " + std::to_string(config.adapterIndex);
+        case GraphicsAdapterRequest::Name:
+            return "name \"" + config.adapterName + "\"";
+        case GraphicsAdapterRequest::Default:
+            break;
+        }
+        return "default";
+    }
+
     Microsoft::WRL::ComPtr<IDXGIAdapter1> SelectAdapter(
         IDXGIFactory6& factory)
     {
@@ -53,25 +140,18 @@ namespace
                 continue;
             }
 
-            if (SUCCEEDED(D3D12CreateDevice(
-                    adapter.Get(),
-                    D3D_FEATURE_LEVEL_11_0,
-                    __uuidof(ID3D12Device),
-                    nullptr)))
+            if (CanCreateDevice(*adapter.Get()))
             {
                 return adapter;
             }
         }
 
-        Microsoft::WRL::ComPtr<IDXGIAdapter> warpAdapter;
-        ThrowIfFailed(
-            factory.EnumWarpAdapter(
-                IID_PPV_ARGS(warpAdapter.ReleaseAndGetAddressOf())),
-            "IDXGIFactory6::EnumWarpAdapter");
-        ThrowIfFailed(
-            warpAdapter.As(&adapter),
-            "Query WARP IDXGIAdapter1");
-        return adapter;
+        return WarpAdapter(factory);
+    }
+
+    void Name(ID3D12Object& object, const std::wstring& name) noexcept
+    {
+        D3D12Detail::SetDebugName(object, name.c_str());
     }
 }
 
@@ -98,6 +178,17 @@ D3D12Renderer::~D3D12Renderer()
         }
     }
 
+    if (validationMessages_.Active() && device_ != nullptr)
+    {
+        ReleaseAllButDevice();
+        validationMessages_.Finish(*device_.Get());
+    }
+
+    if (frameLatencyWait_ != nullptr)
+    {
+        CloseHandle(frameLatencyWait_);
+        frameLatencyWait_ = nullptr;
+    }
     if (fenceEvent_ != nullptr)
     {
         CloseHandle(fenceEvent_);
@@ -109,13 +200,16 @@ void D3D12Renderer::Initialize(
     const HWND window,
     const std::uint32_t width,
     const std::uint32_t height,
-    const bool deviceRemovedData)
+    const EngineDiagnosticsConfig& diagnostics)
 {
     window_ = window;
     width_ = width;
     height_ = height;
+    sink_ = diagnostics.sink;
+    graphics_ = diagnostics.graphics;
+    swapChainBuffers_ = std::clamp<std::uint32_t>(graphics_.swapChainBuffers, D3D12Detail::FrameCount, MaximumSwapChainBuffers);
     // DRED only watches devices created after it was switched on.
-    deviceRemovedData_ = deviceRemovedData && D3D12Detail::EnableDeviceRemovedExtendedData();
+    deviceRemovedData_ = diagnostics.graphicsDeviceRemovedData && D3D12Detail::EnableDeviceRemovedExtendedData();
 
     // The creation order follows D3D12 dependencies: device first,
     // command queue/fences next, then a swap chain that uses that queue.
@@ -174,22 +268,18 @@ void D3D12Renderer::Resize(
     }
     depthStencil_.Reset();
 
-    const UINT flags = tearingSupported_
-        ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
-        : 0;
-
+    // The flags must match the ones the swap chain was created with.
     ThrowIfFailed(
         swapChain_->ResizeBuffers(
-            D3D12Detail::FrameCount,
+            swapChainBuffers_,
             width,
             height,
             renderTargetFormat_,
-            flags),
+            SwapChainFlags()),
         "IDXGISwapChain4::ResizeBuffers");
 
     width_ = width;
     height_ = height;
-    frameIndex_ = swapChain_->GetCurrentBackBufferIndex();
     frameFenceValues_.fill(0);
     CreateRenderTargets();
     CreateDepthStencil();
@@ -206,7 +296,9 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     // This is the normal per-frame synchronization point.  It waits only
     // when the allocator/back buffer selected for reuse is still in use;
     // it never waits for the entire GPU after every render.
+    WaitForSwapChain();
     WaitForFrame(frameIndex_);
+    backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
     imageReadbacks_->CompleteFrame(frameIndex_);
     ThrowIfFailed(
         commandAllocators_[frameIndex_]->Reset(),
@@ -217,7 +309,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
 
     D3D12_RESOURCE_BARRIER toRenderTarget{};
     toRenderTarget.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    toRenderTarget.Transition.pResource = renderTargets_[frameIndex_].Get();
+    toRenderTarget.Transition.pResource = renderTargets_[backBufferIndex_].Get();
     toRenderTarget.Transition.Subresource =
         D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     toRenderTarget.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
@@ -227,7 +319,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
 
     const D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView = OffsetDescriptor(
         rtvHeap_->GetCPUDescriptorHandleForHeapStart(),
-        frameIndex_,
+        backBufferIndex_,
         rtvDescriptorSize_);
     const D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView =
         dsvHeap_->GetCPUDescriptorHandleForHeapStart();
@@ -263,7 +355,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     MeshRenderingBackend::BeginFrame(*meshRenderSystem_, frameIndex_);
     TextRenderingBackend::BeginFrame(*textRenderSystem_, frameIndex_, renderIndex);
     static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).BeginScreenFrame(renderIndex, frameIndex_);
-    imageReadbacks_->BeginFrame(frameIndex_, renderIndex, *renderTargets_[frameIndex_].Get());
+    imageReadbacks_->BeginFrame(frameIndex_, renderIndex, *renderTargets_[backBufferIndex_].Get());
     frameOpen_ = true;
     RenderContext context;
     frameContext_.commandList = commandList_.Get();
@@ -307,7 +399,7 @@ void D3D12Renderer::EndFrame()
 
     D3D12_RESOURCE_BARRIER toPresent{};
     toPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    toPresent.Transition.pResource = renderTargets_[frameIndex_].Get();
+    toPresent.Transition.pResource = renderTargets_[backBufferIndex_].Get();
     toPresent.Transition.Subresource =
         D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     toPresent.Transition.StateBefore =
@@ -316,7 +408,8 @@ void D3D12Renderer::EndFrame()
     commandList_->ResourceBarrier(1, &toPresent);
 
     // Present interval zero keeps presentation from becoming the update
-    // limiter.  Tearing is requested only when DXGI reports support.
+    // limiter.  Tearing is requested only when DXGI reports support and the
+    // diagnostics configuration did not turn it off.
     ThrowIfFailed(
         commandList_->Close(),
         "ID3D12GraphicsCommandList::Close");
@@ -324,7 +417,7 @@ void D3D12Renderer::EndFrame()
     commandQueue_->ExecuteCommandLists(1, commandLists);
     imageReadbacks_->MarkSubmitted();
 
-    const UINT presentFlags = tearingSupported_
+    const UINT presentFlags = (SwapChainFlags() & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0
         ? DXGI_PRESENT_ALLOW_TEARING
         : 0;
     ThrowIfFailed(
@@ -338,8 +431,9 @@ void D3D12Renderer::EndFrame()
         commandQueue_->Signal(fence_.Get(), signalValue),
         "ID3D12CommandQueue::Signal");
     frameFenceValues_[frameIndex_] = signalValue;
-    frameIndex_ = swapChain_->GetCurrentBackBufferIndex();
+    frameIndex_ = (frameIndex_ + 1) % D3D12Detail::FrameCount;
     frameOpen_ = false;
+    validationMessages_.Forward();
 }
 
 void D3D12Renderer::WaitForGpu()
@@ -373,12 +467,63 @@ std::vector<std::string> D3D12Renderer::StartupRecord() const
     if (adapter_ == nullptr)
         return lines;
     lines.push_back("graphics adapter: " + D3D12Detail::DescribeAdapter(*adapter_.Get()));
-    lines.push_back(
-        "swap chain: " + std::to_string(width_) + "x" + std::to_string(height_) + ", " +
-        std::to_string(D3D12Detail::FrameCount) + " buffers, tearing " +
-        (tearingSupported_ ? "allowed" : "not supported"));
+    lines.push_back("swap chain: " + DescribeSwapChain());
     lines.push_back(std::string("device removed data: ") + (deviceRemovedData_ ? "on" : "off"));
+    lines.push_back(
+        "graphics options: validation " + D3D12Detail::DescribeValidation(validation_) + ", adapter " + adapterRequest_);
     return lines;
+}
+
+// "1280x720, 2 buffers, tearing allowed" and, when asked for, ", waitable (latency 1)".
+std::string D3D12Renderer::DescribeSwapChain() const
+{
+    const char* tearing = "not supported";
+    if (tearingSupported_)
+        tearing = graphics_.allowTearing ? "allowed" : "off by setting";
+    std::string line = std::to_string(width_) + "x" + std::to_string(height_) + ", " +
+        std::to_string(swapChainBuffers_) + " buffers, tearing " + tearing;
+    if (frameLatencyWait_ != nullptr)
+        line += ", waitable (latency 1)";
+    return line;
+}
+
+UINT D3D12Renderer::SwapChainFlags() const noexcept
+{
+    UINT flags = 0;
+    if (tearingSupported_ && graphics_.allowTearing)
+        flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    if (graphics_.waitableSwapChain)
+        flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+    return flags;
+}
+
+// A waitable swap chain signals when it can take another frame. The wait is
+// bounded so a stuck presentation cannot hold the main loop forever.
+void D3D12Renderer::WaitForSwapChain() const noexcept
+{
+    constexpr DWORD MaximumWaitMilliseconds = 1000;
+    if (frameLatencyWait_ != nullptr)
+        static_cast<void>(WaitForSingleObjectEx(frameLatencyWait_, MaximumWaitMilliseconds, TRUE));
+}
+
+void D3D12Renderer::ReleaseAllButDevice() noexcept
+{
+    // The same order the members would be destroyed in.
+    imageReadbacks_.reset();
+    visual2DRenderSystem_.reset();
+    textRenderSystem_.reset();
+    meshRenderSystem_.reset();
+    fence_.Reset();
+    commandList_.Reset();
+    for (auto& allocator : commandAllocators_)
+        allocator.Reset();
+    depthStencil_.Reset();
+    for (auto& target : renderTargets_)
+        target.Reset();
+    dsvHeap_.Reset();
+    rtvHeap_.Reset();
+    swapChain_.Reset();
+    commandQueue_.Reset();
 }
 
 GraphicsMemoryInfo D3D12Renderer::MemoryInfo() const noexcept
@@ -395,6 +540,8 @@ std::optional<GraphicsDeviceLossReport> D3D12Renderer::DeviceLossReport(
 {
     if (device_ == nullptr)
         return std::nullopt;
+    // The messages of the frame that failed come before the loss report.
+    validationMessages_.Forward();
     const HRESULT reason = device_->GetDeviceRemovedReason();
     // A failed call that named the loss is reported even if the device gives no reason.
     if (reason == S_OK && operation == nullptr)
@@ -461,23 +608,15 @@ bool D3D12Renderer::SupportsTearing() const noexcept
 
 void D3D12Renderer::CreateDeviceAndFactory()
 {
-    UINT factoryFlags = 0;
-
-#if defined(_DEBUG)
-    Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
-    if (SUCCEEDED(D3D12GetDebugInterface(
-            IID_PPV_ARGS(debugController.ReleaseAndGetAddressOf()))))
-    {
-        debugController->EnableDebugLayer();
-        factoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
-    }
-#endif
-
-    ThrowIfFailed(
-        CreateDXGIFactory2(
-            factoryFlags,
-            IID_PPV_ARGS(factory_.ReleaseAndGetAddressOf())),
-        "CreateDXGIFactory2");
+    // Validation must be on before the device exists. Debug builds keep the
+    // debug layer they always had.
+    validation_ = D3D12Detail::EnableValidation(graphics_.validation);
+    const UINT factoryFlags = validation_.debugLayer ? DXGI_CREATE_FACTORY_DEBUG : 0;
+    HRESULT factoryCreated = CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(factory_.ReleaseAndGetAddressOf()));
+    // The DXGI debug part may be missing even where the D3D12 layer exists.
+    if (FAILED(factoryCreated) && factoryFlags != 0)
+        factoryCreated = CreateDXGIFactory2(0, IID_PPV_ARGS(factory_.ReleaseAndGetAddressOf()));
+    ThrowIfFailed(factoryCreated, "CreateDXGIFactory2");
 
     BOOL allowTearing = FALSE;
     if (SUCCEEDED(factory_->CheckFeatureSupport(
@@ -488,13 +627,32 @@ void D3D12Renderer::CreateDeviceAndFactory()
         tearingSupported_ = allowTearing == TRUE;
     }
 
-    adapter_ = SelectAdapter(*factory_.Get());
+    // A requested adapter that is missing or cannot make a device falls back
+    // to the normal choice, and the start record says so.
+    adapterRequest_ = DescribeRequest(graphics_);
+    adapter_ = RequestedAdapter(*factory_.Get(), graphics_);
+    const bool requested = graphics_.adapter != GraphicsAdapterRequest::Default;
+    if (adapter_ != nullptr && !CanCreateDevice(*adapter_.Get()))
+    {
+        adapter_.Reset();
+        adapterRequest_ += " (no device, default used)";
+    }
+    else if (adapter_ == nullptr && requested)
+    {
+        adapterRequest_ += " (not found, default used)";
+    }
+    if (adapter_ == nullptr)
+        adapter_ = SelectAdapter(*factory_.Get());
     ThrowIfFailed(
         D3D12CreateDevice(
             adapter_.Get(),
             D3D_FEATURE_LEVEL_11_0,
             IID_PPV_ARGS(device_.ReleaseAndGetAddressOf())),
         "D3D12CreateDevice");
+
+    // Only a Client that asked for validation gets its messages as records.
+    if (graphics_.validation != GraphicsValidation::Off && validation_.debugLayer)
+        validationMessages_.Attach(*device_.Get(), sink_, graphics_.validationMessageLimit);
 }
 
 void D3D12Renderer::CreateCommandObjects()
@@ -512,13 +670,15 @@ void D3D12Renderer::CreateCommandObjects()
     // The names appear in the device-removed data and in graphics debuggers.
     static_cast<void>(commandQueue_->SetName(L"Main queue"));
 
-    for (auto& allocator : commandAllocators_)
+    for (std::uint32_t slot = 0; slot < D3D12Detail::FrameCount; ++slot)
     {
+        auto& allocator = commandAllocators_[slot];
         ThrowIfFailed(
             device_->CreateCommandAllocator(
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
                 IID_PPV_ARGS(allocator.ReleaseAndGetAddressOf())),
             "ID3D12Device::CreateCommandAllocator");
+        Name(*allocator.Get(), L"Frame allocator " + std::to_wstring(slot));
     }
 
     ThrowIfFailed(
@@ -540,6 +700,7 @@ void D3D12Renderer::CreateCommandObjects()
             D3D12_FENCE_FLAG_NONE,
             IID_PPV_ARGS(fence_.ReleaseAndGetAddressOf())),
         "ID3D12Device::CreateFence");
+    Name(*fence_.Get(), L"Frame fence");
 
     fenceEvent_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (fenceEvent_ == nullptr)
@@ -557,13 +718,11 @@ void D3D12Renderer::CreateSwapChain(const HWND window)
     description.Stereo = FALSE;
     description.SampleDesc.Count = 1;
     description.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    description.BufferCount = D3D12Detail::FrameCount;
+    description.BufferCount = swapChainBuffers_;
     description.Scaling = DXGI_SCALING_STRETCH;
     description.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     description.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    description.Flags = tearingSupported_
-        ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
-        : 0;
+    description.Flags = SwapChainFlags();
 
     Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain;
     ThrowIfFailed(
@@ -582,19 +741,27 @@ void D3D12Renderer::CreateSwapChain(const HWND window)
         swapChain.As(&swapChain_),
         "Query IDXGISwapChain4");
 
-    frameIndex_ = swapChain_->GetCurrentBackBufferIndex();
+    if (graphics_.waitableSwapChain)
+    {
+        ThrowIfFailed(
+            swapChain_->SetMaximumFrameLatency(1),
+            "IDXGISwapChain4::SetMaximumFrameLatency");
+        frameLatencyWait_ = swapChain_->GetFrameLatencyWaitableObject();
+    }
+    backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
 }
 
 void D3D12Renderer::CreateDescriptorHeaps()
 {
     D3D12_DESCRIPTOR_HEAP_DESC rtvDescription{};
     rtvDescription.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    rtvDescription.NumDescriptors = D3D12Detail::FrameCount;
+    rtvDescription.NumDescriptors = swapChainBuffers_;
     ThrowIfFailed(
         device_->CreateDescriptorHeap(
             &rtvDescription,
             IID_PPV_ARGS(rtvHeap_.ReleaseAndGetAddressOf())),
         "Create RTV descriptor heap");
+    Name(*rtvHeap_.Get(), L"Back buffer views");
     rtvDescriptorSize_ = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
@@ -606,6 +773,7 @@ void D3D12Renderer::CreateDescriptorHeaps()
             &dsvDescription,
             IID_PPV_ARGS(dsvHeap_.ReleaseAndGetAddressOf())),
         "Create DSV descriptor heap");
+    Name(*dsvHeap_.Get(), L"Depth stencil view");
 }
 
 void D3D12Renderer::CreateRenderTargets()
@@ -613,13 +781,14 @@ void D3D12Renderer::CreateRenderTargets()
     const D3D12_CPU_DESCRIPTOR_HANDLE start =
         rtvHeap_->GetCPUDescriptorHandleForHeapStart();
 
-    for (std::uint32_t index = 0; index < D3D12Detail::FrameCount; ++index)
+    for (std::uint32_t index = 0; index < swapChainBuffers_; ++index)
     {
         ThrowIfFailed(
             swapChain_->GetBuffer(
                 index,
                 IID_PPV_ARGS(renderTargets_[index].ReleaseAndGetAddressOf())),
             "IDXGISwapChain4::GetBuffer");
+        Name(*renderTargets_[index].Get(), L"Back buffer " + std::to_wstring(index));
         const D3D12_CPU_DESCRIPTOR_HANDLE handle =
             OffsetDescriptor(start, index, rtvDescriptorSize_);
         device_->CreateRenderTargetView(
@@ -658,6 +827,7 @@ void D3D12Renderer::CreateDepthStencil()
             &clearValue,
             IID_PPV_ARGS(depthStencil_.ReleaseAndGetAddressOf())),
         "Create depth-stencil resource");
+    Name(*depthStencil_.Get(), L"Depth stencil");
 
     D3D12_DEPTH_STENCIL_VIEW_DESC viewDescription{};
     viewDescription.Format = depthStencilFormat_;

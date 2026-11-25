@@ -120,6 +120,53 @@ protected:
     ~IEngineDiagnosticSink() = default;
 };
 
+// How closely the graphics backend checks the engine's use of it. Each level
+// costs more than the one before: the debug layer checks every call on the
+// CPU, GPU-based validation also checks what shaders access on the GPU and is
+// many times slower. Both need the debug layer installed on the PC (Windows
+// "Graphics Tools"); without it the run continues unchecked and says so.
+enum class GraphicsValidation : std::uint8_t
+{
+    Off,
+    DebugLayer,
+    GpuBased,
+};
+
+// Which graphics adapter the device is created on.
+enum class GraphicsAdapterRequest : std::uint8_t
+{
+    Default, // the first hardware adapter, by high-performance preference
+    Warp,    // the software rasterizer: no GPU driver involved, much slower
+    Index,   // adapterIndex in the system's adapter list
+    Name,    // the first adapter whose name contains adapterName (ASCII, any case)
+};
+
+// Graphics device switches for chasing a crash. The defaults are the engine's
+// normal behaviour, so a Client that sets nothing renders exactly as before.
+// All of them are decided when the device and swap chain are created.
+struct GraphicsDeviceDiagnosticsConfig
+{
+    // The debug layer and GPU-based validation are process-wide: once a run
+    // turned them on, later runs in the same process keep them. Debug builds
+    // always use at least the debug layer.
+    GraphicsValidation validation{GraphicsValidation::Off};
+    // Validation messages sent to the sink per run, at most three of each kind;
+    // the rest are only counted in the summary sent when the renderer ends.
+    std::uint32_t validationMessageLimit{100};
+    // An adapter that cannot be found or cannot create a device falls back to
+    // Default, and the start record says so.
+    GraphicsAdapterRequest adapter{GraphicsAdapterRequest::Default};
+    std::uint32_t adapterIndex{};
+    std::string adapterName;
+    // False presents without the tearing flag even where the display allows it.
+    bool allowTearing{true};
+    // Back buffers in the swap chain: 2 or 3 (other values are clamped).
+    std::uint32_t swapChainBuffers{2};
+    // Each frame first waits until the swap chain can take it, with at most
+    // one frame queued for presentation (bounded at one second).
+    bool waitableSwapChain{};
+};
+
 struct EngineDiagnosticsConfig
 {
     // Must outlive Run. Null records nothing.
@@ -137,6 +184,8 @@ struct EngineDiagnosticsConfig
     // Test hook: removes the graphics device after this many rendered frames
     // so the loss path can be exercised on purpose. Zero never does.
     std::uint64_t removeGraphicsDeviceAfterRenderedFrames{};
+    // Validation, adapter and swap-chain switches for crash experiments.
+    GraphicsDeviceDiagnosticsConfig graphics;
 };
 
 } // namespace PhantomCore

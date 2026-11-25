@@ -3,6 +3,7 @@
 #include "Audio/AudioPcmTests.h"
 #include "App/HeadlessRunTests.h"
 #include "App/DeviceLossTests.h"
+#include "App/GraphicsOptionsTests.h"
 #include "App/CrashDumpTests.h"
 #include "App/ThrownExceptionWatchTests.h"
 #include "App/MainLoopWatchTests.h"
@@ -44,6 +45,8 @@ int main(int argc, char** argv)
         return TestHeadlessRunError();
     if (argc == 2 && std::string_view(argv[1]) == "--device-loss")
         return TestDeviceLoss();
+    if (argc == 2 && std::string_view(argv[1]) == "--graphics-options")
+        return TestGraphicsOptions();
     if (argc == 2 && std::string_view(argv[1]) == "--main-loop-watch")
         return TestMainLoopWatch();
     if (argc == 2 && std::string_view(argv[1]) == "--crash-dump")

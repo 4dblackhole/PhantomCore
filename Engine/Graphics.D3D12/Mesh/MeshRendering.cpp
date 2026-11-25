@@ -49,6 +49,7 @@ namespace
                 nullptr,
                 IID_PPV_ARGS(resource.ReleaseAndGetAddressOf())),
             "Create upload buffer");
+        D3D12Detail::SetDebugName(*resource.Get(), L"Mesh upload buffer");
         return resource;
     }
 

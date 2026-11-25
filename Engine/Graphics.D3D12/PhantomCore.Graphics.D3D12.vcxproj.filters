@@ -3,8 +3,10 @@
   <ItemGroup>
     <ClInclude Include="Renderer\FrameImageReadbackQueue.h"><Filter>Renderer</Filter></ClInclude>
     <ClInclude Include="Renderer\GraphicsDeviceDiagnostics.h"><Filter>Renderer</Filter></ClInclude>
+    <ClInclude Include="Renderer\GraphicsValidation.h"><Filter>Renderer</Filter></ClInclude>
     <ClCompile Include="Renderer\FrameImageReadbackQueue.cpp"><Filter>Renderer</Filter></ClCompile>
     <ClCompile Include="Renderer\GraphicsDeviceDiagnostics.cpp"><Filter>Renderer</Filter></ClCompile>
+    <ClCompile Include="Renderer\GraphicsValidation.cpp"><Filter>Renderer</Filter></ClCompile>
     <Filter Include="Renderer">
       <UniqueIdentifier>{20222222-2222-4222-8222-222222222221}</UniqueIdentifier>
     </Filter>

@@ -121,6 +121,7 @@
     <ClInclude Include="..\Core\Rendering\ImageReadback.h"><Filter>Core\Rendering</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\GraphicsDeviceDiagnostics.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
+    <ClInclude Include="..\Graphics.D3D12\Renderer\GraphicsValidation.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Mesh\MeshRendering.h"><Filter>Graphics.D3D12\Mesh</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Texture\D3D12TextureRendering.h"><Filter>Graphics.D3D12\Texture</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameResources.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
@@ -176,6 +177,7 @@
     <ClCompile Include="..\Graphics.D3D12\Renderer\D3D12Renderer.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Renderer\GraphicsDeviceDiagnostics.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
+    <ClCompile Include="..\Graphics.D3D12\Renderer\GraphicsValidation.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Mesh\MeshRendering.cpp"><Filter>Graphics.D3D12\Mesh</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Texture\TextureManager.cpp"><Filter>Graphics.D3D12\Texture</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Text\TextRendering.cpp"><Filter>Graphics.D3D12\Text</Filter></ClCompile>
