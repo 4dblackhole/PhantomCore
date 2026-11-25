@@ -44,6 +44,30 @@ namespace
         return DefWindowProcW(window, message, wParam, lParam);
     }
 
+    [[nodiscard]] bool IsThreadOfThisProcess(const DWORD threadId) noexcept
+    {
+        const HANDLE thread = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, threadId);
+        if (thread == nullptr)
+        {
+            return false;
+        }
+        const bool own = GetProcessIdOfThread(thread) == GetCurrentProcessId();
+        CloseHandle(thread);
+        return own;
+    }
+
+    [[nodiscard]] bool IsForegroundOfThisProcess() noexcept
+    {
+        const HWND foreground = GetForegroundWindow();
+        if (foreground == nullptr)
+        {
+            return false;
+        }
+        DWORD processId{};
+        GetWindowThreadProcessId(foreground, &processId);
+        return processId == GetCurrentProcessId();
+    }
+
     [[nodiscard]] LONG Width(const RECT& rectangle) noexcept
     {
         return rectangle.right - rectangle.left;
@@ -291,6 +315,9 @@ void Win32Window::Initialize(const WindowConfig& config, InputState& input)
     ShowWindow(window_, config.visible ? SW_SHOW : SW_HIDE);
     UpdateWindow(window_);
     UpdateBackdrop();
+    // WM_ACTIVATEAPP keeps this current from here on.
+    visible_ = config.visible;
+    processInFront_ = IsForegroundOfThisProcess();
 }
 
 bool Win32Window::PumpMessages()
@@ -632,6 +659,11 @@ bool Win32Window::IsMinimized() const noexcept
     return minimized_;
 }
 
+bool Win32Window::IsInBackground() const noexcept
+{
+    return visible_ && !processInFront_;
+}
+
 double Win32Window::RefreshRateHz() const noexcept
 {
     return refreshRateHz_;
@@ -719,6 +751,10 @@ LRESULT Win32Window::WindowProcedure(
         return 0;
 
     case WM_ACTIVATEAPP:
+        // On deactivation lParam is the thread that owns the window being
+        // activated; a window of another thread of this process still counts
+        // as this program being in front.
+        processInFront_ = wParam != FALSE || IsThreadOfThisProcess(static_cast<DWORD>(lParam));
         if (wParam == FALSE)
         {
             input_->Reset();

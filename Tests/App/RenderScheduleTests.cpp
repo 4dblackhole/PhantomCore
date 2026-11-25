@@ -95,6 +95,53 @@ namespace
         Check(!schedule.IsDue(0.505), "A stalled loop does not render a catch-up burst.");
         Check(schedule.IsDue(0.510), "After a stall the deadline restarts one interval after the late frame.");
     }
+
+    // A 360 Hz display behind another program's window, in each mode.
+    void TestBackgroundCap()
+    {
+        constexpr double Step = 0.0001;
+        constexpr RenderRateMode Modes[] = {
+            RenderRateMode::Display, RenderRateMode::DisplayDouble, RenderRateMode::Unlimited};
+        for (const RenderRateMode mode : Modes)
+        {
+            RenderSchedule schedule;
+            schedule.SetBaseRate(360.0, 0.0);
+            schedule.SetMode(mode, 0.0);
+            schedule.SetBackgroundRate(DefaultBackgroundRenderRateHz);
+            Check(!schedule.IsBackgroundLimited(), "The cap waits until the window is in the background.");
+            const std::uint64_t front = CountFrames(schedule, 0.0, 1.0, Step);
+            Check(front > 300, "In front the mode renders its own rate.");
+
+            schedule.SetBackground(true, 1.0);
+            Check(schedule.IsBackgroundLimited(), "Behind another window the cap applies.");
+            Check(Near(CountFrames(schedule, 1.0, 10.0, Step), DefaultBackgroundRenderRateHz * 10.0),
+                  "Behind another window every mode renders 30 frames a second.");
+
+            // Brought back in the middle of a background interval.
+            schedule.MarkRendered(11.0);
+            schedule.SetBackground(false, 11.001);
+            Check(schedule.IsDue(11.001), "A window brought to the front is drawn at once.");
+            Check(Near(CountFrames(schedule, 11.001, 1.0, Step), static_cast<double>(front)),
+                  "In front again the mode renders its own rate.");
+        }
+    }
+
+    void TestBackgroundCapLimits()
+    {
+        RenderSchedule slow;
+        slow.SetBaseRate(24.0, 0.0);
+        slow.SetBackgroundRate(DefaultBackgroundRenderRateHz);
+        slow.SetBackground(true, 0.0);
+        Check(Near(CountFrames(slow, 0.0, 10.0, 0.0001), 240.0), "A rate slower than the cap keeps its own rate.");
+
+        RenderSchedule off;
+        off.SetBaseRate(60.0, 0.0);
+        off.SetMode(RenderRateMode::Unlimited, 0.0);
+        off.SetBackgroundRate(0.0);
+        off.SetBackground(true, 0.0);
+        Check(!off.IsBackgroundLimited(), "A cap of 0 is off.");
+        Check(CountFrames(off, 0.0, 1.0, 0.001) == 1000, "With the cap off the background renders every iteration.");
+    }
 } // namespace
 
 int TestRenderSchedule()
@@ -103,5 +150,7 @@ int TestRenderSchedule()
     TestLimitedModes();
     TestUnlimitedMode();
     TestLateFrame();
+    TestBackgroundCap();
+    TestBackgroundCapLimits();
     return failureCount;
 }

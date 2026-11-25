@@ -64,6 +64,10 @@ struct EngineConfig
     double renderRateOverrideHz{};
     // Frames per base-rate period, or one frame per Update (Unlimited).
     RenderRateMode renderRateMode{RenderRateMode::Display};
+    // Most frames per second while the shown window is behind another
+    // program's window; 1 or less renders at the normal rate. Update, input,
+    // and audio keep their rates. Hidden and minimized windows are not affected.
+    double backgroundRenderRateHz{DefaultBackgroundRenderRateHz};
     double maximumUpdateDeltaSeconds{0.1};
 
     // Hidden runs also suppress modal fatal-error dialogs; errors remain logged.
