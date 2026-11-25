@@ -3716,11 +3716,16 @@ protected:
 
 // ===== BEGIN Engine\Core\App\RenderSchedule.h =====
 
+#include <algorithm>
 #include <cstdint>
 
 
 namespace PhantomCore
 {
+// Most frames per second while the window is shown but another program's
+// window is in front. EngineConfig::backgroundRenderRateHz starts from it.
+inline constexpr double DefaultBackgroundRenderRateHz = 30.0;
+
 // How often the main loop calls Render. Update is never limited.
 enum class RenderRateMode : std::uint8_t
 {
@@ -3769,6 +3774,24 @@ class RenderSchedule final
         nextRenderTime_ = now;
     }
 
+    // Cap while in the background. Rates of 1 Hz or less turn the cap off.
+    void SetBackgroundRate(const double hz) noexcept
+    {
+        backgroundRateHz_ = hz > 1.0 ? hz : 0.0;
+    }
+
+    // A change takes effect at once: the next frame is due at `now`, so a
+    // window brought to the front is drawn on the same loop iteration.
+    void SetBackground(const bool background, const double now) noexcept
+    {
+        if (background == background_)
+        {
+            return;
+        }
+        background_ = background;
+        nextRenderTime_ = now;
+    }
+
     [[nodiscard]] RenderRateMode Mode() const noexcept
     {
         return mode_;
@@ -3779,23 +3802,26 @@ class RenderSchedule final
         return baseRateHz_;
     }
 
+    // True while the background cap slows rendering down.
+    [[nodiscard]] bool IsBackgroundLimited() const noexcept
+    {
+        return background_ && backgroundRateHz_ > 0.0;
+    }
+
     // Seconds between frames; zero when every loop iteration renders.
     [[nodiscard]] double IntervalSeconds() const noexcept
     {
-        switch (mode_)
+        const double interval = ModeIntervalSeconds();
+        if (!IsBackgroundLimited())
         {
-        case RenderRateMode::DisplayDouble:
-            return 0.5 / baseRateHz_;
-        case RenderRateMode::Unlimited:
-            return 0.0;
-        default:
-            return 1.0 / baseRateHz_;
+            return interval;
         }
+        return std::max(interval, 1.0 / backgroundRateHz_);
     }
 
     [[nodiscard]] bool IsDue(const double now) const noexcept
     {
-        return mode_ == RenderRateMode::Unlimited || now >= nextRenderTime_;
+        return IntervalSeconds() == 0.0 || now >= nextRenderTime_;
     }
 
     // Call after a frame was rendered at `now`.
@@ -3810,8 +3836,23 @@ class RenderSchedule final
     }
 
   private:
+    [[nodiscard]] double ModeIntervalSeconds() const noexcept
+    {
+        switch (mode_)
+        {
+        case RenderRateMode::DisplayDouble:
+            return 0.5 / baseRateHz_;
+        case RenderRateMode::Unlimited:
+            return 0.0;
+        default:
+            return 1.0 / baseRateHz_;
+        }
+    }
+
     RenderRateMode mode_{RenderRateMode::Display};
     double baseRateHz_{60.0};
+    double backgroundRateHz_{};
+    bool background_{};
     double nextRenderTime_{};
 };
 
@@ -4069,6 +4110,10 @@ struct EngineConfig
     double renderRateOverrideHz{};
     // Frames per base-rate period, or one frame per Update (Unlimited).
     RenderRateMode renderRateMode{RenderRateMode::Display};
+    // Most frames per second while the shown window is behind another
+    // program's window; 1 or less renders at the normal rate. Update, input,
+    // and audio keep their rates. Hidden and minimized windows are not affected.
+    double backgroundRenderRateHz{DefaultBackgroundRenderRateHz};
     double maximumUpdateDeltaSeconds{0.1};
 
     // Hidden runs also suppress modal fatal-error dialogs; errors remain logged.

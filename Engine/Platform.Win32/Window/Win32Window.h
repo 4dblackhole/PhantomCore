@@ -57,6 +57,9 @@ public:
     [[nodiscard]] std::uint32_t ClientWidth() const noexcept;
     [[nodiscard]] std::uint32_t ClientHeight() const noexcept;
     [[nodiscard]] bool IsMinimized() const noexcept;
+    // Shown, and another program's window is in front. A window of this
+    // process in front (a dialog) keeps the game in the foreground.
+    [[nodiscard]] bool IsInBackground() const noexcept;
     [[nodiscard]] double RefreshRateHz() const noexcept;
 
     [[nodiscard]] bool ConsumeResize(WindowSize& size) noexcept;
@@ -102,6 +105,8 @@ private:
     std::uint32_t clientHeight_{};
     bool resizePending_{};
     bool minimized_{};
+    bool visible_{};
+    bool processInFront_{};
     bool mouseCaptured_{};
     bool refreshRateChanged_{};
     double refreshRateHz_{60.0};

@@ -231,6 +231,7 @@ namespace
                 ValidRate(config.renderRateOverrideHz, refreshRateHz),
                 0.0);
             schedule.SetMode(config.renderRateMode, 0.0);
+            schedule.SetBackgroundRate(config.backgroundRenderRateHz);
         }
 
         HighResolutionClock clock;
@@ -250,6 +251,11 @@ namespace
         std::string recordedSize;
         WindowMode recordedWindowMode{};
         RenderRateMode recordedRenderRate{};
+        // Background cap changes: recorded at most once per quiet period,
+        // with the count of changes since the last line.
+        bool lastBackgroundLimited{};
+        std::uint64_t backgroundChangesSinceRecord{};
+        double nextBackgroundRecordSeconds{};
         bool deviceRemovedForTest{};
         RenderSchedule schedule;
         double audioInterval{};
@@ -273,6 +279,34 @@ namespace
             state.recordedRenderRate = renderRate.Mode();
             Record(state.diagnosticSink, std::string("render rate: ") + Name(state.recordedRenderRate));
         }
+    }
+
+    // Switching windows quickly must not flood the record: after a line, the
+    // next one waits this long and then reports the state and the change count.
+    constexpr double BackgroundRecordQuietSeconds = 10.0;
+
+    void RecordBackgroundChanges(MainLoopState& state)
+    {
+        if (state.diagnosticSink == nullptr)
+            return;
+        const bool limited = state.schedule.IsBackgroundLimited();
+        if (limited != state.lastBackgroundLimited)
+        {
+            state.lastBackgroundLimited = limited;
+            ++state.backgroundChangesSinceRecord;
+        }
+        if (state.backgroundChangesSinceRecord == 0)
+            return;
+        if (state.totalSeconds < state.nextBackgroundRecordSeconds)
+            return;
+        std::string line = limited
+            ? "render rate: background " + Hertz(1.0 / state.schedule.IntervalSeconds())
+            : std::string("render rate: foreground");
+        if (state.backgroundChangesSinceRecord > 1)
+            line += " (" + std::to_string(state.backgroundChangesSinceRecord) + " focus changes)";
+        Record(state.diagnosticSink, line);
+        state.backgroundChangesSinceRecord = 0;
+        state.nextBackgroundRecordSeconds = state.totalSeconds + BackgroundRecordQuietSeconds;
     }
 
     void HandleWindowChanges(
@@ -313,7 +347,10 @@ namespace
             }
         }
         state.schedule.SetMode(renderRate.Mode(), state.totalSeconds);
+        // Only the Render calls slow down behind another program's window.
+        state.schedule.SetBackground(window.IsInBackground(), state.totalSeconds);
         RecordModeChanges(window, renderRate, state);
+        RecordBackgroundChanges(state);
     }
 
     [[nodiscard]] bool UpdateClient(

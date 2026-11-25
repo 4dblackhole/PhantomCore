@@ -27,6 +27,9 @@
     덮습니다. 배경 창은 게임 창 바로 뒤에 있고 포커스를 받지 않으며, 누르면 게임 창으로 돌아갑니다. 게임 창이 숨겨지거나
     최소화되면 함께 숨습니다.
   - 모니터 해상도가 바뀌면(`WM_DISPLAYCHANGE`) 같은 규칙으로 다시 놓습니다.
+  - 다른 프로그램의 창이 앞에 오면(`WM_ACTIVATEAPP`) 입력을 비우고 마우스 캡처를 풀며, 보이는 창이면 Render를 초당 30회
+    이하로 줄입니다(Update는 그대로, [렌더 스케줄](EngineOverview.md#5-시간입력렌더-스케줄)). 배경 창을 누르면 게임 창이
+    다시 앞에 오므로 이 제한도 풀립니다.
 - `MonitorSize()`는 창이 있는 모니터의 픽셀 크기, `Position()`은 client 영역(게임 화면)의 왼쪽 위가 그 모니터의 왼쪽 위에서
   떨어진 픽셀(`WindowPosition`)입니다.
 - `SetPosition(position, error)`는 위치를 기억하고 창을 그곳으로 옮깁니다. 시작 값은 `EngineConfig::windowPosition`입니다.
