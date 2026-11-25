@@ -235,6 +235,7 @@ namespace
         // Diagnostics: the last values recorded, so only a change adds a line.
         IEngineDiagnosticSink* diagnosticSink{};
         std::string recordedRefreshRate;
+        std::string recordedSize;
         WindowMode recordedWindowMode{};
         RenderRateMode recordedRenderRate{};
         bool deviceRemovedForTest{};
@@ -273,7 +274,12 @@ namespace
         WindowSize newSize{};
         if (window.ConsumeResize(newSize))
         {
-            Record(state.diagnosticSink, "window size: " + Size(newSize.width, newSize.height));
+            // The window reports its size once at start; only a new size is news.
+            if (std::string size = Size(newSize.width, newSize.height); size != state.recordedSize)
+            {
+                Record(state.diagnosticSink, "window size: " + size);
+                state.recordedSize = std::move(size);
+            }
             renderer.Resize(newSize.width, newSize.height);
             client.OnResize(newSize.width, newSize.height);
         }
@@ -435,6 +441,7 @@ namespace
         const IRenderRateControl& renderRate)
     {
         MainLoopState state(config, window.RefreshRateHz());
+        state.recordedSize = Size(window.ClientWidth(), window.ClientHeight());
         MainLoopWatch watch(window.Handle(), config.diagnostics.mainLoopStallSeconds, config.diagnostics.sink);
         bool running = true;
         while (running && window.PumpMessages())
