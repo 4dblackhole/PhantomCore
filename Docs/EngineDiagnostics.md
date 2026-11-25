@@ -99,6 +99,9 @@ command list Frame on queue Main queue: completed 41 of 57 operations; DrawInsta
 알리는 창을 직접 띄울 때 씁니다. `EngineDialog`를 돌려주면 지금까지처럼 엔진이 문구만 담은 창을 띄웁니다.
 숨김 실행(`showWindow=false`)에서는 어느 쪽이든 엔진 창이 없습니다.
 
+엔진은 `OnFatalError`를 부르기 전에 이 스레드의 메시지 큐를 비웁니다. 예외가 올라오는 동안 창이 파괴되며 종료 메시지를 남기는데,
+그것이 남아 있으면 메시지 상자가 뜨자마자 닫히기 때문입니다. 그래서 Client는 `OnFatalError` 안에서 바로 `MessageBox`를 띄워도 됩니다.
+
 ## 메인 루프 멈춤 감시
 
 `EngineConfig::diagnostics.mainLoopStallSeconds`에 0보다 큰 값을 넣으면 엔진이 메인 루프를 지켜봅니다.
