@@ -156,11 +156,23 @@ namespace
         }
     }
 
+    // The window is destroyed while the exception unwinds, and that leaves a quit message in this thread's
+    // queue. A message box that finds one closes at once, before anybody can read it. The run is over and
+    // nothing is left to receive messages, so the queue is emptied before the error is shown.
+    void DiscardQueuedMessages() noexcept
+    {
+        MSG message{};
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
+        {
+        }
+    }
+
     void ReportFatalError(const std::exception &error, bool showDialog, IEngineDiagnosticSink* sink) noexcept
     {
         OutputDebugStringA("PhantomCore fatal error: ");
         OutputDebugStringA(error.what());
         OutputDebugStringA("\n");
+        DiscardQueuedMessages();
         const bool handled =
             sink != nullptr && sink->OnFatalError(error.what()) == FatalErrorPresentation::Handled;
         if (showDialog && !handled)

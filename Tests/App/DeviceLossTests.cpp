@@ -1,5 +1,6 @@
 #include "DeviceLossTests.h"
 #include "PhantomCore.h"
+#include <Windows.h>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -21,6 +22,8 @@ namespace
         std::vector<std::string> records;
         std::vector<GraphicsDeviceLossReport> losses;
         std::vector<std::string> fatalErrors;
+        // Whether the engine thread still had a quit message queued when the fatal error arrived.
+        bool quitQueuedAtFatalError = false;
         PerformanceStatistics sample;
     };
 
@@ -53,6 +56,8 @@ namespace
         }
         FatalErrorPresentation OnFatalError(const std::string_view message) noexcept override
         {
+            MSG queued{};
+            log_.quitQueuedAtFatalError = PeekMessageW(&queued, nullptr, WM_QUIT, WM_QUIT, PM_NOREMOVE) != FALSE;
             try
             {
                 log_.fatalErrors.emplace_back(message);
@@ -226,6 +231,10 @@ namespace
         const std::vector<std::string> expected{"lost", "shutdown", "fatal"};
         if (log.events != expected)
             return Fail("The order must be: loss report, Client shutdown, fatal error.");
+        // The window is destroyed before the fatal error is reported. Its quit message must be gone by then,
+        // or a message box the receiver shows would close at once.
+        if (log.quitQueuedAtFatalError)
+            return Fail("No quit message may be queued when the fatal error is reported.");
         if (log.fatalErrors.front().find("failed with HRESULT 0x") == std::string::npos)
             return Fail("The fatal error must keep the usual failed-call text.");
         const GraphicsDeviceLossReport &report = log.losses.front();
