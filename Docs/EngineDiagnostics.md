@@ -131,7 +131,8 @@ graphics options: validation debug layer + GPU-based, adapter index 3 (not found
 `validation`을 켠 실행에서는 디버그 레이어의 경고·오류·손상 메시지를 `OnEngineRecord` 한 줄씩으로 보냅니다.
 렌더러가 프레임을 마칠 때마다(`EndFrame`) 장치의 메시지 대기열에서 새로 쌓인 것을 꺼내므로 `Run`을 부른 스레드에서만 옵니다.
 메시지 콜백(`ID3D12InfoQueue1`)은 쓰지 않습니다. 콜백은 메시지를 만든 스레드에서 불리는데, 받는 쪽은 `Run` 스레드에서만 부른다는
-약속이 있기 때문입니다. 그래서 장치가 멈추기 직전의 메시지는 그 프레임이 끝나지 못하면 렌더러가 끝날 때 함께 나옵니다.
+약속이 있기 때문입니다. 장치가 끊긴 프레임은 `EndFrame`에 닿지 못하므로, 렌더러가 장치 끊김 보고서를 만들 때 남은 메시지를
+먼저 꺼내 보냅니다. 그래서 그 메시지들은 `OnGraphicsDeviceLost`보다 앞에 옵니다.
 
 ```text
 graphics validation error #1234: <디버그 레이어 설명>
@@ -156,7 +157,14 @@ graphics validation summary: 0 corruptions, 0 errors, 2 warnings, 2 recorded, 0 
   링 번호는 프레임마다 하나씩 돌고, 그리는 back buffer는 swap chain이 알려 주는 번호입니다. 한 back buffer를 다시 쓰는 것은
   그것을 마지막으로 쓴 프레임(3프레임 전)이 끝난 뒤이고, `BeginFrame`은 2프레임 전 프레임이 끝나기를 기다리므로 안전합니다.
   텍스트 아틀라스와 이미지 칸의 회수 규칙(`FrameCount` 기준)도 링 기준이라 바뀌지 않습니다.
-- **대기 가능 swap chain:** 기다림이 메인 루프 안에서 일어나므로 렌더할 때마다 Update도 그만큼 늦습니다.
+- **`FrameCount`의 뜻:** 프레임 자원 링의 길이입니다(명령 할당자, Mesh·Text·Visual2D 업로드 영역, readback 칸, 텍스트 아틀라스
+  회수 `renderIndex - 마지막 사용 >= FrameCount`, 이미지 칸 재사용 `놓은 renderIndex + FrameCount + 1`). 모두 "`BeginFrame`이 그 링 칸의
+  fence를 기다렸으니 `FrameCount` 프레임 전의 GPU 작업은 끝났다"는 전제를 씁니다. back buffer 수는 `swapChainBuffers`로 따로 정하며,
+  back buffer 번호는 렌더 타깃과 그 RTV를 고르는 데만 씁니다.
+- **대기 가능 swap chain:** 기다리는 곳은 `BeginFrame`의 맨 앞, 링 칸의 fence를 기다리기 전입니다(최대 1초).
+  표시 대기열이 1프레임이므로 CPU가 GPU·화면보다 여러 프레임 앞서 기록하지 못합니다. 기본(대기열 최대 3프레임)보다 그린 프레임이
+  화면에 나오기까지가 짧아지고, 대신 앞 프레임이 표시로 넘어갈 때까지 메인 루프가 그 자리에서 기다리므로 그만큼 Update가 늦게 돕니다.
+  리듬 판정은 Raw Input의 QPC 시각을 쓰므로 판정 시각은 바뀌지 않고, 입력이 다음 Update에 처리되기까지의 시간만 늘 수 있습니다.
 
 ## 치명적 오류 창
 
