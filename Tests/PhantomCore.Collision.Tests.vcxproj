@@ -84,6 +84,7 @@
     <ClCompile Include="App\HeadlessRunTests.cpp" />
     <ClCompile Include="App\DeviceLossTests.cpp" />
     <ClCompile Include="App\CrashDumpTests.cpp" />
+    <ClCompile Include="App\ThrownExceptionWatchTests.cpp" />
     <ClCompile Include="App\MainLoopWatchTests.cpp" />
     <ClCompile Include="App\TextRenderingTests.cpp" />
     <ClCompile Include="App\TextPixelTests.cpp" />
@@ -100,6 +101,7 @@
     <ClInclude Include="App\HeadlessRunTests.h" />
     <ClInclude Include="App\DeviceLossTests.h" />
     <ClInclude Include="App\CrashDumpTests.h" />
+    <ClInclude Include="App\ThrownExceptionWatchTests.h" />
     <ClInclude Include="App\MainLoopWatchTests.h" />
     <ClInclude Include="App\TextRenderingTests.h" />
     <ClInclude Include="App\TextPixelTests.h" />

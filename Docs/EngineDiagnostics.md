@@ -3,8 +3,8 @@
 게임이 꺼졌을 때 무슨 일이 있었는지 알 수 있도록, `Run`이 아는 사실을 Client에 넘겨줍니다.
 엔진은 무엇을 기록할지만 정합니다. 파일을 만들거나 창을 띄우지 않으며, 어디에 남길지는 Client가 정합니다.
 
-선언은 `Engine/Core/Diagnostics/EngineDiagnostics.h`(받는 쪽)와 `Engine/Platform.Win32/System/CrashDump.h`(덤프)에 있고
-`PhantomCore.h`에 포함됩니다.
+선언은 `Engine/Core/Diagnostics/EngineDiagnostics.h`(받는 쪽), `Engine/Platform.Win32/System/CrashDump.h`(덤프),
+`Engine/Platform.Win32/System/ThrownExceptionWatch.h`(시험 전용 예외 계수)에 있고 `PhantomCore.h`에 포함됩니다.
 
 ## 연결
 
@@ -168,6 +168,21 @@ cdb -z mygame-20261125-061530-crash.dmp -y <PDB가 있는 폴더> -c ".ecxr; k; 
 ```
 
 요청한 덤프(`WriteNow`)에는 예외 정보가 없으므로 `.ecxr` 대신 `~*k`로 모든 스레드를 봅니다. 메인 스레드는 보통 0번입니다.
+
+## 던진 예외 세기 (시험 전용)
+
+정상 실행은 C++ 예외를 던지지 않습니다. 예상할 수 있는 실패(취소, 없을 수 있는 파일 등)는 반환값·상태로 알립니다.
+`ThrownExceptionWatch`는 그것을 시험·smoke 실행에서 확인하는 도구입니다. 배포 실행은 만들지 않으므로 비용이 없습니다.
+
+- 살아 있는 동안 벡터 예외 처리기 하나가 체인의 맨 뒤에서 C++ 예외(0xE06D7363)를 셉니다.
+  예외를 처리하지 않고, 할당·잠금을 하지 않으므로 프로그램의 동작과 크래시(위 `CrashDumpService`)는 그대로입니다.
+- 셈 대상: 이 실행 파일(엔진 포함)과 그 C++ 런타임 라이브러리(Debug는 DLL)가 던진 것.
+  던진 이미지는 예외 레코드의 `ExceptionInformation[3]`으로 가립니다.
+  시스템 라이브러리(Media Foundation, WIC, 그래픽 드라이버 등)가 안에서 던지고 스스로 잡는 것은 세지 않습니다.
+- 다시 던지기도 C++ 런타임에는 새 throw이므로 한 번 더 셉니다. 그냥 `throw;`와 `std::rethrow_exception`(`std::future::get`이 씀)이 모두 그렇습니다.
+- 처음 16개는 스레드·형식 이름·`what()`(std::exception 파생일 때)·스택 16칸을 고정 배열에 남깁니다(`Records()`).
+- 한 번에 하나만 만들 수 있습니다. 출력 방식은 정하지 않으므로, 엔진 테스트는 stderr에, Client는 자기 기록에 씁니다.
+- 일부러 예외를 일으키는 시험 실행(예: 크래시 시험)에는 만들지 않습니다.
 
 ## 일부러 끊어 보기
 

@@ -4,6 +4,7 @@
 #include "App/HeadlessRunTests.h"
 #include "App/DeviceLossTests.h"
 #include "App/CrashDumpTests.h"
+#include "App/ThrownExceptionWatchTests.h"
 #include "App/MainLoopWatchTests.h"
 #include "App/ImageReadbackTests.h"
 #include "App/SceneManagerTests.h"
@@ -49,6 +50,8 @@ int main(int argc, char** argv)
         return TestCrashDump();
     if (argc == 4 && std::string_view(argv[1]) == "--crash-dump-child")
         return RunCrashDumpChild(argv[2], argv[3]);
+    if (argc == 2 && std::string_view(argv[1]) == "--thrown-exceptions")
+        return TestThrownExceptionWatch();
     if (argc == 2 && std::string_view(argv[1]) == "--text-rendering")
         return TestTextRendering();
     if (argc == 2 && std::string_view(argv[1]) == "--text-pixels")
