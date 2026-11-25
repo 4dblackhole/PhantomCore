@@ -990,6 +990,7 @@ namespace
                     nullptr,
                     IID_PPV_ARGS(page.texture.ReleaseAndGetAddressOf())),
                 "ID3D12Device::CreateCommittedResource(glyph atlas)");
+            D3D12Detail::SetDebugName(*page.texture.Get(), L"Glyph atlas page");
 
             WriteAtlasDescriptor(page.texture.Get(), atlasPages.size());
             atlasPages.push_back(std::move(page));
@@ -1075,6 +1076,7 @@ namespace
                                                           D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                                                           IID_PPV_ARGS(page.resource.GetAddressOf())),
                           "ID3D12Device::CreateCommittedResource(text glyph arena)");
+            D3D12Detail::SetDebugName(*page.resource.Get(), L"Glyph upload page");
             const D3D12_RANGE noReads{0, 0};
             ThrowIfFailed(page.resource->Map(0, &noReads, reinterpret_cast<void **>(&page.mappedData)),
                           "ID3D12Resource::Map(text glyph arena)");
@@ -1174,6 +1176,7 @@ namespace
                     IID_PPV_ARGS(
                         page.resource.ReleaseAndGetAddressOf())),
                 "ID3D12Device::CreateCommittedResource(text instances)");
+            D3D12Detail::SetDebugName(*page.resource.Get(), L"Text instance page");
             ThrowIfFailed(
                 page.resource->Map(
                     0,
@@ -1201,6 +1204,7 @@ namespace
                     IID_PPV_ARGS(
                         atlasDescriptorHeap.ReleaseAndGetAddressOf())),
                 "ID3D12Device::CreateDescriptorHeap(text atlas)");
+            D3D12Detail::SetDebugName(*atlasDescriptorHeap.Get(), L"Glyph atlas views");
             atlasDescriptorSize =
                 device->GetDescriptorHandleIncrementSize(
                     D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);

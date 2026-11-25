@@ -545,7 +545,7 @@ static int RunClient(std::unique_ptr<IGameClient> client,
                 window.Handle(),
                 window.ClientWidth(),
                 window.ClientHeight(),
-                config.diagnostics.graphicsDeviceRemovedData);
+                config.diagnostics);
             RecordStart(diagnosticSink, renderer, window, config.renderRateMode);
 
             if (diagnosticsQueue != nullptr)

@@ -499,6 +499,7 @@ void TextureManager::Impl::Initialize(
                 IID_PPV_ARGS(
                     descriptorHeap_.ReleaseAndGetAddressOf())),
             "Create texture descriptor heap");
+        D3D12Detail::SetDebugName(*descriptorHeap_.Get(), L"Texture views");
         descriptorSize_ = device.GetDescriptorHandleIncrementSize(
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         descriptorBlocks_ = std::make_shared<DescriptorBlockPool>();
@@ -510,6 +511,7 @@ void TextureManager::Impl::Initialize(
                 IID_PPV_ARGS(
                     uploadAllocator_.ReleaseAndGetAddressOf())),
             "Create texture upload command allocator");
+        D3D12Detail::SetDebugName(*uploadAllocator_.Get(), L"Texture upload allocator");
         D3D12Detail::ThrowIfFailed(
             device.CreateCommandList(
                 0,
@@ -529,6 +531,7 @@ void TextureManager::Impl::Initialize(
                 D3D12_FENCE_FLAG_NONE,
                 IID_PPV_ARGS(uploadFence_.ReleaseAndGetAddressOf())),
             "Create texture upload fence");
+        D3D12Detail::SetDebugName(*uploadFence_.Get(), L"Texture upload fence");
         uploadFenceEvent_ =
             CreateEventW(nullptr, FALSE, FALSE, nullptr);
         if (uploadFenceEvent_ == nullptr)
@@ -827,6 +830,7 @@ RenderTargetTextureHandle TextureManager::Impl::CreateRenderTargetTexture(
             &clearValue,
             IID_PPV_ARGS(target->resource.ReleaseAndGetAddressOf())),
         "Create render-target texture");
+    D3D12Detail::SetDebugName(*target->resource.Get(), L"Canvas render target");
 
     D3D12_SHADER_RESOURCE_VIEW_DESC shaderView{};
     shaderView.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -847,6 +851,7 @@ RenderTargetTextureHandle TextureManager::Impl::CreateRenderTargetTexture(
             &rtvHeapDescription,
             IID_PPV_ARGS(target->rtvHeap.ReleaseAndGetAddressOf())),
         "Create render-target texture RTV heap");
+    D3D12Detail::SetDebugName(*target->rtvHeap.Get(), L"Canvas render target view");
     target->rtv =
         target->rtvHeap->GetCPUDescriptorHandleForHeapStart();
     device_->CreateRenderTargetView(
@@ -961,6 +966,7 @@ void TextureManager::Impl::BeginUploadCommands()
         D3D12Detail::ThrowIfFailed(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                                       IID_PPV_ARGS(uploadAllocator_.ReleaseAndGetAddressOf())),
                       "Create texture upload allocator");
+        D3D12Detail::SetDebugName(*uploadAllocator_.Get(), L"Texture upload allocator");
         D3D12Detail::ThrowIfFailed(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, uploadAllocator_.Get(), nullptr,
                                                  IID_PPV_ARGS(uploadCommandList_.ReleaseAndGetAddressOf())),
                       "Create texture upload list");
@@ -1033,6 +1039,7 @@ void TextureManager::Impl::RecordTextureUpload(
             nullptr,
             IID_PPV_ARGS(texture.ReleaseAndGetAddressOf())),
         "Create GPU texture");
+    D3D12Detail::SetDebugName(*texture.Get(), L"Image texture");
 
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
     UINT rowCount = 0;
@@ -1062,6 +1069,7 @@ void TextureManager::Impl::RecordTextureUpload(
             nullptr,
             IID_PPV_ARGS(uploadBuffer.ReleaseAndGetAddressOf())),
         "Create texture upload buffer");
+    D3D12Detail::SetDebugName(*uploadBuffer.Get(), L"Image upload buffer");
 
     // Copy tightly packed WIC RGBA rows into the D3D12-aligned upload
     // footprint without changing the source image dimensions.

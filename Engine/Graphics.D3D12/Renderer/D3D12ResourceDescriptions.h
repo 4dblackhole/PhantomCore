@@ -24,6 +24,13 @@ namespace D3D12Detail
         description.Flags = D3D12_RESOURCE_FLAG_NONE;
         return description;
     }
+
+    // Names resources, heaps and allocators for validation messages, the
+    // live-object report, DRED and graphics debuggers. Never fails a run.
+    inline void SetDebugName(ID3D12Object& object, const wchar_t* name) noexcept
+    {
+        static_cast<void>(object.SetName(name));
+    }
 }
 
 } // namespace PhantomCore

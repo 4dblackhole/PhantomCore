@@ -175,6 +175,8 @@ namespace
             return Fail("A diagnosed run must record the adapter, the swap chain and the window at start.");
         if (!HasRecord(log, extendedData ? "device removed data: on" : "device removed data: off"))
             return Fail("The start record must say whether device removed data is collected.");
+        if (!HasRecord(log, "graphics options: validation ") || !HasRecord(log, "swap chain: 64x64, 2 buffers, tearing "))
+            return Fail("By default the start record must show the validation and the usual two-buffer swap chain.");
         return true;
     }
 
@@ -187,8 +189,8 @@ namespace
             return false;
         if (!log.losses.empty() || !log.fatalErrors.empty())
             return Fail("A working device must report neither a loss nor a fatal error.");
-        if (log.records.size() != 4)
-            return Fail("A run in which nothing changes must record only its four start lines.");
+        if (log.records.size() != 5)
+            return Fail("A run in which nothing changes must record only its five start lines.");
         if (!log.sample.hasMeasurement || log.sample.longestLoopSeconds <= 0.0)
             return Fail("The performance sample must carry the longest main-loop pass of its interval.");
         if (log.sample.graphicsMemoryUsageBytes > 0 && log.sample.graphicsMemoryBudgetBytes == 0)

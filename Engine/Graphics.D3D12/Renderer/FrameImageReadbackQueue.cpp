@@ -51,6 +51,7 @@ std::unique_ptr<FrameImageReadbackQueue::PendingImage> FrameImageReadbackQueue::
         &properties, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
         IID_PPV_ARGS(pending->buffer.GetAddressOf()))))
         throw std::runtime_error("Failed to allocate a frame image readback buffer.");
+    D3D12Detail::SetDebugName(*pending->buffer.Get(), L"Frame image readback");
     pending->future = pending->promise.get_future().share();
     return pending;
 }
