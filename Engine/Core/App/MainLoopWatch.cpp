@@ -1,5 +1,6 @@
 #include "App/MainLoopWatch.h"
 
+#include <chrono>
 #include <stdexcept>
 
 namespace PhantomCore
@@ -72,8 +73,15 @@ void MainLoopWatch::Watch() noexcept
         stillSeconds += LookMilliseconds / 1000.0;
         if (reported || stillSeconds < stallSeconds_)
             continue;
-        // A breakpoint stops the loop on purpose, and a window loop is the user's doing.
-        if (IsDebuggerPresent() || WindowLoopRuns())
+        // A breakpoint stops the loop on purpose.
+        if (IsDebuggerPresent())
+            continue;
+        // A window loop is the user's doing. Asking a stuck window takes as long as the answer is waited for,
+        // and the loop stood still for that time too.
+        const auto asked = std::chrono::steady_clock::now();
+        const bool windowLoop = WindowLoopRuns();
+        stillSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - asked).count();
+        if (windowLoop)
             continue;
         reported = true;
         sink_->OnMainLoopStalled({stillSeconds, watchedThreadId_, passes});
