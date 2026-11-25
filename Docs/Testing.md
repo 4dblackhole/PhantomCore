@@ -49,6 +49,7 @@ foreach ($configuration in 'Debug', 'Release') {
 | `--audio-clock` | 기본 출력에서 스냅샷 400개의 흔들림: 날 DSP clock 짝짓기와 `CaptureClockSnapshot` 비교 |
 | `--headless-error` | 숨김 실행의 Update 예외 정리 |
 | `--device-loss` | 진단 받는 쪽의 시작 기록과 성능 표본, 일부러 제거한 그래픽 장치의 보고서(실패한 호출·제거 사유·프레임), 보고서 → Client 종료 → 치명적 오류 순서, 장치 제거 추가 정보(DRED) 켬·끔 |
+| `--graphics-options` | 그래픽 장치 시험 설정: 기본값(버퍼 2장, 검증 기록 없음), 찢어짐 끔·버퍼 3장·대기 가능 swap chain에서 창 크기 변경 뒤 계속 표시, WARP 어댑터, 없는 어댑터 번호의 기본값 복귀, 디버그 레이어·GPU 기반 검증에서 오류 0건과 요약·살아 있는 객체 보고(디버그 레이어가 없는 PC에서는 검증 단계를 건너뛰었다고 출력). 검증은 프로세스 전체라 마지막에 실행 |
 | `--main-loop-watch` | 메인 루프 멈춤 감시: 계속 도는 루프와 창 메시지 루프로 붙잡힌 루프는 알리지 않음, 멈춘 Update는 멈춤 한 번·풀림 한 번, 감시 스레드에서 알림 |
 | `--thrown-exceptions` | 시험 전용 예외 계수(`ThrownExceptionWatch`): 다른 스레드를 포함한 이 프로그램의 throw를 형식·`what()`·스택과 함께 셈, 다시 던지기(`throw;`, `std::rethrow_exception`)는 한 번 더 셈, 기록은 처음 16개, 한 번에 하나만 |
 | `--crash-dump` | 크래시 덤프: 자식 프로세스의 구조적 예외·스택 넘침·`std::terminate`·순수 가상 호출·잘못된 인자마다 덤프 파일과 관찰자 통지, 요청한 덤프와 보관 개수 한도. 임시 폴더 사용 |

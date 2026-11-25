@@ -260,8 +260,10 @@ descriptor·queue 상태도 비공개 구현이 소유하며, 엔진 내부 Text
 
 MeshRenderSystem의 장치·파이프라인·프레임 버퍼도 비공개 구현에 있다. 소비자는
 메시·재질 생성과 제출을 사용하며, 내부 MeshRenderingBackend와 TextRenderingBackend가
-초기화·프레임 준비·GPU 기록을 연결한다. swap chain과 Mesh/Text/Visual2D의 프레임
-개수는 내부 Renderer/FrameResources.h의 D3D12Detail::FrameCount 하나로 정의한다.
+초기화·프레임 준비·GPU 기록을 연결한다. 렌더러와 Mesh/Text/Visual2D의 프레임 링
+개수는 내부 Renderer/FrameResources.h의 D3D12Detail::FrameCount 하나로 정의한다. swap chain의 back buffer는
+기본 같은 수(2)이고 진단 설정으로 3장까지 늘릴 수 있으며, 링 번호와 back buffer 번호는 따로 돈다
+([그래픽 장치 시험 설정](EngineDiagnostics.md#그래픽-장치-시험-설정)).
 
 공개 수학 값은 엔진의 `Float2/3/4`, `Float4x4`를 사용하고 Camera도 엔진 행렬을 반환한다.
 DirectXMath 저장 값과 SIMD 변환은 내부 구현에 한정한다. 이미지 파일 로드는

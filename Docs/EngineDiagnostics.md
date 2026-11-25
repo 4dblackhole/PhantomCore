@@ -49,8 +49,11 @@ PhantomCore::EngineConfig MyGame::GetEngineConfig() const
 graphics adapter: NVIDIA GeForce GTX 1060 3GB, vendor 10DE device 1C02, 3072 MB dedicated, driver 32.0.15.6094
 swap chain: 1920x1080, 2 buffers, tearing allowed
 device removed data: off
+graphics options: validation off, adapter default
 window: 1920x1080 Windowed, display 360 Hz, render rate Display
 ```
+
+`swap chain` 줄과 `graphics options` 줄은 아래 [그래픽 장치 시험 설정](#그래픽-장치-시험-설정)의 실제 값을 보여 줍니다.
 
 실행 중에는 창 크기(`window size: 1280x720`), 창 모드(`window mode: Borderless`), 모니터 주사율(`display: 144 Hz`),
 렌더 속도 모드(`render rate: Unlimited`)가 바뀔 때 한 줄씩 옵니다. 값이 그대로면 줄이 오지 않으므로 평소에는 기록이 없습니다.
@@ -92,6 +95,68 @@ command list Frame on queue Main queue: completed 41 of 57 operations; DrawInsta
 
 기본은 꺼짐입니다. 모든 그리기 명령에 표시를 남기므로 비용이 조금 있고, 장치를 만들기 전에만 정할 수 있습니다.
 크래시를 쫓을 때만 Client 설정으로 켜는 것을 권합니다. DRED가 없는 Windows에서는 켜도 꺼진 것으로 기록됩니다.
+
+## 그래픽 장치 시험 설정
+
+`EngineConfig::diagnostics.graphics`(`GraphicsDeviceDiagnosticsConfig`)는 그래픽 장치가 멈추거나 끊기는 원인을 가르는 시험용
+스위치입니다. 기본값은 모두 지금까지의 엔진 동작과 같으므로, 아무것도 정하지 않은 Client의 렌더링은 바뀌지 않습니다.
+모두 장치와 swap chain을 만들 때 정해지고 실행 중에는 바뀌지 않습니다.
+
+| 필드 | 기본 | 뜻 |
+| --- | --- | --- |
+| `validation` | `Off` | `DebugLayer`: D3D12 디버그 레이어가 모든 호출을 CPU에서 검사. `GpuBased`: 셰이더의 자원 접근까지 GPU에서 검사(몇 배 느림). Debug 빌드는 예전처럼 최소 `DebugLayer` |
+| `validationMessageLimit` | 100 | 한 실행에서 기록으로 보내는 검증 메시지 수. 같은 종류는 세 번까지 |
+| `adapter` | `Default` | `Warp`: 소프트웨어 래스터라이저(그래픽 드라이버를 거치지 않음, 느림). `Index`: `adapterIndex`번 어댑터(DXGI 목록 순서). `Name`: 이름에 `adapterName`이 들어간 첫 어댑터(ASCII, 대소문자 무시) |
+| `allowTearing` | true | false면 찢어짐 허용 없이 만들고(`CreateSwapChainForHwnd`·`ResizeBuffers`) 표시합니다(`Present`) |
+| `swapChainBuffers` | 2 | back buffer 수. 2 또는 3(그 밖의 값은 가까운 쪽으로) |
+| `waitableSwapChain` | false | 대기 가능 swap chain, 표시 대기열 최대 1프레임. 프레임마다 swap chain이 받을 수 있을 때까지 기다림(최대 1초) |
+
+### 시작 기록
+
+```text
+swap chain: 1280x720, 3 buffers, tearing off by setting, waitable (latency 1)
+graphics options: validation debug layer + GPU-based, adapter index 3 (not found, default used)
+```
+
+- 찢어짐: `allowed`, `off by setting`(설정으로 끔), `not supported`(DXGI가 지원하지 않음).
+- 검증: `off`, `debug layer`, `debug layer + GPU-based`, `debug layer (debug build)`(Debug 빌드의 기본).
+  디버그 레이어가 없는 PC(Windows 선택 기능 "Graphics Tools"가 설치되지 않음)에서는
+  `debug layer unavailable: D3D12 debug layer not installed (Windows Graphics Tools), running unchecked`로 남기고 검사 없이 평소대로 실행합니다.
+  엔진은 그 기능을 설치하거나 시스템 설정을 바꾸지 않습니다.
+- 어댑터: `default`, `WARP`, `index N`, `name "..."`. 찾지 못했거나 그 어댑터로 장치를 만들 수 없으면 기본 선택으로 돌아가고
+  `(not found, default used)`·`(no device, default used)`를 붙입니다. 실제로 고른 어댑터는 `graphics adapter` 줄에 있습니다.
+
+### 검증 메시지
+
+`validation`을 켠 실행에서는 디버그 레이어의 경고·오류·손상 메시지를 `OnEngineRecord` 한 줄씩으로 보냅니다.
+렌더러가 프레임을 마칠 때마다(`EndFrame`) 장치의 메시지 대기열에서 새로 쌓인 것을 꺼내므로 `Run`을 부른 스레드에서만 옵니다.
+메시지 콜백(`ID3D12InfoQueue1`)은 쓰지 않습니다. 콜백은 메시지를 만든 스레드에서 불리는데, 받는 쪽은 `Run` 스레드에서만 부른다는
+약속이 있기 때문입니다. 그래서 장치가 멈추기 직전의 메시지는 그 프레임이 끝나지 못하면 렌더러가 끝날 때 함께 나옵니다.
+
+```text
+graphics validation error #1234: <디버그 레이어 설명>
+graphics validation: 100 messages recorded; later ones are only counted
+graphics live object: Live ID3D12Device at 0x..., Refcount: 3
+graphics validation summary: 0 corruptions, 0 errors, 2 warnings, 2 recorded, 0 dropped by the queue; 1 live object lines at shutdown
+```
+
+- 같은 종류(메시지 번호)는 세 번까지, 전체는 `validationMessageLimit`까지 보내고 나머지는 셉니다. 정보 수준 메시지는 보내지 않습니다.
+- 렌더러가 끝날 때 장치를 뺀 모든 자원을 먼저 놓고 `ReportLiveDeviceObjects`를 불러 아직 살아 있는 객체를 `graphics live object` 줄로
+  (최대 40줄) 보낸 뒤, 요약 한 줄로 끝냅니다. 장치 자신은 늘 한 줄 나옵니다. 실패로 끝나는 실행에서도 같습니다.
+- 엔진이 만드는 자원·힙·할당자에는 이름이 있습니다(`Back buffer 0`, `Frame allocator 1`, `Glyph atlas page`, `Image texture` 등).
+  검증 메시지, 살아 있는 객체 보고, 장치 제거 추가 정보에 그 이름이 나옵니다.
+- `validation`을 정하지 않은 Debug 빌드는 예전처럼 메시지를 대기열에만 남깁니다(`RunWithGraphicsDiagnostics`가 읽음).
+- 디버그 레이어와 GPU 기반 검증은 DRED처럼 프로세스 전체 설정입니다. 한 번 켠 프로세스에서는 다음 실행도 켜진 채입니다.
+
+### 주의
+
+- **찢어짐 끔:** 창이 모니터를 혼자 덮어 Windows가 합성을 건너뛰는 상태에서는 렌더와 Update가 화면 주사율에 묶입니다
+  ([창 제어](WindowControl.md)). 엔진은 그 상태를 피하지만, 이 설정의 시험 결과를 볼 때 Update 수가 줄었는지 함께 봅니다.
+- **버퍼 3장:** 프레임 링(명령 할당자, 업로드 영역, fence)은 `FrameCount`(2) 칸 그대로이고 back buffer만 늘어납니다.
+  링 번호는 프레임마다 하나씩 돌고, 그리는 back buffer는 swap chain이 알려 주는 번호입니다. 한 back buffer를 다시 쓰는 것은
+  그것을 마지막으로 쓴 프레임(3프레임 전)이 끝난 뒤이고, `BeginFrame`은 2프레임 전 프레임이 끝나기를 기다리므로 안전합니다.
+  텍스트 아틀라스와 이미지 칸의 회수 규칙(`FrameCount` 기준)도 링 기준이라 바뀌지 않습니다.
+- **대기 가능 swap chain:** 기다림이 메인 루프 안에서 일어나므로 렌더할 때마다 Update도 그만큼 늦습니다.
 
 ## 치명적 오류 창
 
@@ -198,6 +263,6 @@ Client는 이 값을 숨은 실행 인자에만 연결하고, 사용자의 설�
 
 `PhantomCore.Collision.Tests --device-loss`가 이 값으로 숨긴 엔진을 세 번 돌려 확인합니다.
 
-- 정상 실행: 시작 기록 네 줄이 오고, 끊김·치명적 오류는 오지 않으며, 성능 표본에 가장 긴 루프 시간이 들어 있습니다.
+- 정상 실행: 시작 기록 다섯 줄이 오고(기본 설정은 버퍼 2장), 끊김·치명적 오류는 오지 않으며, 성능 표본에 가장 긴 루프 시간이 들어 있습니다.
 - 장치 제거(추가 정보 꺼짐·켜짐): 실행이 실패로 끝나고, 보고서가 한 번, 치명적 오류가 한 번 오며,
   순서가 보고서 → Client `Shutdown` → 치명적 오류입니다.
