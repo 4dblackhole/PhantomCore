@@ -190,6 +190,14 @@ Client(YOUMU) 쪽 구조 그림은 Client 저장소 `Docs/Architecture/Overview.
 - 모니터 주사율은 `QueryDisplayConfig`가 주는 분수 값(예: 59.94 Hz, 143.98 Hz)을 쓴다. 정수로 잘린 명목 값으로
   렌더하면 화면 갱신과 약 1 Hz 어긋나 1초쯤마다 한 프레임이 겹치거나 빠진다. 분수 값을 얻지 못하면 명목 값을 쓴다.
 - 마감보다 한 간격 넘게 늦으면 밀린 프레임을 몰아서 그리지 않고 마감을 지금부터 다시 잡는다.
+- 보이는 창 앞에 다른 프로그램의 창이 있으면(`WM_ACTIVATEAPP`) Render만 초당 `EngineConfig::backgroundRenderRateHz`
+  (기본 `DefaultBackgroundRenderRateHz` = 30) 이하로 줄인다. 모드 간격이 더 길면 그 간격을 쓰고, 1 이하로 두면 끈다.
+  - Update·입력 시각·오디오 갱신은 그대로 돈다. 그래서 뒤에 있어도 CPU 사용량은 줄지 않는다.
+  - 같은 프로세스의 창(파일 선택 창 같은 대화 상자)이 앞에 있으면 앞에 있는 것으로 본다.
+  - 숨긴 창(`showWindow = false`)은 제한하지 않는다. 최소화된 창은 예전처럼 그리지 않는다.
+  - 다시 앞에 오면 그 루프에서 바로 한 장 그리고 원래 속도로 돌아간다.
+  - 진단 기록에는 `render rate: background 30 Hz` / `render rate: foreground`를 남긴다. 한 줄을 남긴 뒤 10초 동안은
+    바뀐 횟수만 세고, 그 뒤 지금 상태와 횟수(`(n focus changes)`)를 한 줄로 남긴다.
 - 입력 이벤트의 QPC 시각은 루프가 창 메시지를 처리할 때 정해진다. 제한 모드에서는 Update만 도는 루프가 메시지를
   촘촘히 처리하지만, `Unlimited`에서는 모든 루프에 Render가 들어가므로 입력 시각의 오차가 프레임 한 장의 시간까지
   늘 수 있다. 판정 정밀도가 중요한 Client는 이 점을 사용자에게 알리거나 제한 모드를 기본으로 둔다.
