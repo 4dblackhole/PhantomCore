@@ -63,6 +63,7 @@
     <ClInclude Include="System\RuntimePaths.h" />
     <ClInclude Include="System\CrashDump.h" />
     <ClInclude Include="System\ThrownExceptionWatch.h" />
+    <ClInclude Include="System\BackgroundWork.h" />
     <ClInclude Include="Window\Win32Window.h" />
     <ClInclude Include="Window\WindowControl.h" />
   </ItemGroup>
@@ -75,6 +76,7 @@
     <ClCompile Include="System\RuntimePaths.cpp" />
     <ClCompile Include="System\CrashDump.cpp" />
     <ClCompile Include="System\ThrownExceptionWatch.cpp" />
+    <ClCompile Include="System\BackgroundWork.cpp" />
     <ClCompile Include="Window\Win32Window.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -86,6 +86,7 @@
     <ClCompile Include="App\GraphicsOptionsTests.cpp" />
     <ClCompile Include="App\CrashDumpTests.cpp" />
     <ClCompile Include="App\ThrownExceptionWatchTests.cpp" />
+    <ClCompile Include="App\BackgroundWorkTests.cpp" />
     <ClCompile Include="App\MainLoopWatchTests.cpp" />
     <ClCompile Include="App\TextRenderingTests.cpp" />
     <ClCompile Include="App\TextPixelTests.cpp" />
@@ -104,6 +105,7 @@
     <ClInclude Include="App\GraphicsOptionsTests.h" />
     <ClInclude Include="App\CrashDumpTests.h" />
     <ClInclude Include="App\ThrownExceptionWatchTests.h" />
+    <ClInclude Include="App\BackgroundWorkTests.h" />
     <ClInclude Include="App\MainLoopWatchTests.h" />
     <ClInclude Include="App\TextRenderingTests.h" />
     <ClInclude Include="App\TextPixelTests.h" />

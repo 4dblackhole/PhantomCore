@@ -20,6 +20,7 @@
     <ClCompile Include="App\GraphicsOptionsTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="App\CrashDumpTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="App\ThrownExceptionWatchTests.cpp"><Filter>App</Filter></ClCompile>
+    <ClCompile Include="App\BackgroundWorkTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="App\MainLoopWatchTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="App\TextRenderingTests.cpp"><Filter>App</Filter></ClCompile>
     <ClCompile Include="App\TextPixelTests.cpp"><Filter>App</Filter></ClCompile>
@@ -38,6 +39,7 @@
     <ClInclude Include="App\GraphicsOptionsTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\CrashDumpTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\ThrownExceptionWatchTests.h"><Filter>App</Filter></ClInclude>
+    <ClInclude Include="App\BackgroundWorkTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\MainLoopWatchTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\TextRenderingTests.h"><Filter>App</Filter></ClInclude>
     <ClInclude Include="App\TextPixelTests.h"><Filter>App</Filter></ClInclude>

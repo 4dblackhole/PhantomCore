@@ -4,6 +4,7 @@
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
 #include "Renderer/D3D12ResourceDescriptions.h"
+#include "System/BackgroundWork.h"
 
 #include <Windows.h>
 #include <wincodec.h>
@@ -415,6 +416,7 @@ bool TextureManager::Impl::PrepareImages(std::span<const std::filesystem::path> 
     preparation_ = std::async(std::launch::async,
                               [paths = std::move(missing)]
                               {
+                                  const BackgroundWork work("prepare images");
                                   const auto result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
                                   D3D12Detail::ThrowIfFailed(result, "Initialize image preparation COM apartment");
                                   struct Apartment
