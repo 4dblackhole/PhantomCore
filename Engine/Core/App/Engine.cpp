@@ -242,6 +242,9 @@ namespace
         std::uint64_t rendersSinceStatisticsReport{};
         std::uint64_t drawCallsSinceStatisticsReport{};
         std::uint64_t peakDrawCallsSinceStatisticsReport{};
+        std::uint64_t glyphRasterizationsSinceStatisticsReport{};
+        std::uint64_t atlasEvictionsSinceStatisticsReport{};
+        std::uint64_t textAtlasPages{};
         double longestLoopSinceStatisticsReport{};
         double statisticsReportStartSeconds{};
         PerformanceStatistics performance{};
@@ -423,6 +426,11 @@ namespace
         state.drawCallsSinceStatisticsReport += drawCalls;
         state.peakDrawCallsSinceStatisticsReport =
             std::max(state.peakDrawCallsSinceStatisticsReport, drawCalls);
+        // The text counters describe the frame just recorded; the next BeginFrame clears them.
+        const TextRenderStatistics text = renderer.TextRendering().Statistics();
+        state.glyphRasterizationsSinceStatisticsReport += text.glyphRasterizations;
+        state.atlasEvictionsSinceStatisticsReport += text.atlasEvictions;
+        state.textAtlasPages = text.atlasPages;
         state.schedule.MarkRendered(state.totalSeconds);
 
         return config.autoExitAfterRenderedFrames == 0 ||
@@ -484,12 +492,17 @@ namespace
         const GraphicsMemoryInfo memory = renderer.MemoryInfo();
         state.performance.graphicsMemoryUsageBytes = memory.usageBytes;
         state.performance.graphicsMemoryBudgetBytes = memory.budgetBytes;
+        state.performance.textAtlasPages = state.textAtlasPages;
+        state.performance.textGlyphRasterizations = state.glyphRasterizationsSinceStatisticsReport;
+        state.performance.textAtlasEvictions = state.atlasEvictionsSinceStatisticsReport;
         ++state.performance.measurementIndex;
         state.performance.hasMeasurement = true;
         state.updatesSinceStatisticsReport = 0;
         state.rendersSinceStatisticsReport = 0;
         state.drawCallsSinceStatisticsReport = 0;
         state.peakDrawCallsSinceStatisticsReport = 0;
+        state.glyphRasterizationsSinceStatisticsReport = 0;
+        state.atlasEvictionsSinceStatisticsReport = 0;
         state.longestLoopSinceStatisticsReport = 0.0;
         state.statisticsReportStartSeconds = state.totalSeconds;
     }

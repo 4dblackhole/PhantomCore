@@ -13,6 +13,9 @@
 | `longestLoopSeconds` | 구간 안에서 가장 길었던 메인 루프 한 바퀴(메시지 펌프, `Update`, 오디오 갱신, 마감이 된 `Render`) |
 | `graphicsMemoryUsageBytes` | 구간 끝에 이 프로세스가 그래픽 어댑터에 들고 있는 메모리 |
 | `graphicsMemoryBudgetBytes` | Windows가 지금 이 프로세스에 허용하는 양. 어댑터에 물을 수 없으면 두 값 모두 0 |
+| `textAtlasPages` | 구간 끝에 화면 글자 아틀라스가 가진 장 수(한 장 1024×1024, 기본 한도 16장) |
+| `textGlyphRasterizations` | 구간 동안 새로 구운 글자 수 |
+| `textAtlasEvictions` | 구간 동안 다시 쓰려고 비운 아틀라스 장 수 |
 | `measurementIndex` | 표본을 게시할 때마다 1씩 늘어남 |
 | `hasMeasurement` | 첫 구간이 끝날 때까지 false |
 
@@ -22,6 +25,8 @@ render texture 패스도 포함합니다. 파이프라인과 텍스처 페이지
 
 `longestLoopSeconds`는 초당 횟수로는 보이지 않는 한 번의 끊김을 보여 줍니다. 추가로 시각을 재지 않고 루프가 이미 재는 한 바퀴 간격의 최댓값을 씁니다.
 그래픽 메모리는 1초에 한 번 어댑터에 묻습니다. 사용량이 예산을 넘으면 Windows가 자원을 시스템 메모리로 옮기기 시작해 그리기가 느려집니다.
+글자 수치는 화면 글자(`D3D12Renderer`의 `TextRenderSystem`)의 것입니다. 화면이 멈춰 있는데 구간마다 글자를 굽거나 장을 비우면
+아틀라스가 보이는 글자에 비해 모자란 것입니다([TextRendering](TextRendering.md)의 페이지 회수).
 Client는 이 표본을 보관해 두었다가 문제가 났을 때 직전 상황으로 남길 수 있습니다([엔진 진단 기록](EngineDiagnostics.md)).
 
 Client는 `measurementIndex`가 바뀔 때만 문자열을 고치면 됩니다.
