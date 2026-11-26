@@ -84,6 +84,9 @@ namespace
     // Draws one panel every frame. With removeDevice the engine loses the
     // device after five frames; without it the run ends at the first
     // one-second performance sample.
+    // Set for the one run that asks for the driver's GPU crash dumps.
+    bool requestGpuCrashDumps = false;
+
     class DiagnosedClient final : public IGameClient
     {
       public:
@@ -101,6 +104,7 @@ namespace
             config.audio.preferredBackend = AudioOutputBackend::NoSound;
             config.diagnostics.sink = &sink_;
             config.diagnostics.graphicsDeviceRemovedData = extendedData_;
+            config.diagnostics.gpuCrashDumps = requestGpuCrashDumps;
             config.diagnostics.removeGraphicsDeviceAfterRenderedFrames = removeDevice_ ? FramesBeforeRemoval : 0;
             return config;
         }
@@ -249,6 +253,27 @@ namespace
             std::cout << "  " << line << '\n';
         return true;
     }
+    // The driver's crash dumps were asked for. This test has no Aftermath library beside it (and may be
+    // built without the calls), so the start record must say the dumps are off and why, device removed
+    // data must take over, and the loss report must carry the same explanation and no dump.
+    bool CheckCrashDumpRequest()
+    {
+        RunLog log;
+        requestGpuCrashDumps = true;
+        const int result = RunDiagnosed(log, true, true);
+        requestGpuCrashDumps = false;
+        if (result != EXIT_FAILURE || log.losses.size() != 1)
+            return Fail("A removed device must be reported once when GPU crash dumps were asked for.");
+        if (!HasRecord(log, "gpu crash dumps: off (") || !HasRecord(log, "device removed data: on"))
+            return Fail("Without the Aftermath library the start record must say so and keep device removed data.");
+        const GraphicsDeviceLossReport &report = log.losses.front();
+        if (!CheckLossReport(report, true))
+            return false;
+        if (!report.gpuCrashDumpStatus.starts_with("off (") || !report.gpuCrashDump.empty())
+            return Fail("A run without GPU crash dumps must report why and carry no dump.");
+        std::cout << "GPU crash dumps requested: " << report.gpuCrashDumpStatus << ".\n";
+        return true;
+    }
 } // namespace
 
 int TestDeviceLoss()
@@ -257,6 +282,8 @@ int TestDeviceLoss()
     // A device removed on request has no command list history; the run with the
     // data on checks that the request reaches the report, not what a real hang leaves.
     if (!CheckHealthyRun() || !CheckLostRun(false) || !CheckLostRun(true))
+        return EXIT_FAILURE;
+    if (!CheckCrashDumpRequest())
         return EXIT_FAILURE;
     std::cout << "Engine diagnostics passed: start records, performance sample, device loss report and order.\n";
     return EXIT_SUCCESS;

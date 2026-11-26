@@ -257,6 +257,7 @@ namespace
         std::uint64_t backgroundChangesSinceRecord{};
         double nextBackgroundRecordSeconds{};
         bool deviceRemovedForTest{};
+        bool deviceHungForTest{};
         RenderSchedule schedule;
         double audioInterval{};
         double nextAudioUpdateTime{};
@@ -441,6 +442,19 @@ namespace
         renderer.RemoveDeviceForDiagnosticsTest();
     }
 
+    // Test hook of EngineDiagnosticsConfig: one frame the GPU never finishes.
+    void HangDeviceIfRequested(
+        D3D12Renderer& renderer,
+        const EngineConfig& config,
+        MainLoopState& state)
+    {
+        const std::uint64_t after = config.diagnostics.hangGraphicsDeviceAfterRenderedFrames;
+        if (after == 0 || state.deviceHungForTest || state.renderedFrames < after)
+            return;
+        state.deviceHungForTest = true;
+        renderer.HangDeviceForDiagnosticsTest();
+    }
+
     void RefreshPerformanceStatistics(const D3D12Renderer& renderer, MainLoopState& state)
     {
         const double elapsedSeconds =
@@ -527,6 +541,7 @@ namespace
                     config,
                     state);
                 RemoveDeviceIfRequested(renderer, config, state);
+                HangDeviceIfRequested(renderer, config, state);
             }
             RefreshPerformanceStatistics(renderer, state);
         }

@@ -5,6 +5,8 @@
 #include "Diagnostics/EngineDiagnostics.h"
 #include "Renderer/RenderFrameContext.h"
 #include "Renderer/FrameResources.h"
+#include "Renderer/GpuCrashDumps.h"
+#include "Renderer/GpuHangTest.h"
 #include "Renderer/GraphicsValidation.h"
 
 #include <Windows.h>
@@ -65,13 +67,17 @@ public:
     // swap chain, one fact per line. DeviceLossReport is empty while the
     // device works; operation and resultCode name the call that failed, when
     // one is known. With validation on it first sends the validation messages
-    // still queued. RemoveDeviceForDiagnosticsTest loses the device on purpose.
+    // still queued, and with GPU crash dumps on it waits for the driver's dump.
+    // RemoveDeviceForDiagnosticsTest loses the device on purpose;
+    // HangDeviceForDiagnosticsTest makes the next frame one the GPU never
+    // finishes, so that Windows resets the driver.
     [[nodiscard]] std::vector<std::string> StartupRecord() const;
     [[nodiscard]] GraphicsMemoryInfo MemoryInfo() const noexcept;
     [[nodiscard]] std::optional<GraphicsDeviceLossReport> DeviceLossReport(
         const char* operation,
         std::uint32_t resultCode) const;
     void RemoveDeviceForDiagnosticsTest();
+    void HangDeviceForDiagnosticsTest() noexcept;
 
     [[nodiscard]] ID3D12Device* Device() const noexcept;
     [[nodiscard]] MeshRenderSystem& MeshRendering() const noexcept;
@@ -88,6 +94,8 @@ private:
     static constexpr std::uint32_t MaximumSwapChainBuffers = 3;
 
     void CreateDeviceAndFactory();
+    void EnableLossDiagnostics();
+    void RecordHangIfRequested();
     void CreateCommandObjects();
     void CreateSwapChain(HWND window);
     void CreateDescriptorHeaps();
@@ -113,11 +121,16 @@ private:
     std::uint32_t rtvDescriptorSize_{};
     bool tearingSupported_{};
     bool deviceRemovedData_{};
+    bool deviceRemovedDataRequested_{};
+    bool gpuCrashDumpsRequested_{};
+    bool hangRequested_{};
     bool frameOpen_{};
     std::uint32_t lastFrameDrawCalls_{};
     GraphicsDeviceDiagnosticsConfig graphics_;
     std::uint32_t swapChainBuffers_{D3D12Detail::FrameCount};
     D3D12Detail::ValidationState validation_;
+    D3D12Detail::GpuCrashDumps gpuCrashDumps_;
+    D3D12Detail::GpuHangObjects gpuHang_;
     // "default", "WARP", "index 1 (not found, default used)", ...
     std::string adapterRequest_;
     IEngineDiagnosticSink* sink_{};

@@ -60,6 +60,8 @@
   <ItemGroup>
     <ClInclude Include="Renderer\D3D12Renderer.h" />
     <ClInclude Include="Renderer\FrameImageReadbackQueue.h" />
+    <ClInclude Include="Renderer\GpuCrashDumps.h" />
+    <ClInclude Include="Renderer\GpuHangTest.h" />
     <ClInclude Include="Renderer\GraphicsDeviceDiagnostics.h" />
     <ClInclude Include="Renderer\GraphicsValidation.h" />
     <ClInclude Include="Mesh\MeshRendering.h" />
@@ -72,6 +74,8 @@
   <ItemGroup>
     <ClCompile Include="Renderer\D3D12Renderer.cpp" />
     <ClCompile Include="Renderer\FrameImageReadbackQueue.cpp" />
+    <ClCompile Include="Renderer\GpuCrashDumps.cpp" />
+    <ClCompile Include="Renderer\GpuHangTest.cpp" />
     <ClCompile Include="Renderer\GraphicsDeviceDiagnostics.cpp" />
     <ClCompile Include="Renderer\GraphicsValidation.cpp" />
     <ClCompile Include="Mesh\MeshRendering.cpp" />

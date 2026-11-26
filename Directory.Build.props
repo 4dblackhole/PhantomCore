@@ -14,6 +14,24 @@
     <FmodLibraryDir>$(FmodRoot)\api\core\lib\x64</FmodLibraryDir>
   </PropertyGroup>
 
+  <!-- NVIDIA Nsight Aftermath (GPU crash dumps). Off unless a build asks with /p:PhantomCoreAftermath=true.
+       The SDK is not in this repository: AftermathRoot or NSIGHT_AFTERMATH_SDK names its folder (the one
+       holding include\GFSDK_Aftermath.h). Only the headers are used at build time; the library is opened
+       at run time from the folder of the executable. -->
+  <PropertyGroup>
+    <PhantomCoreAftermath Condition="'$(PhantomCoreAftermath)' == ''">false</PhantomCoreAftermath>
+    <AftermathRoot Condition="'$(AftermathRoot)' == '' and '$(NSIGHT_AFTERMATH_SDK)' != ''">$(NSIGHT_AFTERMATH_SDK)</AftermathRoot>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(PhantomCoreAftermath)' == 'true'">
+    <ClCompile>
+      <PreprocessorDefinitions>PHANTOMCORE_AFTERMATH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(AftermathRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <Target Name="EnsureAftermathSdk" BeforeTargets="PrepareForBuild" Condition="'$(PhantomCoreAftermath)' == 'true'">
+    <Error Condition="!Exists('$(AftermathRoot)\include\GFSDK_Aftermath.h')" Text="PhantomCoreAftermath is true but the Nsight Aftermath SDK was not found. Set NSIGHT_AFTERMATH_SDK or pass /p:AftermathRoot=&quot;path to the SDK folder&quot;." />
+  </Target>
+
   <!-- Release links the C/C++ runtime statically (/MT) so the binaries run without the Visual C++
        redistributable. Every project must agree, or the linker reports LNK2038. Debug keeps /MDd. -->
   <ItemDefinitionGroup Condition="'$(Configuration)' == 'Release'">

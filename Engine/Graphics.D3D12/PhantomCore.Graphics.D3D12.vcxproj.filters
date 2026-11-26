@@ -2,9 +2,13 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="Renderer\FrameImageReadbackQueue.h"><Filter>Renderer</Filter></ClInclude>
+    <ClInclude Include="Renderer\GpuCrashDumps.h"><Filter>Renderer</Filter></ClInclude>
+    <ClInclude Include="Renderer\GpuHangTest.h"><Filter>Renderer</Filter></ClInclude>
     <ClInclude Include="Renderer\GraphicsDeviceDiagnostics.h"><Filter>Renderer</Filter></ClInclude>
     <ClInclude Include="Renderer\GraphicsValidation.h"><Filter>Renderer</Filter></ClInclude>
     <ClCompile Include="Renderer\FrameImageReadbackQueue.cpp"><Filter>Renderer</Filter></ClCompile>
+    <ClCompile Include="Renderer\GpuCrashDumps.cpp"><Filter>Renderer</Filter></ClCompile>
+    <ClCompile Include="Renderer\GpuHangTest.cpp"><Filter>Renderer</Filter></ClCompile>
     <ClCompile Include="Renderer\GraphicsDeviceDiagnostics.cpp"><Filter>Renderer</Filter></ClCompile>
     <ClCompile Include="Renderer\GraphicsValidation.cpp"><Filter>Renderer</Filter></ClCompile>
     <Filter Include="Renderer">

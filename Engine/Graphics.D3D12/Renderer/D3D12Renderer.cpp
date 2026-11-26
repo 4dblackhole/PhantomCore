@@ -208,8 +208,8 @@ void D3D12Renderer::Initialize(
     sink_ = diagnostics.sink;
     graphics_ = diagnostics.graphics;
     swapChainBuffers_ = std::clamp<std::uint32_t>(graphics_.swapChainBuffers, D3D12Detail::FrameCount, MaximumSwapChainBuffers);
-    // DRED only watches devices created after it was switched on.
-    deviceRemovedData_ = diagnostics.graphicsDeviceRemovedData && D3D12Detail::EnableDeviceRemovedExtendedData();
+    deviceRemovedDataRequested_ = diagnostics.graphicsDeviceRemovedData;
+    gpuCrashDumpsRequested_ = diagnostics.gpuCrashDumps;
 
     // The creation order follows D3D12 dependencies: device first,
     // command queue/fences next, then a swap chain that uses that queue.
@@ -306,6 +306,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     ThrowIfFailed(
         commandList_->Reset(commandAllocators_[frameIndex_].Get(), nullptr),
         "ID3D12GraphicsCommandList::Reset");
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::FrameClear);
 
     D3D12_RESOURCE_BARRIER toRenderTarget{};
     toRenderTarget.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -350,6 +351,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
         0,
         nullptr);
 
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::ClientDraws);
     const std::uint64_t renderIndex = nextRenderIndex_++;
     D3D12Detail::RecordedDrawCalls() = 0;
     MeshRenderingBackend::BeginFrame(*meshRenderSystem_, frameIndex_);
@@ -386,9 +388,12 @@ void D3D12Renderer::EndFrame()
     // Client scenes only submit high-level MeshInstances.  The renderer
     // resolves material pipelines, batches instances, and records draws
     // before the back buffer transitions to PRESENT.
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::Meshes);
     MeshRenderingBackend::Flush(*meshRenderSystem_, *commandList_.Get());
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::Visual2D);
     static_cast<D3D12Visual2DRenderer&>(*visual2DRenderSystem_).DrawScreen(
         *commandList_.Get(), frameIndex_, width_, height_);
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::Text);
     TextRenderingBackend::Flush(
         *textRenderSystem_,
         *commandList_.Get(),
@@ -396,6 +401,8 @@ void D3D12Renderer::EndFrame()
         height_);
     imageReadbacks_->RecordCopy(*commandList_.Get());
     lastFrameDrawCalls_ = D3D12Detail::RecordedDrawCalls();
+    RecordHangIfRequested();
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::FrameEnd);
 
     D3D12_RESOURCE_BARRIER toPresent{};
     toPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -436,6 +443,28 @@ void D3D12Renderer::EndFrame()
     validationMessages_.Forward();
 }
 
+// The diagnostics test hook: one draw the GPU never finishes, into the back
+// buffer of this frame. The frame is then submitted and presented as usual.
+void D3D12Renderer::RecordHangIfRequested()
+{
+    if (!hangRequested_)
+        return;
+    hangRequested_ = false;
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::HangTest);
+    commandList_->RSSetViewports(1, &viewport_);
+    commandList_->RSSetScissorRects(1, &scissorRectangle_);
+    commandList_->OMSetRenderTargets(
+        1,
+        &frameContext_.renderTargetView,
+        FALSE,
+        &frameContext_.depthStencilView);
+    gpuHang_ = D3D12Detail::RecordGpuHang(
+        *device_.Get(),
+        *commandList_.Get(),
+        renderTargetFormat_,
+        depthStencilFormat_);
+}
+
 void D3D12Renderer::WaitForGpu()
 {
     if (commandQueue_ == nullptr || fence_ == nullptr)
@@ -469,6 +498,8 @@ std::vector<std::string> D3D12Renderer::StartupRecord() const
     lines.push_back("graphics adapter: " + D3D12Detail::DescribeAdapter(*adapter_.Get()));
     lines.push_back("swap chain: " + DescribeSwapChain());
     lines.push_back(std::string("device removed data: ") + (deviceRemovedData_ ? "on" : "off"));
+    if (gpuCrashDumpsRequested_)
+        lines.push_back("gpu crash dumps: " + gpuCrashDumps_.State());
     lines.push_back(
         "graphics options: validation " + D3D12Detail::DescribeValidation(validation_) + ", adapter " + adapterRequest_);
     return lines;
@@ -560,6 +591,13 @@ std::optional<GraphicsDeviceLossReport> D3D12Renderer::DeviceLossReport(
     report.extendedDataEnabled = deviceRemovedData_;
     if (deviceRemovedData_)
         report.extendedData = D3D12Detail::ReadDeviceRemovedExtendedData(*device_.Get());
+    if (gpuCrashDumpsRequested_)
+    {
+        D3D12Detail::GpuCrashDumpResult dump = gpuCrashDumps_.Collect();
+        report.gpuCrashDumpStatus = std::move(dump.status);
+        report.gpuCrashDump = std::move(dump.dump);
+        report.gpuCrashDumpJson = std::move(dump.json);
+    }
     return report;
 }
 
@@ -569,6 +607,11 @@ void D3D12Renderer::RemoveDeviceForDiagnosticsTest()
     if (device_ == nullptr || FAILED(device_.As(&device)))
         throw std::runtime_error("This Windows version cannot remove the D3D12 device on request.");
     device->RemoveDevice();
+}
+
+void D3D12Renderer::HangDeviceForDiagnosticsTest() noexcept
+{
+    hangRequested_ = true;
 }
 
 ID3D12Device* D3D12Renderer::Device() const noexcept
@@ -643,16 +686,33 @@ void D3D12Renderer::CreateDeviceAndFactory()
     }
     if (adapter_ == nullptr)
         adapter_ = SelectAdapter(*factory_.Get());
+    EnableLossDiagnostics();
     ThrowIfFailed(
         D3D12CreateDevice(
             adapter_.Get(),
             D3D_FEATURE_LEVEL_11_0,
             IID_PPV_ARGS(device_.ReleaseAndGetAddressOf())),
         "D3D12CreateDevice");
+    gpuCrashDumps_.AttachDevice(*device_.Get());
 
     // Only a Client that asked for validation gets its messages as records.
     if (graphics_.validation != GraphicsValidation::Off && validation_.debugLayer)
         validationMessages_.Attach(*device_.Get(), sink_, graphics_.validationMessageLimit);
+}
+
+// Both only watch devices created after they were switched on. The driver's
+// crash dumps and DRED are not used together: where the dumps are on, DRED
+// stays off even if it was asked for.
+void D3D12Renderer::EnableLossDiagnostics()
+{
+    if (gpuCrashDumpsRequested_)
+    {
+        DXGI_ADAPTER_DESC1 description{};
+        const bool described = adapter_ != nullptr && SUCCEEDED(adapter_->GetDesc1(&description));
+        gpuCrashDumps_.Enable(described ? description.VendorId : 0);
+    }
+    if (deviceRemovedDataRequested_ && !gpuCrashDumps_.Active())
+        deviceRemovedData_ = D3D12Detail::EnableDeviceRemovedExtendedData();
 }
 
 void D3D12Renderer::CreateCommandObjects()
@@ -689,6 +749,8 @@ void D3D12Renderer::CreateCommandObjects()
             nullptr,
             IID_PPV_ARGS(commandList_.ReleaseAndGetAddressOf())),
         "ID3D12Device::CreateCommandList");
+    // The list is recording here, which the marker context needs.
+    gpuCrashDumps_.AttachCommandList(*commandList_.Get());
     ThrowIfFailed(
         commandList_->Close(),
         "ID3D12GraphicsCommandList::Close");

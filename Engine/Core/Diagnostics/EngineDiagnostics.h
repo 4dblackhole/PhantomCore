@@ -73,6 +73,13 @@ struct GraphicsDeviceLossReport
     // the backend kept none. It is empty only when the data was off.
     bool extendedDataEnabled{};
     std::vector<std::string> extendedData;
+    // EngineDiagnosticsConfig::gpuCrashDumps. The status is one line: whether
+    // the driver's dumps were on and how far this one got. The dump is the
+    // driver's own file content (NVIDIA ".nv-gpudmp") and the JSON is the same
+    // dump decoded to text; both are empty when no dump was made.
+    std::string gpuCrashDumpStatus;
+    std::vector<std::uint8_t> gpuCrashDump;
+    std::string gpuCrashDumpJson;
 };
 
 // The main loop has not finished a pass for stalledSeconds, and its thread
@@ -176,6 +183,13 @@ struct EngineDiagnosticsConfig
     // fault (D3D12 DRED). It costs a little on every draw, so it is off unless
     // a crash is being chased. It cannot change after the device exists.
     bool graphicsDeviceRemovedData{};
+    // Asks the graphics driver for a GPU crash dump when the device is lost
+    // (NVIDIA Aftermath): the shaders and the part of the frame the GPU was
+    // working on. It needs an engine built with PhantomCoreAftermath, the
+    // Aftermath library beside the executable and an NVIDIA adapter; anything
+    // missing leaves it off and the start record says why. Where it is on,
+    // graphicsDeviceRemovedData is left off: the two are not used together.
+    bool gpuCrashDumps{};
     // A main loop pass that takes longer than this is reported as a stall.
     // Zero or less does not watch. A value well above any honest pause (a
     // synchronous load) keeps the report for real hangs. A debugger and the
@@ -184,6 +198,11 @@ struct EngineDiagnosticsConfig
     // Test hook: removes the graphics device after this many rendered frames
     // so the loss path can be exercised on purpose. Zero never does.
     std::uint64_t removeGraphicsDeviceAfterRenderedFrames{};
+    // Test hook: after this many rendered frames, draws something the GPU
+    // never finishes. Windows resets the graphics driver about two seconds
+    // later: the screen goes dark for a moment and other programs may lose
+    // their graphics devices. Only for a run a person asked for. Zero never does.
+    std::uint64_t hangGraphicsDeviceAfterRenderedFrames{};
     // Validation, adapter and swap-chain switches for crash experiments.
     GraphicsDeviceDiagnosticsConfig graphics;
 };
