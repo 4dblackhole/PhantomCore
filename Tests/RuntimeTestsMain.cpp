@@ -6,6 +6,7 @@
 #include "App/GraphicsOptionsTests.h"
 #include "App/CrashDumpTests.h"
 #include "App/ThrownExceptionWatchTests.h"
+#include "App/BackgroundWorkTests.h"
 #include "App/MainLoopWatchTests.h"
 #include "App/ImageReadbackTests.h"
 #include "App/SceneManagerTests.h"
@@ -55,6 +56,8 @@ int main(int argc, char** argv)
         return RunCrashDumpChild(argv[2], argv[3]);
     if (argc == 2 && std::string_view(argv[1]) == "--thrown-exceptions")
         return TestThrownExceptionWatch();
+    if (argc == 2 && std::string_view(argv[1]) == "--background-work")
+        return TestBackgroundWork();
     if (argc == 2 && std::string_view(argv[1]) == "--text-rendering")
         return TestTextRendering();
     if (argc == 2 && std::string_view(argv[1]) == "--text-pixels")

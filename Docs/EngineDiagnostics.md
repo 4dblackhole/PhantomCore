@@ -4,6 +4,7 @@
 엔진은 무엇을 기록할지만 정합니다. 파일을 만들거나 창을 띄우지 않으며, 어디에 남길지는 Client가 정합니다.
 
 선언은 `Engine/Core/Diagnostics/EngineDiagnostics.h`(받는 쪽), `Engine/Platform.Win32/System/CrashDump.h`(덤프),
+`Engine/Platform.Win32/System/BackgroundWork.h`(메인 루프 밖의 작업 표시),
 `Engine/Platform.Win32/System/ThrownExceptionWatch.h`(시험 전용 예외 계수)에 있고 `PhantomCore.h`에 포함됩니다.
 
 ## 연결
@@ -241,6 +242,23 @@ cdb -z mygame-20261125-061530-crash.dmp -y <PDB가 있는 폴더> -c ".ecxr; k; 
 ```
 
 요청한 덤프(`WriteNow`)에는 예외 정보가 없으므로 `.ecxr` 대신 `~*k`로 모든 스레드를 봅니다. 메인 스레드는 보통 0번입니다.
+
+## 메인 루프 밖의 작업 표시
+
+멈춤이나 장치 끊김을 나중에 볼 때 "그 순간 다른 스레드는 무엇을 하고 있었나"에 답하기 위한 것입니다.
+
+- 작업 스레드는 일 한 덩어리를 `BackgroundWork work("이름");`으로 감쌉니다. 이름은 문자열 리터럴(정적 수명)이고
+  무슨 일인지만 적습니다(파일 경로를 넣지 않습니다).
+- 살아 있는 동안 그 덩어리는 프로세스에 하나뿐인 표에 올라 있습니다. `BackgroundWork::Running`이 지금 진행 중인 덩어리
+  (이름·스레드·시작한 뒤 지난 ms)를 복사해 줍니다. 할당·잠금이 없어 크래시·멈춤 처리기에서도 부를 수 있습니다.
+  표는 동시에 32개까지 담습니다. 넘치는 덩어리는 표에서만 빠지고 알림은 그대로 갑니다.
+- 끝난 모습은 셋입니다: 성공, 실패(예외가 빠져나가거나 `Failed()`를 부름), 취소(`Cancelled()`를 부름).
+- 프로그램이 `IBackgroundWorkObserver`를 `BackgroundWorkObservation`으로 걸어 두면 덩어리마다 시작과 끝을
+  작업 스레드에서 알려 줍니다(끝에는 결과와 걸린 ms). 한 번에 하나만 걸 수 있고, 소멸자는 진행 중인 알림이 끝난 뒤에
+  돌아옵니다. 걸지 않으면 덩어리 하나의 비용은 atomic 쓰기 몇 번입니다.
+- 엔진이 표시하는 작업: 그림 준비(`prepare images`, `PrepareImages`의 디코딩), 소리 읽기(`read sound`),
+  소리 속도 변환(`stretch sound`). 동기 로드 모드의 소리 읽기는 부른 스레드에서 돌고 그 스레드 번호로 표시됩니다.
+  Client는 자기 작업을 같은 방법으로 표시합니다.
 
 ## 던진 예외 세기 (시험 전용)
 

@@ -20,6 +20,7 @@
     </ClInclude>
     <ClInclude Include="System\CrashDump.h"><Filter>System</Filter></ClInclude>
     <ClInclude Include="System\ThrownExceptionWatch.h"><Filter>System</Filter></ClInclude>
+    <ClInclude Include="System\BackgroundWork.h"><Filter>System</Filter></ClInclude>
     <ClInclude Include="System\ComApartment.h">
       <Filter>System</Filter>
     </ClInclude>
@@ -37,6 +38,7 @@
     </ClCompile>
     <ClCompile Include="System\CrashDump.cpp"><Filter>System</Filter></ClCompile>
     <ClCompile Include="System\ThrownExceptionWatch.cpp"><Filter>System</Filter></ClCompile>
+    <ClCompile Include="System\BackgroundWork.cpp"><Filter>System</Filter></ClCompile>
     <ClCompile Include="System\ComApartment.cpp">
       <Filter>System</Filter>
     </ClCompile>

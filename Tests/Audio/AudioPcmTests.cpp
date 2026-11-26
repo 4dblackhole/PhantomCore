@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
 #include <thread>
 
@@ -207,6 +208,42 @@ namespace
         Require(watch.Count() == 0, "Cancelled and dropped clips throw no exception (worker or caller): " +
                                         std::string(watch.Count() ? watch.Records().front().what.data() : ""));
     }
+    class WorkRecorder final : public IBackgroundWorkObserver
+    {
+    public:
+        void OnBackgroundWork(const BackgroundWorkEvent& event) noexcept override
+        {
+            const std::scoped_lock lock(mutex_);
+            events_.push_back(event);
+        }
+        [[nodiscard]] std::vector<BackgroundWorkEvent> Events()
+        {
+            const std::scoped_lock lock(mutex_);
+            return events_;
+        }
+
+    private:
+        std::mutex mutex_;
+        std::vector<BackgroundWorkEvent> events_;
+    };
+    // An asynchronous clip reads its file as one marked piece of background work, on a thread of its own.
+    void VerifyWorkMarks(AudioSystem& audio, const std::filesystem::path& path)
+    {
+        WorkRecorder recorder;
+        {
+            const BackgroundWorkObservation observation(recorder);
+            std::string error;
+            auto clip = audio.LoadSound(path, AudioLoadMode::StreamAsyncAccurate, error);
+            Require(clip != nullptr, error);
+            WaitReady(audio, *clip);
+        }
+        const auto events = recorder.Events();
+        Require(events.size() == 2, "Reading one sound is one piece of work: a start and an end.");
+        const bool named = std::string_view(events[0].name) == "read sound" && events[0].name == events[1].name;
+        Require(named && !events[0].finished, "The piece is named and starts first.");
+        const bool ended = events[1].finished && events[1].outcome == BackgroundWorkOutcome::Succeeded;
+        Require(ended && events[1].threadId != GetCurrentThreadId(), "It succeeds on a thread of its own.");
+    }
     void VerifyPlayback(const std::filesystem::path& path, const PcmProbe& pcm)
     {
 
@@ -261,6 +298,7 @@ namespace
             Require(clip->Play(settings, nullptr, error) == nullptr,
                     "The normalized PCM end position is rejected before allocating a voice.");
         }
+        VerifyWorkMarks(audio, path);
         VerifyCancellation(audio, path, static_cast<std::uint64_t>(std::llround(
                                             static_cast<long double>(pcm.frames) * 1'000'000 / pcm.rate)));
         // Cancellation/shutdown must not leave a decoder referencing the device.

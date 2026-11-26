@@ -2,6 +2,7 @@
 #include "FmodAudioClip.h"
 #include "Decode/AudioPcmDecoder.h"
 #include "Processing/TimeStretch.h"
+#include "System/BackgroundWork.h"
 #include <cmath>
 #include <algorithm>
 
@@ -30,6 +31,7 @@ namespace
 
     SourceResult ReadSource(const std::filesystem::path& path, const std::stop_token stop)
     {
+        BackgroundWork work("read sound");
         SourcePcm pcm;
         DecodeAudioPcm(path, stop, [&](const std::uint32_t channels, const std::uint32_t rate,
                                        const std::span<const float> samples)
@@ -47,7 +49,10 @@ namespace
             pcm.samples.insert(pcm.samples.end(), samples.begin(), samples.end());
         });
         if (stop.stop_requested())
+        {
+            work.Cancelled();
             return std::nullopt;
+        }
         if (pcm.samples.empty())
             throw std::runtime_error("PCM source contains no audio frames.");
         return pcm;
@@ -169,9 +174,13 @@ namespace
                             pending_ = std::async(std::launch::async,
                                 [pcm = std::move(pcm_), rate = stretchRate_, stop = cancellation_.get_token()]() mutable
                                     -> SourceResult {
+                                    BackgroundWork work("stretch sound");
                                     auto stretched = TimeStretchPcm(pcm.samples, pcm.channels, pcm.rate, rate, stop);
                                     if (!stretched)
+                                    {
+                                        work.Cancelled();
                                         return std::nullopt;
+                                    }
                                     pcm.samples = std::move(*stretched);
                                     return std::move(pcm); // A captured copy is not moved implicitly.
                                 });
