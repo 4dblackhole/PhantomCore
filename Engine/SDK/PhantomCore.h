@@ -4048,6 +4048,12 @@ struct GraphicsDeviceLossReport
     std::string gpuCrashDumpStatus;
     std::vector<std::uint8_t> gpuCrashDump;
     std::string gpuCrashDumpJson;
+    // With gpuCrashDumps requested: what the last frames drew, one line per frame and per draw (kind,
+    // instance count, the GPU address and size of the buffer its instances were read from, its texture
+    // descriptors), oldest frame first. frameDrawData holds the instance bytes the CPU wrote for those
+    // draws; each line ends with its place in it ("data @offset +bytes"). Both are empty otherwise.
+    std::vector<std::string> frameDraws;
+    std::vector<std::uint8_t> frameDrawData;
 };
 
 // The main loop has not finished a pass for stalledSeconds, and its thread
