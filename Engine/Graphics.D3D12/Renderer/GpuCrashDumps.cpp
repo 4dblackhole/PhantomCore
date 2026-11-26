@@ -337,11 +337,16 @@ void GpuCrashDumps::AttachDevice(ID3D12Device& device)
 {
     if (implementation_ == nullptr)
         return;
-    // Markers only. Resource tracking, call stacks and shader debug data cost
-    // more on every call and answer questions this engine has not had yet.
+    // Markers, and the driver's own record of live and recently destroyed
+    // resources: a real loss was a GPU page fault, and only that record says
+    // which resource the faulting address belonged to and whether it had
+    // been destroyed. Call stacks and shader debug data stay off: they cost
+    // far more on every call.
+    const std::uint32_t features =
+        GFSDK_Aftermath_FeatureFlags_EnableMarkers | GFSDK_Aftermath_FeatureFlags_EnableResourceTracking;
     const GFSDK_Aftermath_Result result = implementation_->initialize(
         GFSDK_Aftermath_Version_API,
-        GFSDK_Aftermath_FeatureFlags_EnableMarkers,
+        features,
         &device);
     if (!GFSDK_Aftermath_SUCCEED(result))
     {
