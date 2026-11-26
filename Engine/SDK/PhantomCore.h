@@ -4214,6 +4214,12 @@ struct PerformanceStatistics final
     // cannot be asked.
     std::uint64_t graphicsMemoryUsageBytes{};
     std::uint64_t graphicsMemoryBudgetBytes{};
+    // Screen text: glyph atlas pages at the end of the interval, and the glyphs
+    // rasterized and the atlas pages emptied for reuse during it. Rasterizing or
+    // emptying in every interval means the atlas is too small for what is shown.
+    std::uint64_t textAtlasPages{};
+    std::uint64_t textGlyphRasterizations{};
+    std::uint64_t textAtlasEvictions{};
     std::uint64_t measurementIndex{};
     bool hasMeasurement{};
 };

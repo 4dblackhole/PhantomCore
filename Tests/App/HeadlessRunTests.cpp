@@ -222,6 +222,12 @@ int TestDrawStatistics()
                   << sample.framesPerSecond << ".\n";
         return EXIT_FAILURE;
     }
+    if (sample.textGlyphRasterizations != 0 || sample.textAtlasEvictions != 0)
+    {
+        std::cerr << "A Canvas without text must report no glyph work: rasterized "
+                  << sample.textGlyphRasterizations << ", evicted " << sample.textAtlasEvictions << ".\n";
+        return EXIT_FAILURE;
+    }
     std::cout << "Performance sample reports one batched draw per rendered frame.\n";
     return EXIT_SUCCESS;
 }
