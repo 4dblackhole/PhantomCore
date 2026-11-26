@@ -82,7 +82,7 @@ SDK 테스트의 `--headless-error`는 실제 D3D12/NoSound 실행 중 Update �
 | --- | --- | --- |
 | 애플리케이션 | `Engine/Core/App` | `Run`, subsystem 생성·메인 루프·종료 순서 |
 | Client 계약 | `Engine/Core/Client` | `IGameClient`, `SceneGameClient`, `EngineServices`, Update context |
-| 진단 | `Engine/Core/Diagnostics`, `Engine/Platform.Win32/System` | `IEngineDiagnosticSink`, 장치 끊김 보고서, DRED 선택, 메인 루프 멈춤 감시, `CrashDumpService`, 시험 전용 `ThrownExceptionWatch`; [엔진 진단 기록](EngineDiagnostics.md) |
+| 진단 | `Engine/Core/Diagnostics`, `Engine/Platform.Win32/System` | `IEngineDiagnosticSink`, 장치 끊김 보고서, DRED 선택, 메인 루프 멈춤 감시, `CrashDumpService`, 메인 루프 밖의 작업 표시(`BackgroundWork`), 시험 전용 `ThrownExceptionWatch`; [엔진 진단 기록](EngineDiagnostics.md) |
 | 렌더 프레임 계약 | `Engine/Core/Rendering` | `RenderContext`, `ClearColor`, `RgbaImage`, 이미지 읽기 결과 |
 | Scene | `Engine/Core/Scene` | `GameScene`, `SceneManager`, factory, 지연 전환, 수명 정책 |
 | 수학 값·연산 | `Engine/Math` | `Float2/3/4`, `Float4x4`, 행렬·좌표 변환; [Math](Math.md) |
