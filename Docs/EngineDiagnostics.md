@@ -80,6 +80,7 @@ D3D12·DXGI 호출이 장치 제거·멈춤·리셋 결과(`DXGI_ERROR_DEVICE_RE
 | `lastFrameDrawCalls` | 마지막으로 끝낸 프레임의 draw call 수 |
 | `memory` | 이 프로세스의 그래픽 메모리 사용량·예산·시스템 메모리로 밀려난 양 |
 | `extendedDataEnabled`, `extendedData` | 아래 장치 제거 추가 정보 |
+| `gpuCrashDumpStatus`, `gpuCrashDump`, `gpuCrashDumpJson` | 아래 GPU 크래시 덤프 |
 
 엔진은 끊긴 장치를 되살리지 않습니다. 실행은 실패로 끝납니다.
 
@@ -275,11 +276,47 @@ cdb -z mygame-20261125-061530-crash.dmp -y <PDB가 있는 폴더> -c ".ecxr; k; 
 - 한 번에 하나만 만들 수 있습니다. 출력 방식은 정하지 않으므로, 엔진 테스트는 stderr에, Client는 자기 기록에 씁니다.
 - 일부러 예외를 일으키는 시험 실행(예: 크래시 시험)에는 만들지 않습니다.
 
+## GPU 크래시 덤프 (NVIDIA Aftermath)
+
+`EngineConfig::diagnostics.gpuCrashDumps`를 켜면 그래픽 드라이버가 직접 남기는 덤프를 받습니다. DRED는 "어느 그리기에서
+멈췄나"까지만 말하고, 이 덤프는 드라이버가 본 장치 상태(시간 초과·페이지 폴트 등), 그때 돌던 셰이더, 프레임 안의 위치를 담습니다.
+
+켜지려면 세 가지가 모두 필요합니다. 하나라도 없으면 꺼진 채로 실행되고 시작 기록 `gpu crash dumps: off (이유)`가 이유를 말합니다.
+
+1. `/p:PhantomCoreAftermath=true`로 만든 엔진. 기본은 `false`이고, 그 빌드에는 호출 자체가 없습니다.
+   SDK는 이 저장소에 없습니다. NVIDIA에서 받은 폴더(`include\GFSDK_Aftermath.h`가 든 곳)를 `NSIGHT_AFTERMATH_SDK` 환경 변수나
+   `/p:AftermathRoot=`로 가리킵니다. 헤더와 `.lib`는 NVIDIA 라이선스상 배포할 수 없으므로 커밋하지 않습니다.
+2. 실행 파일 옆의 `GFSDK_Aftermath_Lib.x64.dll`. 엔진은 링크하지 않고 실행 중에 그 경로에서만 엽니다.
+3. NVIDIA 어댑터.
+
+켜진 실행에서는 DRED를 켜지 않습니다(NVIDIA가 함께 쓰는 것을 지원하지 않습니다). 꺼진 실행에서는
+`graphicsDeviceRemovedData`가 그대로 적용됩니다.
+
+엔진은 프레임마다 표시 여섯 개를 남깁니다(`frame: clear`, `client draws`, `meshes`, `visual 2D`, `text`, `end`).
+덤프에는 GPU가 마지막으로 지난 표시가 들어갑니다. 자원 추적·호출 스택·셰이더 디버그 정보는 켜지 않습니다(호출마다 비용이 큽니다).
+
+장치가 끊기면 `DeviceLossReport`가 드라이버의 덤프를 기다렸다가(시작하지 않으면 1.5초, 길어도 8초) 보고서에 담습니다.
+
+| 필드 | 내용 |
+| --- | --- |
+| `gpuCrashDumpStatus` | 한 줄: `dump finished, 123456 bytes, device now: timeout, device in the dump: timeout` 또는 `off (이유)` |
+| `gpuCrashDump` | 드라이버가 준 덤프 그대로. `.nv-gpudmp`로 저장하면 NVIDIA 도구가 엽니다 |
+| `gpuCrashDumpJson` | 같은 덤프를 SDK의 해독기로 푼 JSON 글 |
+
+파일로 쓰는 것은 Client의 일입니다. 요청하지 않은 실행의 보고서에서는 세 필드가 비어 있습니다.
+GTX 10 세대(Pascal)에서는 NVIDIA 문서상 "제한된 정보"만 남습니다.
+
 ## 일부러 끊어 보기
 
 `EngineConfig::diagnostics.removeGraphicsDeviceAfterRenderedFrames`에 0이 아닌 값을 넣으면 그만큼 렌더한 뒤 엔진이 장치를 일부러
 제거합니다(`ID3D12Device5::RemoveDevice`). 위 경로 전체를 Release 빌드에서도 그대로 시험할 수 있습니다.
 Client는 이 값을 숨은 실행 인자에만 연결하고, 사용자의 설정 파일에는 두지 않습니다.
+
+`hangGraphicsDeviceAfterRenderedFrames`는 그만큼 렌더한 뒤 GPU가 끝내지 못하는 그리기(끝나지 않는 픽셀 셰이더) 하나를
+프레임에 넣습니다. 약 2초 뒤 Windows가 그래픽 드라이버를 되살리고 장치는 `DXGI_ERROR_DEVICE_HUNG`으로 끊깁니다.
+실제 GPU 시간 초과를 만드는 유일한 방법이라 GPU 크래시 덤프를 확인할 때 씁니다. **화면이 잠깐 꺼지고 GPU를 쓰는 다른
+프로그램도 장치를 잃을 수 있으며, 60초 안에 다섯 번이면 Windows가 멈춥니다.** 자동 테스트는 이 값을 쓰지 않습니다.
+사람이 그 실행을 요청했을 때만 씁니다.
 
 멈춤과 크래시는 엔진 설정 없이 Client 코드로 일으킬 수 있습니다(Update에서 오래 자기, 예외 던지기).
 `PhantomCore.Collision.Tests --main-loop-watch`는 Update 하나를 1.7초 붙잡아 멈춤이 한 번, 풀림이 한 번 오는지와,
@@ -287,8 +324,10 @@ Client는 이 값을 숨은 실행 인자에만 연결하고, 사용자의 설�
 (구조적 예외, 스택 넘침, `std::terminate`, 순수 가상 호출, 잘못된 인자) 덤프 파일과 관찰자 통지를 확인하며,
 요청한 덤프 세 개 가운데 두 개만 남는지도 봅니다. 임시 폴더에서 돌리고 끝나면 지웁니다.
 
-`PhantomCore.Collision.Tests --device-loss`가 이 값으로 숨긴 엔진을 세 번 돌려 확인합니다.
+`PhantomCore.Collision.Tests --device-loss`가 이 값으로 숨긴 엔진을 네 번 돌려 확인합니다.
 
 - 정상 실행: 시작 기록 다섯 줄이 오고(기본 설정은 버퍼 2장), 끊김·치명적 오류는 오지 않으며, 성능 표본에 가장 긴 루프 시간이 들어 있습니다.
 - 장치 제거(추가 정보 꺼짐·켜짐): 실행이 실패로 끝나고, 보고서가 한 번, 치명적 오류가 한 번 오며,
   순서가 보고서 → Client `Shutdown` → 치명적 오류입니다.
+- GPU 크래시 덤프를 요청한 장치 제거: 테스트 옆에는 Aftermath 라이브러리가 없으므로 시작 기록이 `gpu crash dumps: off (이유)`이고,
+  DRED가 대신 켜지며, 보고서의 상태 줄이 같은 이유를 말하고 덤프는 비어 있습니다.
