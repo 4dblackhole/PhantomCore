@@ -1,3 +1,4 @@
+#include "Renderer/FrameDrawRecord.h"
 #include "Text/TextRendering.h"
 #include "../../Math/DirectXMathBridge.h"
 #include "Text/D3D12TextRendering.h"
@@ -810,6 +811,18 @@ namespace
                     0,
                     0);
                 ++D3D12Detail::RecordedDrawCalls();
+                const std::size_t firstByte = (allocationStart + firstInstance) * sizeof(GpuGlyphInstance);
+                D3D12Detail::RecordDraw({
+                    D3D12Detail::RecordedDrawKind::Text,
+                    false,
+                    0,
+                    0,
+                    static_cast<std::uint32_t>(endInstance - firstInstance),
+                    sizeof(GpuGlyphInstance),
+                    page.resource->GetGPUVirtualAddress() + firstByte,
+                    page.capacity * sizeof(GpuGlyphInstance),
+                    pageDescriptor.ptr,
+                    page.mappedData + firstByte});
                 firstInstance = endInstance;
             }
         }

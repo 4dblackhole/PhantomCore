@@ -3,6 +3,7 @@
 #include "Text/D3D12TextRendering.h"
 #include "Renderer/FrameImageReadbackQueue.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/FrameDrawRecord.h"
 #include "Renderer/D3D12ResourceDescriptions.h"
 #include "Renderer/GraphicsDeviceDiagnostics.h"
 
@@ -210,6 +211,8 @@ void D3D12Renderer::Initialize(
     swapChainBuffers_ = std::clamp<std::uint32_t>(graphics_.swapChainBuffers, D3D12Detail::FrameCount, MaximumSwapChainBuffers);
     deviceRemovedDataRequested_ = diagnostics.graphicsDeviceRemovedData;
     gpuCrashDumpsRequested_ = diagnostics.gpuCrashDumps;
+    // The record of what each frame drew belongs to the same question as the driver's dump.
+    D3D12Detail::FrameDrawRecorder::Instance().Enable(gpuCrashDumpsRequested_);
 
     // The creation order follows D3D12 dependencies: device first,
     // command queue/fences next, then a swap chain that uses that queue.
@@ -353,6 +356,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
 
     gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::ClientDraws);
     const std::uint64_t renderIndex = nextRenderIndex_++;
+    D3D12Detail::FrameDrawRecorder::Instance().BeginFrame(frameIndex_, renderIndex);
     D3D12Detail::RecordedDrawCalls() = 0;
     MeshRenderingBackend::BeginFrame(*meshRenderSystem_, frameIndex_);
     TextRenderingBackend::BeginFrame(*textRenderSystem_, frameIndex_, renderIndex);
@@ -598,6 +602,7 @@ std::optional<GraphicsDeviceLossReport> D3D12Renderer::DeviceLossReport(
         report.gpuCrashDump = std::move(dump.dump);
         report.gpuCrashDumpJson = std::move(dump.json);
     }
+    D3D12Detail::FrameDrawRecorder::Instance().Describe(report.frameDraws, report.frameDrawData);
     return report;
 }
 
