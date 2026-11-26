@@ -86,13 +86,14 @@ namespace
             resources.push_back(std::move(resource));
         }
 
-        void Replace(
+        // Returns the texture that held the slot: the caller keeps it until the GPU is past it.
+        [[nodiscard]] ComPtr<ID3D12Resource> Replace(
             const std::size_t index,
             const TextureInfo info,
             ComPtr<ID3D12Resource> resource)
         {
             ReplaceInfo(index, info);
-            resources.at(index) = std::move(resource);
+            return std::exchange(resources.at(index), std::move(resource));
         }
 
         std::vector<ComPtr<ID3D12Resource>> resources;
@@ -1144,8 +1145,12 @@ void TextureManager::Impl::RecordTextureUpload(
 
     // A slot below the set's size is a replacement; the slot at its end is an append.
     auto& target = RequireTextureSet(textureSet);
+    // The replaced texture leaves with this upload: its fence is signalled on the render queue after every
+    // frame submitted so far, so no queued draw can still read it. Counting frames is the caller's first
+    // guard (Visual2D retires the slot through the frame ring); this one does not depend on that count.
     if (descriptorIndex < target.Size())
-        target.Replace(descriptorIndex, TextureInfo{image.width, image.height}, std::move(texture));
+        uploadBuffers.push_back(
+            target.Replace(descriptorIndex, TextureInfo{image.width, image.height}, std::move(texture)));
     else
         target.Append(TextureInfo{image.width, image.height}, std::move(texture));
     uploadBuffers.push_back(std::move(uploadBuffer));

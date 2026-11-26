@@ -327,6 +327,8 @@ struct MeshRenderSystem::Impl final
         // selected again after D3D12Renderer's fence wait.
         std::vector<GpuMeshHandle> retainedMeshes;
         std::vector<MaterialInstanceHandle> retainedMaterials;
+        // Instance buffers this slot outgrew, kept the same way.
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> retiredBuffers;
     };
 
     [[nodiscard]] GpuMeshHandle CreateMeshData(
@@ -428,6 +430,7 @@ void MeshRenderSystem::Impl::Shutdown() noexcept
     {
         buffer.retainedMaterials.clear();
         buffer.retainedMeshes.clear();
+        buffer.retiredBuffers.clear();
         if (buffer.resource != nullptr && buffer.mappedData != nullptr)
         {
             buffer.resource->Unmap(0, nullptr);
@@ -524,6 +527,7 @@ void MeshRenderSystem::Impl::BeginFrame(const std::uint32_t frameIndex)
     // resources retained by its previous submission are now releasable.
     instanceBuffers_[currentFrameIndex_].retainedMaterials.clear();
     instanceBuffers_[currentFrameIndex_].retainedMeshes.clear();
+    instanceBuffers_[currentFrameIndex_].retiredBuffers.clear();
     pendingItems_.clear();
     frameOpen_ = true;
 }
@@ -1264,6 +1268,11 @@ void MeshRenderSystem::Impl::EnsureInstanceCapacity(
         buffer.resource->Unmap(0, nullptr);
     }
     buffer.mappedData = nullptr;
+    // Draws already recorded in this frame may read the old buffer, so it stays until the slot is reused.
+    if (buffer.resource != nullptr)
+    {
+        buffer.retiredBuffers.push_back(std::move(buffer.resource));
+    }
     buffer.resource.Reset();
 
     buffer.capacity = NextCapacity(requiredInstanceCount);

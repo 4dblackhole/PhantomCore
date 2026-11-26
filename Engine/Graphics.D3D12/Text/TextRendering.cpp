@@ -503,6 +503,8 @@ namespace
         std::vector<FrameInstancePage> pages;
         std::vector<FrameInstancePage> glyphUploadPages;
         std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps;
+        // Atlas pages removed while this slot's frame was being built; released when the slot is reused.
+        std::vector<ComPtr<ID3D12Resource>> retiredAtlasTextures;
         std::uint64_t renderIndex{};
     };
 
@@ -589,6 +591,8 @@ namespace
                 frame.renderIndex = renderIndex;
 
                 frame.descriptorHeaps.clear();
+                // The renderer waited for this slot's last frame, and every frame submitted before it.
+                frame.retiredAtlasTextures.clear();
                 for (auto &page : atlasPages)
                 {
                     page.inFlightFrames &= static_cast<std::uint8_t>(~(1U << frameIndex));
@@ -1021,6 +1025,10 @@ namespace
             while (atlasPages.size() > DefaultAtlasPages && atlasPages.back().inFlightFrames == 0)
             {
                 ErasePageGlyphs(static_cast<std::uint32_t>(atlasPages.size() - 1));
+                // The in-flight marks say no queued frame samples the page; the slot keeps the texture
+                // through its fence anyway, so a wrong mark cannot free memory the GPU still reads.
+                frameBuffers[currentFrameIndex].retiredAtlasTextures.push_back(
+                    std::move(atlasPages.back().texture));
                 atlasPages.pop_back();
             }
         }
