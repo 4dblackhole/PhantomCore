@@ -6,6 +6,7 @@
 #include "Renderer/D3D12ResourceDescriptions.h"
 #include "Renderer/RenderFrameContext.h"
 #include "Renderer/FrameResources.h"
+#include "Renderer/FrameDrawRecord.h"
 #include "Mesh/D3D12MeshRendering.h"
 #include "Text/D3D12TextRendering.h"
 #include "Mesh/MeshRendering.h"
@@ -941,6 +942,17 @@ struct D3D12Visual2DRenderer::Impl
             0,
             0);
         ++D3D12Detail::RecordedDrawCalls();
+        D3D12Detail::RecordDraw({
+            D3D12Detail::RecordedDrawKind::Rectangles,
+            target.screen,
+            target.width,
+            target.height,
+            static_cast<std::uint32_t>(rectangles.size()),
+            sizeof(RectangleInstance),
+            page.resource->GetGPUVirtualAddress() + firstInstance * sizeof(RectangleInstance),
+            page.capacity * sizeof(RectangleInstance),
+            0,
+            page.mappedData + firstInstance * sizeof(RectangleInstance)});
     }
 
     void DrawVisuals(
@@ -995,6 +1007,17 @@ struct D3D12Visual2DRenderer::Impl
             0,
             0);
         ++D3D12Detail::RecordedDrawCalls();
+        D3D12Detail::RecordDraw({
+            D3D12Detail::RecordedDrawKind::Images,
+            target.screen,
+            target.width,
+            target.height,
+            static_cast<std::uint32_t>(visuals.size()),
+            sizeof(VisualInstance),
+            page.resource->GetGPUVirtualAddress() + firstInstance * sizeof(VisualInstance),
+            page.capacity * sizeof(VisualInstance),
+            TextureRenderingBackend::GpuDescriptorStart(meshRendering->Textures(), textures).ptr,
+            page.mappedData + firstInstance * sizeof(VisualInstance)});
     }
 
     void RecordCanvases(

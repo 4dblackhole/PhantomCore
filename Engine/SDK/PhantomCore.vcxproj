@@ -98,6 +98,7 @@
     <ClInclude Include="..\Core\Rendering\ImageReadback.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\GpuCrashDumps.h" />
+    <ClInclude Include="..\Graphics.D3D12\Renderer\FrameDrawRecord.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\GpuHangTest.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\GraphicsDeviceDiagnostics.h" />
     <ClInclude Include="..\Graphics.D3D12\Renderer\GraphicsValidation.h" />
@@ -162,6 +163,7 @@
     <ClCompile Include="..\Graphics.D3D12\Renderer\D3D12Renderer.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Renderer\GpuCrashDumps.cpp" />
+    <ClCompile Include="..\Graphics.D3D12\Renderer\FrameDrawRecord.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Renderer\GpuHangTest.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Renderer\GraphicsDeviceDiagnostics.cpp" />
     <ClCompile Include="..\Graphics.D3D12\Renderer\GraphicsValidation.cpp" />

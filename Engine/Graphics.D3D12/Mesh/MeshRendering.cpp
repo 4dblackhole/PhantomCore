@@ -1,3 +1,4 @@
+#include "Renderer/FrameDrawRecord.h"
 #include "Mesh/MeshRendering.h"
 #include "../../Math/DirectXMathBridge.h"
 #include "Mesh/D3D12MeshRendering.h"
@@ -766,6 +767,23 @@ void MeshRenderSystem::Impl::DrawBatch(
         0,
         0);
     ++D3D12Detail::RecordedDrawCalls();
+    std::uint64_t textureDescriptors = 0;
+    if (materialTemplate->usesTextureSet_)
+    {
+        textureDescriptors =
+            TextureRenderingBackend::GpuDescriptorStart(textureManager_, first.material->Textures()).ptr;
+    }
+    D3D12Detail::RecordDraw({
+        D3D12Detail::RecordedDrawKind::Meshes,
+        false,
+        0,
+        0,
+        static_cast<std::uint32_t>(batchCount),
+        sizeof(InstanceData),
+        instanceView.BufferLocation,
+        instanceBuffer.capacity * sizeof(InstanceData),
+        textureDescriptors,
+        instanceBuffer.mappedData + batchStart * sizeof(InstanceData)});
 }
 
 GpuMeshHandle MeshRenderSystem::Impl::CreateMeshData(

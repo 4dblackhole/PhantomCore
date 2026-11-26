@@ -122,6 +122,7 @@
     <ClInclude Include="..\Core\Rendering\ImageReadback.h"><Filter>Core\Rendering</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\GpuCrashDumps.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
+    <ClInclude Include="..\Graphics.D3D12\Renderer\FrameDrawRecord.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\GpuHangTest.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\GraphicsDeviceDiagnostics.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
     <ClInclude Include="..\Graphics.D3D12\Renderer\GraphicsValidation.h"><Filter>Graphics.D3D12\Renderer</Filter></ClInclude>
@@ -181,6 +182,7 @@
     <ClCompile Include="..\Graphics.D3D12\Renderer\D3D12Renderer.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Renderer\FrameImageReadbackQueue.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Renderer\GpuCrashDumps.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
+    <ClCompile Include="..\Graphics.D3D12\Renderer\FrameDrawRecord.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Renderer\GpuHangTest.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Renderer\GraphicsDeviceDiagnostics.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
     <ClCompile Include="..\Graphics.D3D12\Renderer\GraphicsValidation.cpp"><Filter>Graphics.D3D12\Renderer</Filter></ClCompile>
