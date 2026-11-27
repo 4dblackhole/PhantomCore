@@ -41,6 +41,10 @@ namespace
     constexpr std::uint32_t AtlasWidth = 1024;
     constexpr std::uint32_t AtlasHeight = 1024;
     constexpr std::uint32_t DefaultAtlasPages = 16;
+    // Atlas pages one draw can sample: the size of the shader's page array and of a descriptor block.
+    // A draw binds the block of its glyphs; only an atlas past this many pages needs a second draw.
+    constexpr std::uint32_t AtlasPagesPerDraw = 16;
+    static_assert(DefaultAtlasPages % AtlasPagesPerDraw == 0);
     constexpr std::uint32_t GlyphPadding = 1;
 
     using D3D12Detail::BufferDescription;
@@ -291,7 +295,7 @@ namespace
             // glyph-instance range, and the viewport size to the shaders.
             D3D12_DESCRIPTOR_RANGE atlasRange{};
             atlasRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-            atlasRange.NumDescriptors = 1;
+            atlasRange.NumDescriptors = AtlasPagesPerDraw;
             atlasRange.BaseShaderRegister = 0;
             atlasRange.RegisterSpace = 0;
             atlasRange.OffsetInDescriptorsFromTableStart = 0;
@@ -307,8 +311,8 @@ namespace
 
             parameters[1].ParameterType =
                 D3D12_ROOT_PARAMETER_TYPE_SRV;
-            parameters[1].Descriptor.ShaderRegister = 1;
-            parameters[1].Descriptor.RegisterSpace = 0;
+            parameters[1].Descriptor.ShaderRegister = 0;
+            parameters[1].Descriptor.RegisterSpace = 1;
             parameters[1].ShaderVisibility =
                 D3D12_SHADER_VISIBILITY_VERTEX;
 
@@ -487,9 +491,11 @@ namespace
         Float4 clipRectPixels{
             -1.0e9F, -1.0e9F, 1.0e9F, 1.0e9F};
         float depth{};
+        // The page within the descriptor block the draw binds.
+        std::uint32_t atlasPage{};
     };
 
-    static_assert(sizeof(GpuGlyphInstance) == 132);
+    static_assert(sizeof(GpuGlyphInstance) == 136);
 
     struct FrameInstancePage final
     {
@@ -746,7 +752,8 @@ namespace
                     source.uvRectangle,
                     source.color,
                     source.clipRectPixels,
-                    source.depth};
+                    source.depth,
+                    source.pageIndex % AtlasPagesPerDraw};
             }
             return page;
         }
@@ -781,25 +788,26 @@ namespace
             const FrameInstancePage& page, const std::size_t allocationStart,
             const std::span<const GlyphInstance> instances)
         {
-            // Emit one instanced draw for each consecutive atlas page.
+            // One instanced draw for each run of glyphs whose pages share a descriptor block. An atlas of up
+            // to AtlasPagesPerDraw pages is one block, so a batch is one draw however many pages it uses.
             const D3D12_GPU_DESCRIPTOR_HANDLE heapStart =
                 atlasDescriptorHeap->
                     GetGPUDescriptorHandleForHeapStart();
             std::size_t firstInstance = 0;
             while (firstInstance < instances.size())
             {
-                const std::uint32_t pageIndex =
-                    instances[firstInstance].pageIndex;
+                const std::uint32_t block =
+                    instances[firstInstance].pageIndex / AtlasPagesPerDraw;
                 std::size_t endInstance = firstInstance + 1;
                 while (endInstance < instances.size() &&
-                    instances[endInstance].pageIndex == pageIndex)
+                    instances[endInstance].pageIndex / AtlasPagesPerDraw == block)
                 {
                     ++endInstance;
                 }
 
                 D3D12_GPU_DESCRIPTOR_HANDLE pageDescriptor = heapStart;
                 pageDescriptor.ptr +=
-                    static_cast<UINT64>(pageIndex) *
+                    static_cast<UINT64>(block) * AtlasPagesPerDraw *
                     atlasDescriptorSize;
                 commandList.SetGraphicsRootDescriptorTable(
                     0,
@@ -817,6 +825,7 @@ namespace
                     0,
                     0);
                 ++D3D12Detail::RecordedDrawCalls();
+                ++statistics.drawCalls;
                 const std::size_t firstByte = (allocationStart + firstInstance) * sizeof(GpuGlyphInstance);
                 D3D12Detail::RecordDraw({
                     D3D12Detail::RecordedDrawKind::Text,
@@ -1239,6 +1248,9 @@ namespace
                 device->GetDescriptorHandleIncrementSize(
                     D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             atlasDescriptorCapacity = capacity;
+            // A draw may bind a block that is not full: every slot holds a null view until a page takes it.
+            for (std::uint32_t index = 0; index < capacity; ++index)
+                WriteAtlasDescriptor(nullptr, index);
         }
 
 
