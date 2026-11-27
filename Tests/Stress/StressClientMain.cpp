@@ -4,11 +4,13 @@
 // up or the graphics device is lost. It is not part of the verification: a run may hang the GPU on purpose.
 //
 //   PhantomCore.StressClient --out <folder> [--kind text|image|mesh] [--draws N] [--glyphs N]
-//       [--rate display|double|unlimited] [--hz N] [--seconds N] [--width N] [--height N] [--fill N] [--swap-ms N] [--hidden]
+//       [--rate display|double|unlimited] [--hz N] [--seconds N] [--width N] [--height N] [--fill N] [--swap-ms N] [--font-size N] [--distinct] [--hidden]
 //
 // --kind text   N labels of --glyphs letters, each followed by a plain rectangle, so no two labels share a draw.
 // --kind image  N small images, each followed by a plain rectangle.
 // --kind mesh   N quads, each with its own material, so every quad is its own draw.
+// --kind meshtex   the same with textured materials that share one texture set: every draw binds the same
+//                  descriptor table again. --kind meshtex2: the materials alternate between two texture sets.
 // The folder gets engine.log (the engine's records and one line of statistics a second), result.txt, and
 // loss.txt when the device was lost.
 #include "PhantomCore.h"
@@ -33,6 +35,10 @@ namespace
         std::string kind{"text"};
         std::size_t draws{120};
         std::size_t glyphs{3};
+        // Text size in pixels, and whether every glyph is a different Hangul syllable: large different glyphs
+        // fill glyph atlas pages fast, so a screen's text comes from several pages within seconds.
+        float fontSize{14.0F};
+        bool distinct{};
         // Full-screen translucent images under everything: the fill load of a game's backgrounds.
         std::size_t fill{};
         // Milliseconds between swaps of one image (released, made again), as a song list does; 0 for none.
@@ -147,7 +153,7 @@ namespace
                 swapSprite_ = &CreateSprite(canvas_.Root(), {-width / 2, -height / 2, 256.0F, 256.0F}, swapImage_);
             }
             const TextFont font{TextFontSource::System, L"Segoe UI"};
-            for (std::size_t index = 0; index < options_.draws && options_.kind != "mesh"; ++index)
+            for (std::size_t index = 0; index < options_.draws && !Mesh(); ++index)
             {
                 const float x = -width / 2 + static_cast<float>(index % columns) * cellWidth;
                 const float y = -height / 2 + static_cast<float>((index / columns) % 40) * cellHeight;
@@ -155,11 +161,13 @@ namespace
                 {
                     std::wstring text;
                     for (std::size_t glyph = 0; glyph < options_.glyphs; ++glyph)
-                        text.push_back(static_cast<wchar_t>(L'A' + (index + glyph) % 26));
+                        text.push_back(options_.distinct
+                                           ? static_cast<wchar_t>(0xAC00 + (index * options_.glyphs + glyph) % 11000)
+                                           : static_cast<wchar_t>(L'A' + (index + glyph) % 26));
                     auto &label = CreateLabel(canvas_.Root(), {x, y, cellWidth - 24.0F, cellHeight}, std::move(text));
                     auto &component = *label.GetComponent<TextVisualComponent>();
                     component.SetFont(font);
-                    component.SetFontSize(14.0F);
+                    component.SetFontSize(options_.fontSize);
                     component.SetTextColor({1, 1, 1, 1});
                 }
                 else
@@ -177,6 +185,19 @@ namespace
                 for (std::size_t index = 0; index < options_.draws; ++index)
                     materials_.push_back(services.meshRendering.CreateMaterial(BuiltInMaterial::UnlitVertexColor));
             }
+            if (Textured())
+            {
+                mesh_ = services.meshRendering.CreateMesh<VertexPositionUvColor>(RectangleShape{});
+                const std::vector<std::uint8_t> light(16 * 16 * 4, 230), dark(16 * 16 * 4, 120);
+                const TextureSetHandle first = services.meshRendering.Textures().CreateTextureSet(16, 16, light);
+                const TextureSetHandle second = services.meshRendering.Textures().CreateTextureSet(16, 16, dark);
+                for (std::size_t index = 0; index < options_.draws; ++index)
+                {
+                    auto material = services.meshRendering.CreateMaterial(BuiltInMaterial::UnlitVertexColorTextureArray);
+                    material->SetTextureSet(options_.kind == "meshtex2" && index % 2 == 1 ? second : first);
+                    materials_.push_back(std::move(material));
+                }
+            }
         }
 
         bool Update(const UpdateContext &context) override
@@ -188,7 +209,8 @@ namespace
                 sink_.Write("engine.log", "  " + std::to_string(static_cast<int>(context.totalSeconds)) + "s fps " +
                                               std::to_string(context.performance.framesPerSecond) + " draws " +
                                               std::to_string(context.performance.drawCallsPerFrame) + "/" +
-                                              std::to_string(context.performance.peakDrawCallsPerFrame));
+                                              std::to_string(context.performance.peakDrawCallsPerFrame) + " atlas pages " +
+                                              std::to_string(context.performance.textAtlasPages));
             }
             if (swapSprite_ != nullptr && context.totalSeconds >= nextSwap_)
             {
@@ -204,7 +226,7 @@ namespace
         void Render(const RenderContext &context) override
         {
             ++state_.frames;
-            if (options_.kind == "mesh")
+            if (Mesh())
             {
                 const Float4x4 viewProjection = OrthographicLHMatrix(32.0F, 18.0F, 0.1F, 10.0F);
                 for (std::size_t index = 0; index < materials_.size(); ++index)
@@ -212,7 +234,7 @@ namespace
                     const float x = -15.0F + static_cast<float>(index % 16) * 2.0F;
                     const float y = -8.0F + static_cast<float>((index / 16) % 9) * 2.0F;
                     context.meshRendering->Submit(mesh_, materials_[index], TranslationMatrix(x, y, 1.0F), viewProjection,
-                                                  {1, 1, 1, 1}, {1, 1}, {}, NoTextureIndex);
+                                                  {1, 1, 1, 1}, {1, 1}, {}, Textured() ? 0U : NoTextureIndex);
                 }
                 return;
             }
@@ -224,6 +246,9 @@ namespace
         void Shutdown() noexcept override {}
 
       private:
+        [[nodiscard]] bool Textured() const { return options_.kind == "meshtex" || options_.kind == "meshtex2"; }
+        [[nodiscard]] bool Mesh() const { return options_.kind == "mesh" || Textured(); }
+
         const Options &options_;
         RunState &state_;
         Sink &sink_;
@@ -250,6 +275,11 @@ namespace
                 options.hidden = true;
                 continue;
             }
+            if (name == "--distinct")
+            {
+                options.distinct = true;
+                continue;
+            }
             if (index + 1 >= argc)
                 break;
             const std::string value = argv[++index];
@@ -265,6 +295,8 @@ namespace
                 options.fill = static_cast<std::size_t>(std::atoll(value.c_str()));
             else if (name == "--swap-ms")
                 options.swapMilliseconds = std::atof(value.c_str());
+            else if (name == "--font-size")
+                options.fontSize = static_cast<float>(std::atof(value.c_str()));
             else if (name == "--hz")
                 options.hz = std::atof(value.c_str());
             else if (name == "--seconds")
