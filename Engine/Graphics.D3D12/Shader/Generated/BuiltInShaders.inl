@@ -168,10 +168,12 @@ R"PC_TEXT(struct GlyphInstance
     float4 Color;
     float4 ClipRectPixels;
     float Depth;
+    uint AtlasPage;
 };
 
-Texture2D<float> GlyphAtlas : register(t0);
-StructuredBuffer<GlyphInstance> GlyphInstances : register(t1);
+// The atlas pages of one descriptor block. A glyph names its page, so one draw covers glyphs of every page.
+Texture2D<float> GlyphAtlasPages[16] : register(t0);
+StructuredBuffer<GlyphInstance> GlyphInstances : register(t0, space1);
 
 SamplerState GlyphSampler : register(s0);
 
@@ -186,6 +188,7 @@ struct PixelInput
     float2 Uv : TEXCOORD0;
     float4 Color : COLOR0;
     nointerpolation float4 ClipRectPixels : TEXCOORD1;
+    nointerpolation uint AtlasPage : TEXCOORD2;
 };
 
 PixelInput VSMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
@@ -222,6 +225,7 @@ PixelInput VSMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
         corner);
     output.Color = glyph.Color;
     output.ClipRectPixels = glyph.ClipRectPixels;
+    output.AtlasPage = glyph.AtlasPage;
     return output;
 }
 
@@ -231,7 +235,7 @@ float4 PSMain(PixelInput input) : SV_TARGET
     clip(input.Position.y - input.ClipRectPixels.y);
     clip(input.ClipRectPixels.z - input.Position.x);
     clip(input.ClipRectPixels.w - input.Position.y);
-    float coverage = GlyphAtlas.Sample(GlyphSampler, input.Uv);
+    float coverage = GlyphAtlasPages[NonUniformResourceIndex(input.AtlasPage)].Sample(GlyphSampler, input.Uv);
     return float4(
         input.Color.rgb,
         input.Color.a * coverage);

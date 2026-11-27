@@ -155,6 +155,15 @@ namespace
             if (frame == 3)
                 Require(stats.glyphRasterizations == 512 && stats.uploadAllocations == 1,
                         "512 CJK glyphs must share one upload allocation.");
+            // Glyphs of several atlas pages are one draw: a draw for every page made a screen's text many
+            // small draws, and that load hung a GPU.
+            if (stats.atlasPages <= 16 && stats.submittedGlyphs > 0)
+            {
+                Require(stats.drawCalls == 1, "A batch must be one draw while the atlas has at most sixteen pages.");
+                severalPagesInOneDraw_ = severalPagesInOneDraw_ || stats.atlasPages > 1;
+            }
+            if (frame == 8)
+                Require(severalPagesInOneDraw_, "The test must draw from an atlas of several pages in one draw.");
             if (frame == 4)
                 Require(stats.atlasPages > 16, "Current glyphs may exceed the soft atlas budget.");
             if (frame == 6)
@@ -169,9 +178,10 @@ namespace
             std::cout << "Text frame " << frame << ": layouts=" << stats.layoutCreations
                       << ", glyphs=" << stats.submittedGlyphs << ", raster=" << stats.glyphRasterizations
                       << ", uploads=" << stats.uploadAllocations << ", pages=" << stats.atlasPages
-                      << ", evictions=" << stats.atlasEvictions << '\n';
+                      << ", evictions=" << stats.atlasEvictions << ", draws=" << stats.drawCalls << '\n';
         }
         bool &completed_;
+        bool severalPagesInOneDraw_{};
         TextRenderSystem *renderer_{};
         FontHandle font_;
         std::vector<TextLayoutHandle> layouts_;

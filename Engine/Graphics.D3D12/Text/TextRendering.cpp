@@ -825,6 +825,7 @@ namespace
                     0,
                     0);
                 ++D3D12Detail::RecordedDrawCalls();
+                ++statistics.drawCalls;
                 const std::size_t firstByte = (allocationStart + firstInstance) * sizeof(GpuGlyphInstance);
                 D3D12Detail::RecordDraw({
                     D3D12Detail::RecordedDrawKind::Text,
