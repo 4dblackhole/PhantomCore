@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <atomic>
 #include <bit>
 #include <cfloat>
@@ -43,8 +44,10 @@ namespace
     constexpr std::uint32_t DefaultAtlasPages = 16;
     // Atlas pages one draw can sample: the size of the shader's page array and of a descriptor block.
     // A draw binds the block of its glyphs; only an atlas past this many pages needs a second draw.
-    constexpr std::uint32_t AtlasPagesPerDraw = 16;
-    static_assert(DefaultAtlasPages % AtlasPagesPerDraw == 0);
+    // It is four times the page budget: pages past the budget are kept only while their frames are in
+    // flight, so in practice every batch is one draw and no draw follows another with a new table.
+    constexpr std::uint32_t AtlasPagesPerDraw = 64;
+    static_assert(AtlasPagesPerDraw % DefaultAtlasPages == 0);
     constexpr std::uint32_t GlyphPadding = 1;
 
     using D3D12Detail::BufferDescription;
@@ -793,6 +796,10 @@ namespace
             const D3D12_GPU_DESCRIPTOR_HANDLE heapStart =
                 atlasDescriptorHeap->
                     GetGPUDescriptorHandleForHeapStart();
+            // A table is bound only when it changes. On a GTX 1060 at two frames per display refresh, small
+            // text draws that each bound a table again hung the GPU at the start of a later frame, ten runs
+            // out of ten; the same draws with the table bound once ran for hundreds of thousands of frames.
+            std::optional<std::uint32_t> boundBlock;
             std::size_t firstInstance = 0;
             while (firstInstance < instances.size())
             {
@@ -809,9 +816,11 @@ namespace
                 pageDescriptor.ptr +=
                     static_cast<UINT64>(block) * AtlasPagesPerDraw *
                     atlasDescriptorSize;
-                commandList.SetGraphicsRootDescriptorTable(
-                    0,
-                    pageDescriptor);
+                if (boundBlock != block)
+                {
+                    commandList.SetGraphicsRootDescriptorTable(0, pageDescriptor);
+                    boundBlock = block;
+                }
                 commandList.SetGraphicsRootShaderResourceView(
                     1,
                     page.resource->GetGPUVirtualAddress() +
@@ -1049,7 +1058,7 @@ namespace
         {
             if (required <= atlasDescriptorCapacity)
                 return;
-            std::uint32_t capacity = std::max(atlasDescriptorCapacity, DefaultAtlasPages);
+            std::uint32_t capacity = std::max(atlasDescriptorCapacity, AtlasPagesPerDraw);
             while (capacity < required)
             {
                 if (capacity > std::numeric_limits<std::uint32_t>::max() / 2)
@@ -1229,7 +1238,7 @@ namespace
             return frame.pages.back();
         }
 
-        void CreateDescriptorHeap(std::uint32_t capacity = DefaultAtlasPages)
+        void CreateDescriptorHeap(std::uint32_t capacity = AtlasPagesPerDraw)
         {
             D3D12_DESCRIPTOR_HEAP_DESC description{};
             description.Type =

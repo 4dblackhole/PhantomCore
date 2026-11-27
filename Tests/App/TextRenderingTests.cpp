@@ -157,9 +157,9 @@ namespace
                         "512 CJK glyphs must share one upload allocation.");
             // Glyphs of several atlas pages are one draw: a draw for every page made a screen's text many
             // small draws, and that load hung a GPU.
-            if (stats.atlasPages <= 16 && stats.submittedGlyphs > 0)
+            if (stats.atlasPages <= 64 && stats.submittedGlyphs > 0)
             {
-                Require(stats.drawCalls == 1, "A batch must be one draw while the atlas has at most sixteen pages.");
+                Require(stats.drawCalls == 1, "A batch must be one draw while the atlas has at most 64 pages.");
                 severalPagesInOneDraw_ = severalPagesInOneDraw_ || stats.atlasPages > 1;
             }
             if (frame == 8)
