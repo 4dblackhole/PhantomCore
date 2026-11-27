@@ -4051,7 +4051,9 @@ struct GraphicsDeviceLossReport
     // With gpuCrashDumps requested: what the last frames drew, one line per frame and per draw (kind,
     // instance count, the GPU address and size of the buffer its instances were read from, its texture
     // descriptors), oldest frame first. frameDrawData holds the instance bytes the CPU wrote for those
-    // draws; each line ends with its place in it ("data @offset +bytes"). Both are empty otherwise.
+    // draws; each line ends with its place in it ("data @offset +bytes"). Lines that start with "note:" say
+    // what happened to GPU resources (created, uploaded, replaced, retired), in order between the draws.
+    // Both are empty otherwise.
     std::vector<std::string> frameDraws;
     std::vector<std::uint8_t> frameDrawData;
 };

@@ -1,9 +1,12 @@
 #include "Renderer/GpuCrashDumps.h"
 #include "Renderer/D3D12Error.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <thread>
@@ -44,7 +47,33 @@ namespace
         "frame: text",
         "frame: end",
         "frame: hang test",
+        "text: glyph upload",
+        "frame: clear color",
+        "frame: clear depth",
     };
+
+    // "draw 0" to "draw 1022", and "draw 1023+" for every later draw of a frame.
+    constexpr std::size_t DrawMarkerCount = 1024;
+    struct DrawMarkerNames final
+    {
+        std::array<std::array<char, 16>, DrawMarkerCount> text{};
+        DrawMarkerNames() noexcept
+        {
+            for (std::size_t index = 0; index < text.size(); ++index)
+            {
+                const char* format = index + 1 == text.size() ? "draw %zu+" : "draw %zu";
+                static_cast<void>(std::snprintf(text[index].data(), text[index].size(), format, index));
+            }
+        }
+    };
+    [[nodiscard]] const DrawMarkerNames& DrawMarkers() noexcept
+    {
+        static const DrawMarkerNames names;
+        return names;
+    }
+
+    // The crash dumps whose command list this thread records into.
+    thread_local const GpuCrashDumps* attachedDumps = nullptr;
 
     [[nodiscard]] std::string ResultCode(const GFSDK_Aftermath_Result result)
     {
@@ -216,6 +245,15 @@ struct GpuCrashDumps::Implementation
                 return;
             }
         }
+        const auto& draws = DrawMarkers().text;
+        const auto address = reinterpret_cast<std::uintptr_t>(marker);
+        const auto first = reinterpret_cast<std::uintptr_t>(draws.front().data());
+        const auto last = reinterpret_cast<std::uintptr_t>(draws.back().data());
+        if (address >= first && address <= last)
+        {
+            const char* name = static_cast<const char*>(marker);
+            resolve(name, static_cast<std::uint32_t>(std::strlen(name)));
+        }
     }
 
     [[nodiscard]] GFSDK_Aftermath_CrashDump_Status WaitForDump() const
@@ -282,7 +320,11 @@ struct GpuCrashDumps::Implementation
 };
 
 GpuCrashDumps::GpuCrashDumps() = default;
-GpuCrashDumps::~GpuCrashDumps() = default;
+GpuCrashDumps::~GpuCrashDumps()
+{
+    if (attachedDumps == this)
+        attachedDumps = nullptr;
+}
 
 void GpuCrashDumps::Enable(const UINT adapterVendorId)
 {
@@ -366,7 +408,9 @@ void GpuCrashDumps::AttachCommandList(ID3D12GraphicsCommandList& commandList)
     {
         implementation_->context = nullptr;
         state_ += ", no frame markers " + ResultCode(result);
+        return;
     }
+    attachedDumps = this;
 }
 
 void GpuCrashDumps::Mark(const GpuCrashMarker marker) const noexcept
@@ -378,6 +422,27 @@ void GpuCrashDumps::Mark(const GpuCrashMarker marker) const noexcept
         return;
     // Size zero: the driver stores the address and asks OnResolveMarker for the text.
     static_cast<void>(implementation_->setMarker(implementation_->context, MarkerNames[index], 0));
+}
+
+void GpuCrashDumps::MarkDraw(const std::uint32_t drawNumber) const noexcept
+{
+    if (implementation_ == nullptr || implementation_->context == nullptr)
+        return;
+    const auto& names = DrawMarkers().text;
+    const std::size_t index = std::min<std::size_t>(drawNumber, names.size() - 1);
+    static_cast<void>(implementation_->setMarker(implementation_->context, names[index].data(), 0));
+}
+
+void MarkGpuDraw(const std::uint32_t drawNumber) noexcept
+{
+    if (attachedDumps != nullptr)
+        attachedDumps->MarkDraw(drawNumber);
+}
+
+void MarkGpuStep(const GpuCrashMarker marker) noexcept
+{
+    if (attachedDumps != nullptr)
+        attachedDumps->Mark(marker);
 }
 
 GpuCrashDumpResult GpuCrashDumps::Collect() const
@@ -437,6 +502,18 @@ void GpuCrashDumps::AttachCommandList(ID3D12GraphicsCommandList&)
 }
 
 void GpuCrashDumps::Mark(GpuCrashMarker) const noexcept
+{
+}
+
+void GpuCrashDumps::MarkDraw(std::uint32_t) const noexcept
+{
+}
+
+void MarkGpuDraw(std::uint32_t) noexcept
+{
+}
+
+void MarkGpuStep(GpuCrashMarker) noexcept
 {
 }
 

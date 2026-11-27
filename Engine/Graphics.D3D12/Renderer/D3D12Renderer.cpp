@@ -284,6 +284,7 @@ void D3D12Renderer::Resize(
     width_ = width;
     height_ = height;
     frameFenceValues_.fill(0);
+    D3D12Detail::RecordFrameNote("back buffers resized (width, height)", width, height);
     CreateRenderTargets();
     CreateDepthStencil();
     UpdateViewport();
@@ -320,6 +321,8 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     toRenderTarget.Transition.StateAfter =
         D3D12_RESOURCE_STATE_RENDER_TARGET;
     commandList_->ResourceBarrier(1, &toRenderTarget);
+    // The frame start has three steps; a dump says which one the GPU had reached.
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::ClearColor);
 
     const D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView = OffsetDescriptor(
         rtvHeap_->GetCPUDescriptorHandleForHeapStart(),
@@ -346,6 +349,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
         color,
         0,
         nullptr);
+    gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::ClearDepth);
     commandList_->ClearDepthStencilView(
         depthStencilView,
         D3D12_CLEAR_FLAG_DEPTH,
@@ -357,6 +361,7 @@ RenderContext D3D12Renderer::BeginFrame(const ClearColor& clearColor)
     gpuCrashDumps_.Mark(D3D12Detail::GpuCrashMarker::ClientDraws);
     const std::uint64_t renderIndex = nextRenderIndex_++;
     D3D12Detail::FrameDrawRecorder::Instance().BeginFrame(frameIndex_, renderIndex);
+    D3D12Detail::FrameDrawRecorder::Instance().DescribeTarget(backBufferIndex_, width_, height_, fence_->GetCompletedValue());
     D3D12Detail::RecordedDrawCalls() = 0;
     MeshRenderingBackend::BeginFrame(*meshRenderSystem_, frameIndex_);
     TextRenderingBackend::BeginFrame(*textRenderSystem_, frameIndex_, renderIndex);
@@ -442,6 +447,7 @@ void D3D12Renderer::EndFrame()
         commandQueue_->Signal(fence_.Get(), signalValue),
         "ID3D12CommandQueue::Signal");
     frameFenceValues_[frameIndex_] = signalValue;
+    D3D12Detail::FrameDrawRecorder::Instance().EndFrame(signalValue);
     frameIndex_ = (frameIndex_ + 1) % D3D12Detail::FrameCount;
     frameOpen_ = false;
     validationMessages_.Forward();

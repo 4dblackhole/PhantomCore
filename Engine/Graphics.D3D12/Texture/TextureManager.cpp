@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/FrameDrawRecord.h"
 #include "Renderer/D3D12ResourceDescriptions.h"
 #include "System/BackgroundWork.h"
 
@@ -1145,6 +1146,10 @@ void TextureManager::Impl::RecordTextureUpload(
 
     // A slot below the set's size is a replacement; the slot at its end is an append.
     auto& target = RequireTextureSet(textureSet);
+    D3D12Detail::RecordFrameNote(descriptorIndex < target.Size()
+            ? "image texture replaced (slot in its block, width and height)"
+            : "image texture added (slot in its block, width and height)",
+        descriptorIndex, (static_cast<std::uint64_t>(image.width) << 32) | image.height);
     // The replaced texture leaves with this upload: its fence is signalled on the render queue after every
     // frame submitted so far, so no queued draw can still read it. Counting frames is the caller's first
     // guard (Visual2D retires the slot through the frame ring); this one does not depend on that count.
@@ -1161,9 +1166,15 @@ void TextureManager::Impl::CollectCompletedUploads()
     RequireOwnerThread();
     if (!uploadFence_)
         return;
+    std::uint64_t released = 0;
     while (!pendingUploads_.empty() && pendingUploads_.front().fence != 0 &&
            uploadFence_->GetCompletedValue() >= pendingUploads_.front().fence)
+    {
         pendingUploads_.pop_front();
+        ++released;
+    }
+    if (released != 0)
+        D3D12Detail::RecordFrameNote("finished texture uploads released (count, 0)", released);
 }
 
 void TextureManager::Impl::ExecuteUpload(std::vector<ComPtr<ID3D12Resource>> buffers, TextureSetHandle target)
