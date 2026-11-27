@@ -33,6 +33,9 @@ namespace D3D12Detail
         Text,
         FrameEnd,
         HangTest,
+        GlyphUpload,
+        ClearColor,
+        ClearDepth,
         Count,
     };
 
@@ -68,6 +71,8 @@ namespace D3D12Detail
         void AttachCommandList(ID3D12GraphicsCommandList& commandList);
         // On the attached command list, while it is recording.
         void Mark(GpuCrashMarker marker) const noexcept;
+        // The marker of one draw: its number in the frame, as the frame draw record prints it.
+        void MarkDraw(std::uint32_t drawNumber) const noexcept;
 
         // After a device loss, before the device is released: waits for the
         // driver to finish its dump (a few seconds at most) and returns it.
@@ -78,6 +83,12 @@ namespace D3D12Detail
         std::unique_ptr<Implementation> implementation_;
         std::string state_{"off (not requested)"};
     };
+
+    // For the passes, which do not hold the renderer: both mark the command list of this thread's
+    // renderer and do nothing when it has none. Every draw site calls MarkGpuDraw just before its draw
+    // call, so a dump names the draw the GPU had reached and not only the pass.
+    void MarkGpuDraw(std::uint32_t drawNumber) noexcept;
+    void MarkGpuStep(GpuCrashMarker marker) noexcept;
 }
 
 } // namespace PhantomCore

@@ -3,6 +3,7 @@
 #include "Visual2D/ImageCacheKey.h"
 #include "Texture/D3D12TextureRendering.h"
 #include "Renderer/D3D12Error.h"
+#include "Renderer/GpuCrashDumps.h"
 #include "Renderer/D3D12ResourceDescriptions.h"
 #include "Renderer/RenderFrameContext.h"
 #include "Renderer/FrameResources.h"
@@ -584,6 +585,7 @@ struct D3D12Visual2DRenderer::Impl
         // The frame now being built and the ring before it may still sample the slot.
         const ImageResource resource = found->second;
         imagesByHandle.erase(found);
+        D3D12Detail::RecordFrameNote("image slot retired (page, slot)", resource.pageIndex, resource.textureIndex);
         try
         {
             retired.push_back(
@@ -883,6 +885,8 @@ struct D3D12Visual2DRenderer::Impl
                 IID_PPV_ARGS(page.resource.ReleaseAndGetAddressOf())),
             operation);
         D3D12Detail::SetDebugName(*page.resource.Get(), L"Visual2D upload page");
+        D3D12Detail::RecordFrameNote("visual 2D instance page created (bytes, address)",
+            capacity * instanceSize, page.resource->GetGPUVirtualAddress());
         D3D12Detail::ThrowIfFailed(
             page.resource->Map(
                 0,
@@ -936,6 +940,7 @@ struct D3D12Visual2DRenderer::Impl
             static_cast<UINT>(constants.size()),
             constants.data(),
             0);
+        D3D12Detail::MarkGpuDraw(static_cast<std::uint32_t>(D3D12Detail::RecordedDrawCalls()));
         commandList.DrawInstanced(
             6,
             static_cast<UINT>(rectangles.size()),
@@ -1001,6 +1006,7 @@ struct D3D12Visual2DRenderer::Impl
         commandList.SetGraphicsRootDescriptorTable(
             2,
             TextureRenderingBackend::GpuDescriptorStart(meshRendering->Textures(), textures));
+        D3D12Detail::MarkGpuDraw(static_cast<std::uint32_t>(D3D12Detail::RecordedDrawCalls()));
         commandList.DrawInstanced(
             6,
             static_cast<UINT>(visuals.size()),

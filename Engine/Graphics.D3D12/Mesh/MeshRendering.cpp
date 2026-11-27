@@ -1,4 +1,5 @@
 #include "Renderer/FrameDrawRecord.h"
+#include "Renderer/GpuCrashDumps.h"
 #include "Mesh/MeshRendering.h"
 #include "../../Math/DirectXMathBridge.h"
 #include "Mesh/D3D12MeshRendering.h"
@@ -764,6 +765,7 @@ void MeshRenderSystem::Impl::DrawBatch(
         static_cast<UINT>(vertexViews.size()),
         vertexViews.data());
     commandList.IASetIndexBuffer(&first.mesh->implementation_->indexBufferView_);
+    D3D12Detail::MarkGpuDraw(static_cast<std::uint32_t>(D3D12Detail::RecordedDrawCalls()));
     commandList.DrawIndexedInstanced(
         first.mesh->indexCount_,
         static_cast<UINT>(batchCount),
@@ -1286,6 +1288,8 @@ void MeshRenderSystem::Impl::EnsureInstanceCapacity(
     buffer.resource = CreateUploadBuffer(
         *device_,
         buffer.capacity * sizeof(InstanceData));
+    D3D12Detail::RecordFrameNote("mesh instance buffer grown (instances, address)", buffer.capacity,
+        buffer.resource->GetGPUVirtualAddress());
     D3D12_RANGE noReadRange{0, 0};
     D3D12Detail::ThrowIfFailed(
         buffer.resource->Map(

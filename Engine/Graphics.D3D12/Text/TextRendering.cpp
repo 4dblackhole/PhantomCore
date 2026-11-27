@@ -1,4 +1,5 @@
 #include "Renderer/FrameDrawRecord.h"
+#include "Renderer/GpuCrashDumps.h"
 #include "Text/TextRendering.h"
 #include "../../Math/DirectXMathBridge.h"
 #include "Text/D3D12TextRendering.h"
@@ -809,6 +810,7 @@ namespace
                         static_cast<UINT64>(
                             allocationStart + firstInstance) *
                         sizeof(GpuGlyphInstance));
+                D3D12Detail::MarkGpuDraw(static_cast<std::uint32_t>(D3D12Detail::RecordedDrawCalls()));
                 commandList.DrawInstanced(
                     6,
                     static_cast<UINT>(endInstance - firstInstance),
@@ -1008,6 +1010,7 @@ namespace
                     IID_PPV_ARGS(page.texture.ReleaseAndGetAddressOf())),
                 "ID3D12Device::CreateCommittedResource(glyph atlas)");
             D3D12Detail::SetDebugName(*page.texture.Get(), L"Glyph atlas page");
+            D3D12Detail::RecordFrameNote("glyph atlas page created (pages before it, 0)", atlasPages.size());
 
             WriteAtlasDescriptor(page.texture.Get(), atlasPages.size());
             atlasPages.push_back(std::move(page));
@@ -1098,6 +1101,8 @@ namespace
                                                           IID_PPV_ARGS(page.resource.GetAddressOf())),
                           "ID3D12Device::CreateCommittedResource(text glyph arena)");
             D3D12Detail::SetDebugName(*page.resource.Get(), L"Glyph upload page");
+            D3D12Detail::RecordFrameNote("glyph upload page created (bytes, address)", capacity,
+                                         page.resource->GetGPUVirtualAddress());
             const D3D12_RANGE noReads{0, 0};
             ThrowIfFailed(page.resource->Map(0, &noReads, reinterpret_cast<void **>(&page.mappedData)),
                           "ID3D12Resource::Map(text glyph arena)");
@@ -1128,6 +1133,8 @@ namespace
             std::size_t bufferOffset = 0;
             auto &arena = AllocateGlyphUpload(bytes, bufferOffset);
             statistics.uploadBytes += bytes;
+            D3D12Detail::MarkGpuStep(D3D12Detail::GpuCrashMarker::GlyphUpload);
+            D3D12Detail::RecordFrameNote("glyphs uploaded to the atlas (count, bytes)", pendingUploads.size(), bytes);
             std::vector<D3D12_RESOURCE_BARRIER> barriers;
             for (std::size_t index = 0; index < atlasPages.size(); ++index)
                 if (touchedPages[index])
@@ -1198,6 +1205,8 @@ namespace
                         page.resource.ReleaseAndGetAddressOf())),
                 "ID3D12Device::CreateCommittedResource(text instances)");
             D3D12Detail::SetDebugName(*page.resource.Get(), L"Text instance page");
+            D3D12Detail::RecordFrameNote("text instance page created (bytes, address)", sizeBytes,
+                                         page.resource->GetGPUVirtualAddress());
             ThrowIfFailed(
                 page.resource->Map(
                     0,
