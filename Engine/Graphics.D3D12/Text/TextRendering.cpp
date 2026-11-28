@@ -670,6 +670,22 @@ namespace
 
             FrameInstanceBuffer& frame = frameBuffers[currentFrameIndex];
             std::size_t allocationStart = 0;
+            // A batch whose glyphs are in more than one descriptor block is sorted by block first, as the first
+            // version of this renderer sorted by page: it is then one draw for each block, never a long run of
+            // small draws that each bind another table (the run that hung a GPU). Within the page budget every
+            // glyph is in block zero and nothing is sorted, so the submission order stays.
+            const auto block = [](const GlyphInstance& glyph) { return glyph.pageIndex / AtlasPagesPerDraw; };
+            const bool severalBlocks = std::ranges::any_of(
+                instances, [&](const GlyphInstance& glyph) { return block(glyph) != block(instances.front()); });
+            if (severalBlocks)
+            {
+                std::vector<GlyphInstance> sorted(instances.begin(), instances.end());
+                std::ranges::stable_sort(sorted, {}, block);
+                FrameInstancePage& sortedPage = UploadInstances(frame, sorted, allocationStart);
+                BindPipeline(commandList, frame, pipeline, viewportWidth, viewportHeight);
+                RecordPageBatches(commandList, sortedPage, allocationStart, sorted);
+                return;
+            }
             FrameInstancePage& page = UploadInstances(frame, instances, allocationStart);
             BindPipeline(commandList, frame, pipeline, viewportWidth, viewportHeight);
             RecordPageBatches(commandList, page, allocationStart, instances);
