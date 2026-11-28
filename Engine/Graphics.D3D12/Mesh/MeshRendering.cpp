@@ -370,6 +370,9 @@ struct MeshRenderSystem::Impl final
     std::array<FrameInstanceBuffer, D3D12Detail::FrameCount> instanceBuffers_{};
     std::vector<PendingItem> pendingItems_;
     std::uint32_t currentFrameIndex_{};
+    // What the frame's command list has bound, while Flush records its batches.
+    const MaterialTemplate* boundTemplate_{};
+    std::uint64_t boundTextureTable_{};
     bool initialized_{};
     bool frameOpen_{};
 };
@@ -632,6 +635,8 @@ void MeshRenderSystem::Impl::Flush(ID3D12GraphicsCommandList& commandList)
     ID3D12DescriptorHeap* descriptorHeaps[]{
         TextureRenderingBackend::DescriptorHeap(textureManager_)};
     commandList.SetDescriptorHeaps(1, descriptorHeaps);
+    boundTemplate_ = nullptr;
+    boundTextureTable_ = 0;
 
     std::size_t batchStart = 0;
     while (batchStart < pendingItems_.size())
@@ -736,18 +741,28 @@ void MeshRenderSystem::Impl::DrawBatch(
     const PendingItem& first = pendingItems_[batchStart];
     const MaterialTemplateHandle& materialTemplate =
         first.material->Template();
-    commandList.SetPipelineState(materialTemplate->implementation_->pipelineState_.Get());
-    commandList.SetGraphicsRootSignature(
-        materialTemplate->implementation_->rootSignature_.Get());
+    // State is bound only when it changes: draws of one material template that follow each other differ in
+    // their buffers alone, and a texture table is bound again only for another texture set.
+    if (boundTemplate_ != materialTemplate.get())
+    {
+        commandList.SetPipelineState(materialTemplate->implementation_->pipelineState_.Get());
+        commandList.SetGraphicsRootSignature(
+            materialTemplate->implementation_->rootSignature_.Get());
+        commandList.IASetPrimitiveTopology(
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        boundTemplate_ = materialTemplate.get();
+        boundTextureTable_ = 0;
+    }
     if (materialTemplate->usesTextureSet_)
     {
-        commandList.SetGraphicsRootDescriptorTable(
-            0,
-            TextureRenderingBackend::GpuDescriptorStart(
-                textureManager_, first.material->Textures()));
+        const D3D12_GPU_DESCRIPTOR_HANDLE table =
+            TextureRenderingBackend::GpuDescriptorStart(textureManager_, first.material->Textures());
+        if (boundTextureTable_ != table.ptr)
+        {
+            commandList.SetGraphicsRootDescriptorTable(0, table);
+            boundTextureTable_ = table.ptr;
+        }
     }
-    commandList.IASetPrimitiveTopology(
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     D3D12_VERTEX_BUFFER_VIEW instanceView{};
     instanceView.BufferLocation =

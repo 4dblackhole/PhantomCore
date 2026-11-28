@@ -11,7 +11,7 @@ struct GlyphInstance
 };
 
 // The atlas pages of one descriptor block. A glyph names its page, so one draw covers glyphs of every page.
-Texture2D<float> GlyphAtlasPages[16] : register(t0);
+Texture2D<float> GlyphAtlasPages[64] : register(t0);
 StructuredBuffer<GlyphInstance> GlyphInstances : register(t0, space1);
 
 SamplerState GlyphSampler : register(s0);

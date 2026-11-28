@@ -74,7 +74,7 @@ struct TextRenderStatistics
     std::size_t uploadBytes{};
     std::size_t atlasPages{};
     std::size_t atlasEvictions{};
-    // Draw calls recorded for text. One for each batch while the atlas has at most sixteen pages.
+    // Draw calls recorded for text. One for each batch while the atlas has at most 64 pages.
     std::size_t drawCalls{};
 };
 
