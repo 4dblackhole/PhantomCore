@@ -4,10 +4,12 @@
 // up or the graphics device is lost. It is not part of the verification: a run may hang the GPU on purpose.
 //
 //   PhantomCore.StressClient --out <folder> [--kind text|image|mesh] [--draws N] [--glyphs N]
-//       [--rate display|double|unlimited] [--hz N] [--seconds N] [--width N] [--height N] [--fill N] [--swap-ms N] [--font-size N] [--distinct] [--hidden]
+//       [--rate display|double|unlimited] [--hz N] [--seconds N] [--width N] [--height N] [--fill N] [--swap-ms N] [--font-size N] [--distinct] [--mixed N] [--image-size N] [--hidden]
 //
 // --kind text   N labels of --glyphs letters, each followed by a plain rectangle, so no two labels share a draw.
 // --kind image  N small images, each followed by a plain rectangle.
+// --kind image2 N small images in a row with no rectangle between them, in turn from two texture sets, so every
+//               image is its own draw and binds the other set's descriptor table.
 // --kind mesh   N quads, each with its own material, so every quad is its own draw.
 // --kind meshtex   the same with textured materials that share one texture set: every draw binds the same
 //                  descriptor table again. --kind meshtex2: the materials alternate between two texture sets.
@@ -39,6 +41,11 @@ namespace
         // fill glyph atlas pages fast, so a screen's text comes from several pages within seconds.
         float fontSize{14.0F};
         bool distinct{};
+        // Labels whose letters come in turn from two sets of glyphs that were rasterized apart, so that with a
+        // large --font-size neighbouring letters of one label are on different atlas pages.
+        std::size_t mixed{};
+        // --kind image2: the side in pixels of the two images drawn (8 by default; 1024 is an atlas page's size).
+        std::uint32_t imageSize{8};
         // Full-screen translucent images under everything: the fill load of a game's backgrounds.
         std::size_t fill{};
         // Milliseconds between swaps of one image (released, made again), as a song list does; 0 for none.
@@ -133,6 +140,15 @@ namespace
             ImageHandle image;
             if (options_.kind == "image")
                 image = services.visual2DRendering.CreatePixelImage(8, 8, white);
+            // A texture set holds 64 images: the first and the sixty-fifth are in different sets.
+            std::vector<ImageHandle> images;
+            const std::vector<std::uint8_t> large(static_cast<std::size_t>(options_.imageSize) * options_.imageSize * 4, 200);
+            for (std::size_t index = 0; options_.kind == "image2" && index < 65; ++index)
+            {
+                const bool drawn = index == 0 || index == 64;
+                images.push_back(drawn ? services.visual2DRendering.CreatePixelImage(options_.imageSize, options_.imageSize, large)
+                                       : services.visual2DRendering.CreatePixelImage(8, 8, white));
+            }
             if (options_.fill != 0)
             {
                 std::vector<std::uint8_t> pixels(1024 * 1024 * 4);
@@ -172,12 +188,35 @@ namespace
                 }
                 else
                 {
+                    if (options_.kind == "image2")
+                        image = images[index % 2 == 0 ? 0 : 64];
                     auto &sprite = CreateSprite(canvas_.Root(), {x, y, 20.0F, 20.0F}, image);
                     sprite.GetComponent<SpriteVisualComponent>()->SetTint({1.0F, 0.8F, 0.4F, 0.9F});
                 }
+                if (options_.kind == "image2")
+                    continue;
                 // The plain rectangle between two of them ends the draw of the first.
                 auto &separator = CreateSprite(canvas_.Root(), {x + cellWidth - 22.0F, y, 18.0F, 18.0F}, {});
                 separator.GetComponent<SpriteVisualComponent>()->SetTint({0.2F, 0.4F, 0.8F, 0.6F});
+            }
+            // The first labels above used the low syllables, the later ones the high syllables; with large
+            // glyphs those are on different atlas pages, and these labels take one of each in turn.
+            for (std::size_t index = 0; index < options_.mixed; ++index)
+            {
+                const std::size_t total = options_.draws * options_.glyphs;
+                std::wstring text;
+                for (std::size_t glyph = 0; glyph < options_.glyphs; ++glyph)
+                {
+                    const std::size_t low = (index * 7 + glyph) % (total / 4 + 1);
+                    const std::size_t high = total - 1 - low;
+                    text.push_back(static_cast<wchar_t>(0xAC00 + (glyph % 2 == 0 ? low : high) % 11000));
+                }
+                const float y = height / 2 - 60.0F - static_cast<float>(index % 12) * 4.0F;
+                auto &label = CreateLabel(canvas_.Root(), {-width / 2, y, width, 60.0F}, std::move(text));
+                auto &component = *label.GetComponent<TextVisualComponent>();
+                component.SetFont(font);
+                component.SetFontSize(options_.fontSize);
+                component.SetTextColor({1, 1, 0.6F, 1});
             }
             if (options_.kind == "mesh")
             {
@@ -297,6 +336,10 @@ namespace
                 options.swapMilliseconds = std::atof(value.c_str());
             else if (name == "--font-size")
                 options.fontSize = static_cast<float>(std::atof(value.c_str()));
+            else if (name == "--mixed")
+                options.mixed = static_cast<std::size_t>(std::atoll(value.c_str()));
+            else if (name == "--image-size")
+                options.imageSize = static_cast<std::uint32_t>(std::atoi(value.c_str()));
             else if (name == "--hz")
                 options.hz = std::atof(value.c_str());
             else if (name == "--seconds")
