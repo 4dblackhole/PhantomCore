@@ -4,7 +4,7 @@
 // up or the graphics device is lost. It is not part of the verification: a run may hang the GPU on purpose.
 //
 //   PhantomCore.StressClient --out <folder> [--kind text|image|mesh] [--draws N] [--glyphs N]
-//       [--rate display|double|unlimited] [--hz N] [--seconds N] [--width N] [--height N] [--fill N] [--swap-ms N] [--font-size N] [--distinct] [--mixed N] [--image-size N] [--hidden]
+//       [--rate display|double|unlimited] [--hz N] [--seconds N] [--width N] [--height N] [--fill N] [--swap-ms N] [--font-size N] [--distinct] [--mixed N] [--image-size N] [--mixed-spacing N] [--sprite-size N] [--overlap] [--hidden]
 //
 // --kind text   N labels of --glyphs letters, each followed by a plain rectangle, so no two labels share a draw.
 // --kind image  N small images, each followed by a plain rectangle.
@@ -46,6 +46,11 @@ namespace
         std::size_t mixed{};
         // --kind image2: the side in pixels of the two images drawn (8 by default; 1024 is an atlas page's size).
         std::uint32_t imageSize{8};
+        // Pixels between the rows of the mixed labels (4: they overlap), the side of an image2 sprite on
+        // screen, and whether the image2 sprites are drawn over each other as the mixed labels are.
+        float mixedSpacing{4.0F};
+        float spriteSize{20.0F};
+        bool overlap{};
         // Full-screen translucent images under everything: the fill load of a game's backgrounds.
         std::size_t fill{};
         // Milliseconds between swaps of one image (released, made again), as a song list does; 0 for none.
@@ -124,6 +129,8 @@ namespace
             config.windowMode = WindowMode::Borderless;
             config.renderRateMode = options_.rate;
             config.renderRateOverrideHz = options_.hz;
+            // A run measures the device, so a window behind another one must not slow down.
+            config.backgroundRenderRateHz = 0.0;
             config.audio.preferredBackend = AudioOutputBackend::NoSound;
             config.clearColor = {0.05F, 0.05F, 0.08F, 1.0F};
             config.diagnostics.sink = &sink_;
@@ -190,7 +197,11 @@ namespace
                 {
                     if (options_.kind == "image2")
                         image = images[index % 2 == 0 ? 0 : 64];
-                    auto &sprite = CreateSprite(canvas_.Root(), {x, y, 20.0F, 20.0F}, image);
+                    const float size = options_.spriteSize;
+                    const Rect place = options_.overlap
+                        ? Rect{-width / 2 + static_cast<float>(index % 20) * size * 0.9F, height / 2 - 120.0F + static_cast<float>(index % 12) * 4.0F, size, size}
+                        : Rect{x, y, size, size};
+                    auto &sprite = CreateSprite(canvas_.Root(), place, image);
                     sprite.GetComponent<SpriteVisualComponent>()->SetTint({1.0F, 0.8F, 0.4F, 0.9F});
                 }
                 if (options_.kind == "image2")
@@ -211,7 +222,7 @@ namespace
                     const std::size_t high = total - 1 - low;
                     text.push_back(static_cast<wchar_t>(0xAC00 + (glyph % 2 == 0 ? low : high) % 11000));
                 }
-                const float y = height / 2 - 60.0F - static_cast<float>(index % 12) * 4.0F;
+                const float y = height / 2 - 60.0F - static_cast<float>(index % 12) * options_.mixedSpacing;
                 auto &label = CreateLabel(canvas_.Root(), {-width / 2, y, width, 60.0F}, std::move(text));
                 auto &component = *label.GetComponent<TextVisualComponent>();
                 component.SetFont(font);
@@ -319,6 +330,11 @@ namespace
                 options.distinct = true;
                 continue;
             }
+            if (name == "--overlap")
+            {
+                options.overlap = true;
+                continue;
+            }
             if (index + 1 >= argc)
                 break;
             const std::string value = argv[++index];
@@ -340,6 +356,10 @@ namespace
                 options.mixed = static_cast<std::size_t>(std::atoll(value.c_str()));
             else if (name == "--image-size")
                 options.imageSize = static_cast<std::uint32_t>(std::atoi(value.c_str()));
+            else if (name == "--mixed-spacing")
+                options.mixedSpacing = static_cast<float>(std::atof(value.c_str()));
+            else if (name == "--sprite-size")
+                options.spriteSize = static_cast<float>(std::atof(value.c_str()));
             else if (name == "--hz")
                 options.hz = std::atof(value.c_str());
             else if (name == "--seconds")
